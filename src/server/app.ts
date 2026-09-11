@@ -1,3 +1,4 @@
+import { attachAttribution, recordAttribution } from "./attribution.js";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { bodyLimit } from "hono/body-limit";
@@ -410,6 +411,7 @@ export function createApp(
   });
   attachMaterials(app, db, owned, (roomId) => factsFor(db, roomId), clock);
   attachContent(app, db, clock, agentBridge);
+  attachAttribution(app, db, owned, clock);
   const agentBasis = (roomId: string, tenant: string) => {
     const r = owned(roomId, tenant);
     const binding = getRoomContentBinding(
@@ -677,21 +679,30 @@ export function createApp(
       now = clock(),
       viewer = c.get("viewerId");
     const input = z
-      .object({ visible: z.boolean(), playing: z.boolean().default(false) })
+      .object({
+        visible: z.boolean(),
+        playing: z.boolean().default(false),
+        sourceCode: z.string().max(100).optional(),
+      })
       .parse(await c.req.json());
     const connected = config.requirePlayback
       ? (await media.status(r.id)).connected === true
       : false;
     return c.json(
-      recordPresence(
-        db,
-        r,
-        viewer,
-        input,
-        config.requirePlayback,
-        connected,
-        now,
-      ),
+      transaction(db, () => {
+        const result = recordPresence(
+          db,
+          r,
+          viewer,
+          input,
+          config.requirePlayback,
+          connected,
+          now,
+        );
+        if (result.counting)
+          recordAttribution(db, r.id, viewer, input.sourceCode, now);
+        return result;
+      }),
     );
   });
   app.post("/api/viewer/rooms/:id/questions", async (c) => {

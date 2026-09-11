@@ -231,6 +231,32 @@ export function openDatabase(path: string) {
       INSERT INTO schema_migrations VALUES(8,unixepoch());
     `);
     });
+  if (version < 9)
+    transaction(db, () => {
+      db.exec(`
+      CREATE TABLE attribution_stores(id TEXT PRIMARY KEY,merchant_id TEXT NOT NULL,name TEXT NOT NULL,external_ref TEXT NOT NULL,created_at INTEGER NOT NULL,UNIQUE(merchant_id,external_ref));
+      CREATE TABLE attribution_sources(code TEXT PRIMARY KEY,store_id TEXT NOT NULL REFERENCES attribution_stores(id),room_id TEXT NOT NULL REFERENCES rooms(id),label TEXT NOT NULL,created_at INTEGER NOT NULL,disabled_at INTEGER);
+      CREATE INDEX attribution_sources_room ON attribution_sources(room_id,store_id);
+      CREATE TABLE attribution_visits(room_id TEXT NOT NULL,viewer_id TEXT NOT NULL,source_code TEXT NOT NULL REFERENCES attribution_sources(code),attributed_at INTEGER NOT NULL,watch_seconds_baseline INTEGER NOT NULL,
+        PRIMARY KEY(room_id,viewer_id),FOREIGN KEY(room_id,viewer_id) REFERENCES visits(room_id,viewer_id));
+      CREATE TABLE offline_batches(id TEXT PRIMARY KEY,merchant_id TEXT NOT NULL,store_id TEXT NOT NULL REFERENCES attribution_stores(id),idempotency_key TEXT NOT NULL,request_hash TEXT NOT NULL,source_name TEXT NOT NULL,actor_id TEXT NOT NULL,created_at INTEGER NOT NULL,receipt_json TEXT NOT NULL,UNIQUE(merchant_id,idempotency_key));
+      CREATE TABLE offline_records(id TEXT PRIMARY KEY,merchant_id TEXT NOT NULL,store_id TEXT NOT NULL REFERENCES attribution_stores(id),kind TEXT NOT NULL CHECK(kind IN ('visit','order','cost')),external_id TEXT NOT NULL,revision INTEGER NOT NULL,
+        source_code TEXT NOT NULL,linked_source_code TEXT REFERENCES attribution_sources(code),match_state TEXT NOT NULL,customer_ref TEXT NOT NULL,occurred_at INTEGER NOT NULL,amount_cents INTEGER NOT NULL CHECK(amount_cents>=0),voided INTEGER NOT NULL CHECK(voided IN (0,1)),note TEXT NOT NULL,actor_id TEXT NOT NULL,created_at INTEGER NOT NULL,batch_id TEXT NOT NULL REFERENCES offline_batches(id),
+        UNIQUE(merchant_id,store_id,kind,external_id,revision));
+      CREATE INDEX offline_records_source ON offline_records(linked_source_code);
+      CREATE INDEX offline_records_store ON offline_records(merchant_id,store_id,occurred_at);
+      INSERT INTO schema_migrations VALUES(9,unixepoch());
+    `);
+      for (const table of [
+        "attribution_visits",
+        "offline_batches",
+        "offline_records",
+      ])
+        db.exec(`
+      CREATE TRIGGER ${table}_immutable_update BEFORE UPDATE ON ${table} BEGIN SELECT RAISE(ABORT,'Attribution history is immutable'); END;
+      CREATE TRIGGER ${table}_immutable_delete BEFORE DELETE ON ${table} BEGIN SELECT RAISE(ABORT,'Attribution history is immutable'); END;
+    `);
+    });
   return db;
 }
 export type DB = ReturnType<typeof openDatabase>;

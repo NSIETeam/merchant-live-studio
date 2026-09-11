@@ -1,3 +1,4 @@
+import { AttributionPanel } from "./AttributionPanel.js";
 import { Audience } from "./Audience.js";
 import { memberRoleNames, type MemberRole } from "../shared/membership.js";
 import { BoundScriptPanel } from "./BoundScriptPanel.js";
@@ -667,6 +668,12 @@ function Workspace({
               {tab === "analytics" && (
                 <>
                   <Stats analytics={analytics} />
+                  {(memberRole === "owner" || memberRole === "analyst") && (
+                    <AttributionPanel
+                      roomId={selected.id}
+                      editable={memberRole === "owner"}
+                    />
+                  )}
                   <section className="card analytics-chart">
                     <div className="section-title">
                       <h2>最近 30 分钟 · 活跃观众</h2>
@@ -729,8 +736,7 @@ function Workspace({
                         秒仍有心跳的浏览器会话。累计观众按匿名会话去重；平均停留按直播间开放期间、页面可见时的有效心跳间隔统计。
                       </p>
                       <p className="muted">
-                        这些记录不等于实名认证人数或视频有效播放时长。当前未接订单系统，不计算成交或
-                        GMV。
+                        这些记录不等于实名认证人数。门店成交与成本来自单独登记的线下台账，尚未与收银系统自动核对，也不代表直播直接带来的成交。
                       </p>
                     </section>
                   </div>

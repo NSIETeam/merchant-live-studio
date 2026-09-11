@@ -1024,3 +1024,36 @@ test("an oversized accepted suggestion rolls back both its new version and resol
     f.db.close();
   }
 });
+
+test("offline customer records are limited to owner and analyst, mutations to owner", async () => {
+  const f = fixture();
+  try {
+    for (const id of ["writer", "checker", "host"]) {
+      const cookie = await f.login(id);
+      assert.equal(
+        (await f.call("/merchant/attribution/stores", "GET", undefined, cookie))
+          .status,
+        403,
+      );
+    }
+    const analyst = await f.login("metrics");
+    assert.equal(
+      (await f.call("/merchant/attribution/stores", "GET", undefined, analyst))
+        .status,
+      200,
+    );
+    assert.equal(
+      (
+        await f.call(
+          "/merchant/attribution/stores",
+          "POST",
+          { name: "门店", externalRef: "1" },
+          analyst,
+        )
+      ).status,
+      403,
+    );
+  } finally {
+    f.db.close();
+  }
+});

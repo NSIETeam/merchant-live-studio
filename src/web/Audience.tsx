@@ -184,6 +184,10 @@ function AudienceRoom({ id }: { id: string }) {
           {
             visible: watching,
             playing: watching,
+            sourceCode:
+              new URLSearchParams(window.location.search)
+                .get("source")
+                ?.slice(0, 100) || undefined,
           },
         );
         const heartbeat = await lastHeartbeat;
