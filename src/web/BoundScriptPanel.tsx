@@ -197,7 +197,10 @@ export function BoundScriptPanel({
             )}
           </details>
           <small>
-            商家人工确认 ·{" "}
+            {script?.confirmation?.role === "independent_review"
+              ? `独立审核 · ${script.confirmation.confirmedBy}`
+              : "本地本人确认"}{" "}
+            ·{" "}
             {script?.confirmation
               ? new Date(script.confirmation.confirmedAt).toLocaleString(
                   "zh-CN",

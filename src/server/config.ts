@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
+import type { Membership } from "../shared/membership.js";
 export interface Config {
   production: boolean;
   demoMode: boolean;
@@ -9,6 +10,7 @@ export interface Config {
   databasePath: string;
   sessionSecret: string;
   merchantCredentials: Record<string, string>;
+  merchantMemberships?: Record<string, Membership>;
   streamProvider: "srs" | "mediamtx";
   streamRtmpBase: string;
   streamHlsBase: string;
@@ -38,6 +40,30 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     .parse(JSON.parse(env.MERCHANT_CREDENTIALS || "{}"));
   if (production && !Object.keys(merchantCredentials).length)
     throw new Error("MERCHANT_CREDENTIALS is required in production");
+  const merchantMemberships = z
+    .record(
+      z.string().regex(/^[a-zA-Z0-9_-]{1,50}$/),
+      z
+        .object({
+          merchantId: z.string().regex(/^[a-zA-Z0-9_-]{1,50}$/),
+          role: z.enum(["editor", "reviewer", "presenter", "analyst"]),
+        })
+        .strict(),
+    )
+    .parse(JSON.parse(env.MERCHANT_MEMBERSHIPS || "{}"));
+  for (const [actor, member] of Object.entries(merchantMemberships)) {
+    if (
+      actor === "demo" ||
+      !merchantCredentials[actor] ||
+      actor === member.merchantId ||
+      merchantMemberships[member.merchantId] ||
+      (!merchantCredentials[member.merchantId] &&
+        !(demoMode && member.merchantId === "demo"))
+    )
+      throw new Error(
+        "MERCHANT_MEMBERSHIPS must map credentialed members to a distinct owner account",
+      );
+  }
   const appOrigin = z.url().parse(env.APP_ORIGIN || "http://127.0.0.1:5173");
   if (production && !appOrigin.startsWith("https://"))
     throw new Error("Production APP_ORIGIN must use HTTPS");
@@ -76,6 +102,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     demoMode,
     sessionSecret,
     merchantCredentials,
+    merchantMemberships,
     appOrigin: new URL(appOrigin).origin,
     host: env.HOST || "127.0.0.1",
     port: z.coerce

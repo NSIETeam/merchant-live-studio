@@ -165,6 +165,28 @@ export function openDatabase(path: string) {
         INSERT INTO schema_migrations VALUES(5,unixepoch());
       `);
     });
+  if (version < 6)
+    transaction(db, () => {
+      db.exec(`
+      CREATE TABLE content_script_authors(course_id TEXT NOT NULL,script_version INTEGER NOT NULL,actor_id TEXT NOT NULL,
+        PRIMARY KEY(course_id,script_version),FOREIGN KEY(course_id,script_version) REFERENCES content_script_versions(course_id,version));
+      CREATE TABLE content_review_requests(course_id TEXT NOT NULL,script_version INTEGER NOT NULL,submitted_by TEXT NOT NULL,submitted_at INTEGER NOT NULL,note TEXT NOT NULL,
+        PRIMARY KEY(course_id,script_version),FOREIGN KEY(course_id,script_version) REFERENCES content_script_versions(course_id,version));
+      CREATE TABLE content_review_decisions(course_id TEXT NOT NULL,script_version INTEGER NOT NULL,reviewer_id TEXT NOT NULL,reviewed_at INTEGER NOT NULL,
+        decision TEXT NOT NULL CHECK(decision IN ('approved','changes_requested')),note TEXT NOT NULL,
+        PRIMARY KEY(course_id,script_version),FOREIGN KEY(course_id,script_version) REFERENCES content_review_requests(course_id,script_version));
+      INSERT INTO schema_migrations VALUES(6,unixepoch());
+    `);
+      for (const table of [
+        "content_script_authors",
+        "content_review_requests",
+        "content_review_decisions",
+      ])
+        db.exec(`
+      CREATE TRIGGER ${table}_immutable_update BEFORE UPDATE ON ${table} BEGIN SELECT RAISE(ABORT,'Review records are immutable'); END;
+      CREATE TRIGGER ${table}_immutable_delete BEFORE DELETE ON ${table} BEGIN SELECT RAISE(ABORT,'Review records are immutable'); END;
+    `);
+    });
   return db;
 }
 export type DB = ReturnType<typeof openDatabase>;

@@ -1,4 +1,5 @@
 import { Audience } from "./Audience.js";
+import { memberRoleNames, type MemberRole } from "../shared/membership.js";
 import { BoundScriptPanel } from "./BoundScriptPanel.js";
 import { ContentWorkbench } from "./ContentWorkbench.js";
 import { TrainingWorkbench } from "./TrainingWorkbench.js";
@@ -75,6 +76,8 @@ function Merchant() {
   const [auth, setAuth] = useState<{
       merchantId: string | null;
       demoMode: boolean;
+      actorId?: string;
+      memberRole?: MemberRole;
     } | null>(null),
     [error, setError] = useState("");
   const [loginId, setLoginId] = useState(""),
@@ -89,13 +92,19 @@ function Merchant() {
     setBusy(true);
     setError("");
     try {
-      const data = await api<{ merchantId: string }>(
+      const data = await api<{
+        merchantId: string;
+        actorId?: string;
+        memberRole?: MemberRole;
+      }>(
         demo ? "/auth/demo" : "/auth/merchant",
         "POST",
         demo ? {} : { merchantId: loginId, token },
       );
       setAuth({
         merchantId: data.merchantId,
+        actorId: data.actorId,
+        memberRole: data.memberRole,
         demoMode: auth?.demoMode || false,
       });
       setToken("");
@@ -141,7 +150,7 @@ function Merchant() {
                 }}
               >
                 <label>
-                  商家编号
+                  登录账号
                   <input
                     value={loginId}
                     onChange={(e) => setLoginId(e.target.value)}
@@ -183,6 +192,8 @@ function Merchant() {
   return (
     <Workspace
       merchantId={auth.merchantId}
+      actorId={auth.actorId || auth.merchantId}
+      memberRole={auth.memberRole || "owner"}
       demoMode={auth.demoMode}
       onLogout={() =>
         api("/auth/logout", "POST", {})
@@ -207,16 +218,26 @@ function Brand() {
 }
 function Workspace({
   merchantId,
+  actorId,
+  memberRole,
   demoMode,
   onLogout,
 }: {
   merchantId: string;
+  actorId: string;
+  memberRole: MemberRole;
   demoMode: boolean;
   onLogout: () => void;
 }) {
   const [rooms, setRooms] = useState<Room[]>([]),
     [roomId, setRoomId] = useState(""),
-    [tab, setTab] = useState<Tab>("content"),
+    [tab, setTab] = useState<Tab>(
+      memberRole === "analyst"
+        ? "analytics"
+        : memberRole === "presenter"
+          ? "studio"
+          : "content",
+    ),
     [error, setError] = useState(""),
     [notice, setNotice] = useState("");
   const [creating, setCreating] = useState(false),
@@ -326,17 +347,27 @@ function Workspace({
         <Brand />
         <div className="workspace-label">准备 · 播讲 · 复盘</div>
         <nav aria-label="工作台导航">
-          {tabs.map((t) => (
-            <button
-              key={t.id}
-              className={tab === t.id ? "nav-item active" : "nav-item"}
-              onClick={() => setTab(t.id)}
-            >
-              <t.icon size={19} />
-              {t.label}
-              {tab === t.id && <ChevronRight size={15} />}
-            </button>
-          ))}
+          {tabs
+            .filter(
+              (t) =>
+                memberRole === "owner" ||
+                (memberRole === "analyst"
+                  ? t.id === "analytics"
+                  : memberRole === "reviewer"
+                    ? ["content", "analytics"].includes(t.id)
+                    : t.id !== "rewards"),
+            )
+            .map((t) => (
+              <button
+                key={t.id}
+                className={tab === t.id ? "nav-item active" : "nav-item"}
+                onClick={() => setTab(t.id)}
+              >
+                <t.icon size={19} />
+                {t.label}
+                {tab === t.id && <ChevronRight size={15} />}
+              </button>
+            ))}
         </nav>
         <div className="sidebar-note">
           <ShieldCheck size={20} />
@@ -351,9 +382,11 @@ function Workspace({
           <div className="avatar">{merchantId.slice(0, 1).toUpperCase()}</div>
           <div>
             <strong>
-              {demoMode && merchantId === "demo" ? "演示商家" : merchantId}
+              {demoMode && actorId === "demo" ? "演示商家" : actorId}
             </strong>
-            <small>{demoMode ? "本地演示空间" : "商家空间"}</small>
+            <small>
+              {memberRoleNames[memberRole]} · {merchantId}
+            </small>
           </div>
           <button
             className="icon-button"
@@ -403,7 +436,11 @@ function Workspace({
                           : "来自当前直播间的实际访问与互动记录。"}
               </p>
             </div>
-            <button className="primary" onClick={() => setCreating(true)}>
+            <button
+              className="primary"
+              disabled={memberRole !== "owner"}
+              onClick={() => setCreating(true)}
+            >
               <Plus size={17} />
               创建直播间
             </button>
@@ -473,9 +510,11 @@ function Workspace({
               </button>
             </Notice>
           )}
-          <div hidden={tab !== "content"}>
-            <ContentWorkbench rooms={rooms} />
-          </div>
+          {memberRole !== "analyst" && (
+            <div hidden={tab !== "content"}>
+              <ContentWorkbench rooms={rooms} memberRole={memberRole} />
+            </div>
+          )}
           {tab === "content" ? null : !selected ? (
             <div className="empty-state">
               <Radio size={44} />
@@ -510,7 +549,10 @@ function Workspace({
                           </small>
                         </div>
                         <button
-                          disabled={saving}
+                          disabled={
+                            saving ||
+                            !["owner", "presenter"].includes(memberRole)
+                          }
                           className={
                             selected.status === "live" ? "danger" : "primary"
                           }
@@ -536,13 +578,16 @@ function Workspace({
                               : "开放直播间"}
                         </button>
                       </div>
-                      <StreamSettings
-                        key={selected.id}
-                        roomId={selected.id}
-                        copy={copy}
-                        onError={setError}
-                        onNotice={setNotice}
-                      />
+                      {["owner", "presenter"].includes(memberRole) && (
+                        <StreamSettings
+                          key={selected.id}
+                          roomId={selected.id}
+                          copy={copy}
+                          canRotate={memberRole === "owner"}
+                          onError={setError}
+                          onNotice={setNotice}
+                        />
+                      )}
                     </section>
                     <div className="studio-side">
                       <BoundScriptPanel
@@ -803,11 +848,13 @@ function Signal({ roomId }: { roomId: string }) {
 function StreamSettings({
   roomId,
   copy,
+  canRotate,
   onError,
   onNotice,
 }: {
   roomId: string;
   copy: (text: string) => void;
+  canRotate: boolean;
   onError: (m: string) => void;
   onNotice: (m: string) => void;
 }) {
@@ -870,6 +917,7 @@ function StreamSettings({
           </label>
           <button
             className="text-button"
+            disabled={!canRotate}
             onClick={async () => {
               try {
                 const rotation = await api<{

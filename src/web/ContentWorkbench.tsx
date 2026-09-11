@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ScriptComparison } from "./ScriptComparison.js";
+import { ScriptReviewPanel } from "./ScriptReviewPanel.js";
+import type { MemberRole } from "../shared/membership.js";
 import {
   BookOpen,
   Check,
@@ -95,9 +97,13 @@ const titleState = (script: ScriptVersion) =>
     ? "依据已变化"
     : script.state === "final"
       ? "已人工定稿"
-      : script.state === "needs_review"
-        ? "需要审改"
-        : "草稿";
+      : script.state === "pending_review"
+        ? "待独立审核"
+        : script.state === "changes_requested"
+          ? "已退回修改"
+          : script.state === "needs_review"
+            ? "需要审改"
+            : "草稿";
 type Draft = {
   paragraphs: ScriptParagraph[];
   changeNote: string;
@@ -107,12 +113,15 @@ type Draft = {
 
 export function ContentWorkbench({
   rooms,
+  memberRole = "owner",
   onBound,
 }: {
   rooms: Room[];
+  memberRole?: MemberRole;
   onBound?: (binding: ContentBinding) => void;
 }) {
   const alive = useAlive();
+  const canEdit = memberRole === "owner" || memberRole === "editor";
   const [products, setProducts] = useState<ContentProduct[]>([]),
     [productId, setProductId] = useState("");
   const [loading, setLoading] = useState(true),
@@ -169,7 +178,7 @@ export function ContentWorkbench({
         <button
           type="button"
           className="secondary"
-          disabled={create}
+          disabled={create || !canEdit}
           onClick={() => setCreate(true)}
         >
           <Plus size={14} />
@@ -215,6 +224,7 @@ export function ContentWorkbench({
         <ProductWorkspace
           key={product.id}
           product={product}
+          memberRole={memberRole}
           rooms={rooms}
           drafts={drafts.current}
           onUpdated={(updated) =>
@@ -431,18 +441,21 @@ function ProductForm({
 }
 function ProductWorkspace({
   product,
+  memberRole,
   rooms,
   drafts,
   onUpdated,
   onBound,
 }: {
   product: ContentProduct;
+  memberRole: MemberRole;
   rooms: Room[];
   drafts: Map<string, Draft>;
   onUpdated: (product: ContentProduct) => void;
   onBound?: (binding: ContentBinding) => void;
 }) {
   const alive = useAlive();
+  const canEdit = memberRole === "owner" || memberRole === "editor";
   const [versions, setVersions] = useState<ProductVersion[]>([]),
     [plans, setPlans] = useState<ContentPlan[]>([]),
     [planId, setPlanId] = useState("");
@@ -592,6 +605,7 @@ function ProductWorkspace({
                 setView("plan");
               }}
               aria-label="建立课程计划"
+              disabled={!canEdit}
             >
               <Plus size={13} />
             </button>
@@ -623,6 +637,7 @@ function ProductWorkspace({
               <button
                 type="button"
                 className="secondary"
+                disabled={!canEdit}
                 onClick={() => {
                   setNewCourse(true);
                   setView("plan");
@@ -665,6 +680,7 @@ function ProductWorkspace({
           <CourseEditor
             key={`${course.id}:${current.version}`}
             product={product}
+            memberRole={memberRole}
             productVersion={current}
             course={course}
             rooms={rooms}
@@ -694,7 +710,7 @@ function ProductWorkspace({
                         <button
                           type="button"
                           className="secondary"
-                          disabled={!current || editing}
+                          disabled={!current || editing || !canEdit}
                           onClick={() => setEditing(true)}
                         >
                           编辑与核对资料
@@ -802,6 +818,7 @@ function ProductWorkspace({
                             <button
                               type="button"
                               className="secondary"
+                              disabled={!canEdit}
                               onClick={() => {
                                 setEditingPlan(plan);
                                 setNewPlan(false);
@@ -812,6 +829,7 @@ function ProductWorkspace({
                             <button
                               type="button"
                               className="secondary"
+                              disabled={!canEdit}
                               onClick={() => {
                                 setNewCourse(true);
                                 setEditingCourse(null);
@@ -894,6 +912,7 @@ function ProductWorkspace({
                                       <br />
                                       <button
                                         type="button"
+                                        disabled={!canEdit}
                                         onClick={() => {
                                           setEditingCourse(item);
                                           setNewCourse(false);
@@ -946,7 +965,7 @@ function ProductWorkspace({
                 <div className="cw-divider">
                   <h3>定稿的边界</h3>
                   <p className="cw-meta">
-                    定稿为商家本人确认，尚无独立审稿人或多级审批。替换敏感词不能消除原有功效或比较性承诺。
+                    团队和生产空间由另一审核账号批准定稿。替换敏感词不能消除原有功效或比较性承诺。
                   </p>
                 </div>
               </div>
@@ -1206,6 +1225,7 @@ function CourseForm({
 }
 function CourseEditor({
   product,
+  memberRole,
   productVersion,
   course,
   rooms,
@@ -1217,6 +1237,7 @@ function CourseEditor({
   onRefreshProduct,
 }: {
   product: ContentProduct;
+  memberRole: MemberRole;
   productVersion: ProductVersion;
   course: ContentCourse;
   rooms: Room[];
@@ -1228,6 +1249,7 @@ function CourseEditor({
   onRefreshProduct: () => void;
 }) {
   const alive = useAlive();
+  const canEdit = memberRole === "owner" || memberRole === "editor";
   const savedDraft = drafts.get(course.id);
   const readSequence = useRef(0);
   const bindingReadSequence = useRef(0);
@@ -1247,6 +1269,7 @@ function CourseEditor({
     [notice, setNotice] = useState("");
   const [confirmationNote, setConfirmationNote] = useState(""),
     [acknowledged, setAcknowledged] = useState(false);
+  const [requiresReview, setRequiresReview] = useState(true);
   const [roomId, setRoomId] = useState(rooms[0]?.id || ""),
     [binding, setBinding] = useState<ContentBinding | null>(null),
     [bindingError, setBindingError] = useState("");
@@ -1540,7 +1563,7 @@ function CourseEditor({
             <button
               type="button"
               className="secondary"
-              disabled={busy}
+              disabled={busy || !canEdit}
               onClick={onEditCourse}
             >
               修改课时安排
@@ -1557,7 +1580,7 @@ function CourseEditor({
               {paragraphs.length} / {CONTENT_LIMITS.paragraphs} 段
             </span>
           </div>
-          <fieldset disabled={busy || loading}>
+          <fieldset disabled={busy || loading || !canEdit}>
             <label className="cw-upload">
               导入讲稿文字
               <input
@@ -1772,7 +1795,7 @@ function CourseEditor({
                 段落类型
                 <select
                   value={paragraph.kind}
-                  disabled={busy || loading}
+                  disabled={busy || loading || !canEdit}
                   onChange={(e) =>
                     editParagraph(paragraph.id, {
                       kind: e.target.value as ScriptParagraph["kind"],
@@ -1792,7 +1815,7 @@ function CourseEditor({
                     <label className="cw-check" key={fact.id}>
                       <input
                         type="checkbox"
-                        disabled={busy || loading}
+                        disabled={busy || loading || !canEdit}
                         checked={paragraph.factIds.includes(fact.id)}
                         onChange={(e) =>
                           editParagraph(paragraph.id, {
@@ -1899,57 +1922,72 @@ function CourseEditor({
               </p>
             )}
           </div>
-          <div className="cw-divider">
-            <h3>商家本人定稿确认</h3>
-            {selected?.confirmation && (
-              <p className="cw-meta">
-                V{selected.version} 于 {date(selected.confirmation.confirmedAt)}{" "}
-                由 {selected.confirmation.confirmedBy} 确认。
-                {selected.confirmation.note}
-              </p>
-            )}
-            <fieldset
-              disabled={
-                busy ||
-                dirty ||
-                !selected ||
-                selected.stale ||
-                selected.check.blockingCount > 0 ||
-                selected.state === "final"
-              }
-            >
-              <label>
-                核对与审改记录
-                <textarea
-                  rows={3}
-                  maxLength={1000}
-                  value={confirmationNote}
-                  onChange={(e) => setConfirmationNote(e.target.value)}
-                  placeholder="说明已核对的引用、风险提示及表述适用范围"
-                />
-              </label>
-              <label className="cw-check">
-                <input
-                  type="checkbox"
-                  checked={acknowledged}
-                  onChange={(e) => setAcknowledged(e.target.checked)}
-                />
-                我已逐段核对商品依据与风险提示，确认此稿可用于当前课程。
-              </label>
-              <button
-                type="button"
-                className="primary"
-                disabled={!acknowledged || !confirmationNote.trim()}
-                onClick={() => void confirm()}
+          {selected && (
+            <ScriptReviewPanel
+              key={`${course.id}:${selected.version}`}
+              script={selected}
+              dirty={dirty}
+              onPolicy={setRequiresReview}
+              onChanged={() => {
+                void refresh(true);
+                onSaved();
+              }}
+            />
+          )}
+          {!requiresReview && (
+            <div className="cw-divider">
+              <h3>本地单人演示确认</h3>
+              {selected?.confirmation && (
+                <p className="cw-meta">
+                  V{selected.version} 于{" "}
+                  {date(selected.confirmation.confirmedAt)} 由{" "}
+                  {selected.confirmation.confirmedBy} 确认。
+                  {selected.confirmation.note}
+                </p>
+              )}
+              <fieldset
+                disabled={
+                  busy ||
+                  dirty ||
+                  !selected ||
+                  selected.stale ||
+                  selected.check.blockingCount > 0 ||
+                  selected.state === "final"
+                }
               >
-                <Check size={13} />
-                确认定稿
-              </button>
-            </fieldset>
-            <p className="cw-meta">
-              此操作记录商家自确认，尚非独立审稿人或多级审批。
-            </p>
-          </div>
+                <label>
+                  核对与审改记录
+                  <textarea
+                    rows={3}
+                    maxLength={1000}
+                    value={confirmationNote}
+                    onChange={(e) => setConfirmationNote(e.target.value)}
+                    placeholder="说明已核对的引用、风险提示及表述适用范围"
+                  />
+                </label>
+                <label className="cw-check">
+                  <input
+                    type="checkbox"
+                    checked={acknowledged}
+                    onChange={(e) => setAcknowledged(e.target.checked)}
+                  />
+                  我已逐段核对商品依据与风险提示，确认此稿可用于当前课程。
+                </label>
+                <button
+                  type="button"
+                  className="primary"
+                  disabled={!acknowledged || !confirmationNote.trim()}
+                  onClick={() => void confirm()}
+                >
+                  <Check size={13} />
+                  确认定稿
+                </button>
+              </fieldset>
+              <p className="cw-meta">
+                单人演示可自确认；生产及团队空间必须走独立审核。
+              </p>
+            </div>
+          )}
           <div className="cw-divider">
             <h3>用于真人直播</h3>
             <label>
@@ -1975,6 +2013,9 @@ function CourseEditor({
                 dirty ||
                 !selected ||
                 selected.state !== "final" ||
+                !["owner", "presenter"].includes(memberRole) ||
+                (requiresReview &&
+                  selected.confirmation?.role !== "independent_review") ||
                 selected.stale ||
                 !roomId
               }

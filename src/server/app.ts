@@ -11,6 +11,11 @@ import { z, ZodError } from "zod";
 import type { Config } from "./config.js";
 import { type DB, transaction } from "./db.js";
 import { equalSecret, issueSession, readSession } from "./auth.js";
+import {
+  merchantIdentity,
+  memberMayAccess,
+  requiresIndependentReview,
+} from "./permissions.js";
 import { createStreamAdapter } from "./services/stream.js";
 import {
   campaignDto,
@@ -220,7 +225,9 @@ export function createApp(
   app.get("/api/channels", (c) => c.json({ channels: channelCapabilities }));
   app.get("/api/auth/me", (c) =>
     c.json({
-      merchantId: readSession(c, config, "merchant", db)?.id || null,
+      ...(readSession(c, config, "merchant", db)
+        ? merchantIdentity(config, readSession(c, config, "merchant", db)!.id)
+        : { merchantId: null }),
       demoMode: config.demoMode,
     }),
   );
@@ -237,7 +244,7 @@ export function createApp(
     if (!expected || !equalSecret(expected, input.token))
       throw new HTTPException(401, { message: "商家编号或访问密钥错误" });
     issueSession(c, config, "merchant", input.merchantId);
-    return c.json({ merchantId: input.merchantId });
+    return c.json(merchantIdentity(config, input.merchantId));
   });
   app.post("/api/auth/logout", (c) => {
     const session = readSession(c, config, "merchant", db);
@@ -262,7 +269,13 @@ export function createApp(
     const session = readSession(c, config, "merchant", db);
     if (!session)
       throw new HTTPException(401, { message: "请先登录商家工作台" });
-    c.set("merchantId", session.id);
+    const identity = merchantIdentity(config, session.id);
+    c.set("merchantId", identity.merchantId);
+    c.set("actorId", identity.actorId);
+    c.set("memberRole", identity.memberRole);
+    c.set("requireIndependentReview", identity.requiresIndependentReview);
+    if (!memberMayAccess(identity.memberRole, c.req.method, c.req.path))
+      throw new HTTPException(403, { message: "当前角色没有此操作权限" });
     await next();
   });
   app.use("/api/viewer/*", async (c, next) => {
@@ -399,7 +412,12 @@ export function createApp(
   attachContent(app, db, clock);
   const agentBasis = (roomId: string, tenant: string) => {
     const r = owned(roomId, tenant);
-    const binding = getRoomContentBinding(db, roomId, tenant);
+    const binding = getRoomContentBinding(
+      db,
+      roomId,
+      tenant,
+      requiresIndependentReview(config, tenant),
+    );
     if (!binding)
       return {
         productName: r.product_name,

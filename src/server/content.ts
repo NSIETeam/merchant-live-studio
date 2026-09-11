@@ -5,6 +5,7 @@ import { z } from "zod";
 import { transaction, type DB } from "./db.js";
 import { checkScript, CONTENT_RULE_VERSION } from "./content-check.js";
 import { compareScripts } from "../shared/content-diff.js";
+import { readScriptReview, attachScriptReview } from "./script-review.js";
 import {
   CONTENT_LIMITS,
   type ContentProduct,
@@ -228,14 +229,25 @@ function scriptVersion(
       "SELECT * FROM content_script_confirmations WHERE course_id=? AND script_version=?",
     )
     .get(courseId, version) as ConfirmationRow | undefined;
-  const confirmation: ScriptConfirmation | undefined = confirmationRow
-    ? {
-        confirmedAt: confirmationRow.confirmed_at,
-        confirmedBy: confirmationRow.confirmed_by,
-        note: confirmationRow.note,
-        role: "merchant_self_confirmation",
-      }
-    : undefined;
+  const review = readScriptReview(db, courseId, version);
+  const confirmation: ScriptConfirmation | undefined =
+    review.decision?.decision === "approved"
+      ? {
+          confirmedAt: review.decision.reviewedAt,
+          confirmedBy: review.decision.reviewerId,
+          note: review.decision.note,
+          role: "independent_review",
+        }
+      : review.submission
+        ? undefined
+        : confirmationRow
+          ? {
+              confirmedAt: confirmationRow.confirmed_at,
+              confirmedBy: confirmationRow.confirmed_by,
+              note: confirmationRow.note,
+              role: "merchant_self_confirmation",
+            }
+          : undefined;
   const check = JSON.parse(row.check_json) as ScriptVersion["check"];
   const stale =
     current.latest_version !== row.product_version ||
@@ -251,7 +263,15 @@ function scriptVersion(
     check,
     ...(confirmation ? { confirmation } : {}),
     stale,
-    state: stale ? "needs_review" : confirmation ? "final" : "draft",
+    state: stale
+      ? "needs_review"
+      : confirmation
+        ? "final"
+        : review.decision
+          ? "changes_requested"
+          : review.submission
+            ? "pending_review"
+            : "draft",
   };
 }
 function roomOwned(db: DB, roomId: string, merchant: string) {
@@ -267,6 +287,7 @@ export function getRoomContentBinding(
   db: DB,
   roomId: string,
   merchant: string,
+  requireIndependentReview = false,
 ): ContentBinding | null {
   roomOwned(db, roomId, merchant);
   const row = db
@@ -285,7 +306,11 @@ export function getRoomContentBinding(
     productName: script.productSnapshot.name,
     category: script.productSnapshot.category,
     stale:
-      script.stale || !script.confirmation || script.check.blockingCount > 0,
+      script.stale ||
+      !script.confirmation ||
+      script.check.blockingCount > 0 ||
+      (requireIndependentReview &&
+        script.confirmation.role !== "independent_review"),
     script,
   };
 }
@@ -295,6 +320,12 @@ export function attachContent(
   db: DB,
   clock: () => number = Date.now,
 ) {
+  attachScriptReview(
+    app,
+    db,
+    (id, version, merchant) => scriptVersion(db, id, version, merchant),
+    clock,
+  );
   app.get("/api/merchant/content/products", (c) =>
     c.json({
       products: (
@@ -622,6 +653,11 @@ export function attachContent(
       db.prepare(
         "UPDATE content_courses SET latest_script_version=? WHERE id=?",
       ).run(next, id);
+      db.prepare("INSERT INTO content_script_authors VALUES(?,?,?)").run(
+        id,
+        next,
+        c.get("actorId") || merchant,
+      );
       return next;
     });
     return c.json({ script: scriptVersion(db, id, next, merchant) }, 201);
@@ -629,6 +665,10 @@ export function attachContent(
   app.post(
     "/api/merchant/content/courses/:id/scripts/:version/confirm",
     async (c) => {
+      if (c.get("requireIndependentReview"))
+        throw new HTTPException(409, {
+          message: "此工作空间要求独立审核，请提交审核并由另一审核账号确认。",
+        });
       const input = z
         .object({
           note: z.string().trim().min(1).max(1000),
@@ -645,6 +685,8 @@ export function attachContent(
           .parse(c.req.param("version"));
       transaction(db, () => {
         const script = scriptVersion(db, id, version, merchant);
+        if (readScriptReview(db, id, version).submission)
+          conflict("此稿已进入独立审核流程，不能改用本人确认。");
         if (script.stale)
           conflict(
             "商品依据或检查规则已变化；请用当前证据保存新的讲稿版本并重新检查。",
@@ -665,6 +707,7 @@ export function attachContent(
         db,
         c.req.param("id"),
         c.get("merchantId"),
+        c.get("requireIndependentReview"),
       ),
     }),
   );
@@ -710,6 +753,11 @@ export function attachContent(
       );
       if (script.stale || !script.confirmation || script.check.blockingCount)
         conflict("仅可绑定当前商品依据下、无阻断项且已人工定稿的讲稿。");
+      if (
+        c.get("requireIndependentReview") &&
+        script.confirmation?.role !== "independent_review"
+      )
+        conflict("此工作空间只允许绑定经独立审核批准的稿件。");
       const previous = db
         .prepare(
           "SELECT course_id,script_version FROM content_room_bindings WHERE room_id=?",
@@ -732,7 +780,7 @@ export function attachContent(
         input.courseId,
         input.scriptVersion,
         boundAt,
-        merchant,
+        c.get("actorId") || merchant,
         String(
           db.prepare("SELECT title FROM rooms WHERE id=?").get(roomId)!.title,
         ),

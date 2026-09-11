@@ -103,7 +103,17 @@ export interface ScriptConfirmation {
   confirmedAt: number;
   confirmedBy: string;
   note: string;
-  role: "merchant_self_confirmation";
+  role: "merchant_self_confirmation" | "independent_review";
+}
+export interface ScriptReviewRecord {
+  authorId: string | null;
+  submission: { submittedBy: string; submittedAt: number; note: string } | null;
+  decision: {
+    reviewerId: string;
+    reviewedAt: number;
+    decision: "approved" | "changes_requested";
+    note: string;
+  } | null;
 }
 export interface ScriptVersion {
   courseId: string;
@@ -116,7 +126,8 @@ export interface ScriptVersion {
   check: ScriptCheck;
   confirmation?: ScriptConfirmation;
   stale: boolean;
-  state: "draft" | "final" | "needs_review";
+  state:
+    "draft" | "final" | "needs_review" | "pending_review" | "changes_requested";
 }
 export interface CourseDetail {
   course: ContentCourse;

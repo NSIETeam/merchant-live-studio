@@ -15,7 +15,10 @@ const credentialVersion = (config: Config, id: string) =>
     .update(
       config.demoMode && id === "demo"
         ? "local-demo"
-        : config.merchantCredentials[id] || "disabled",
+        : (config.merchantCredentials[id] || "disabled") +
+            (config.merchantMemberships?.[id]
+              ? JSON.stringify(config.merchantMemberships[id])
+              : ""),
     )
     .digest("hex");
 export function equalSecret(a: string, b: string) {
