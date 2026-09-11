@@ -257,6 +257,35 @@ export function openDatabase(path: string) {
       CREATE TRIGGER ${table}_immutable_delete BEFORE DELETE ON ${table} BEGIN SELECT RAISE(ABORT,'Attribution history is immutable'); END;
     `);
     });
+  if (version < 10)
+    transaction(db, () => {
+      db.exec(`
+        CREATE TABLE engagement_programs(room_id TEXT NOT NULL REFERENCES rooms(id),version INTEGER NOT NULL,enabled INTEGER NOT NULL CHECK(enabled IN(0,1)),points INTEGER NOT NULL CHECK(points BETWEEN 1 AND 10000),min_watch_seconds INTEGER NOT NULL CHECK(min_watch_seconds BETWEEN 0 AND 14400),daily_limit INTEGER NOT NULL CHECK(daily_limit BETWEEN 1 AND 100000),actor_id TEXT NOT NULL,created_at INTEGER NOT NULL,PRIMARY KEY(room_id,version));
+        CREATE TABLE engagement_checkins(id TEXT PRIMARY KEY,room_id TEXT NOT NULL REFERENCES rooms(id),viewer_id TEXT NOT NULL,day TEXT NOT NULL,program_version INTEGER NOT NULL,points INTEGER NOT NULL,created_at INTEGER NOT NULL,UNIQUE(room_id,viewer_id,day));
+        CREATE TABLE engagement_points(id TEXT PRIMARY KEY,merchant_id TEXT NOT NULL,viewer_id TEXT NOT NULL,delta INTEGER NOT NULL CHECK(delta!=0),reason TEXT NOT NULL,reference_id TEXT NOT NULL,created_at INTEGER NOT NULL,UNIQUE(reason,reference_id));
+        CREATE INDEX engagement_points_balance ON engagement_points(merchant_id,viewer_id);
+        CREATE TABLE engagement_gifts(id TEXT PRIMARY KEY,merchant_id TEXT NOT NULL,title TEXT NOT NULL,description TEXT NOT NULL,points INTEGER NOT NULL CHECK(points>0),stock INTEGER NOT NULL CHECK(stock>=0),enabled INTEGER NOT NULL CHECK(enabled IN(0,1)),version INTEGER NOT NULL,created_at INTEGER NOT NULL);
+        CREATE TABLE engagement_gift_history(id TEXT PRIMARY KEY,gift_id TEXT NOT NULL REFERENCES engagement_gifts(id),version INTEGER NOT NULL,snapshot_json TEXT NOT NULL,actor_id TEXT NOT NULL,created_at INTEGER NOT NULL,UNIQUE(gift_id,version));
+        CREATE TABLE engagement_redemptions(id TEXT PRIMARY KEY,merchant_id TEXT NOT NULL,viewer_id TEXT NOT NULL,gift_id TEXT NOT NULL REFERENCES engagement_gifts(id),title TEXT NOT NULL,points INTEGER NOT NULL,code TEXT NOT NULL UNIQUE,state TEXT NOT NULL CHECK(state IN('reserved','fulfilled','cancelled')),idempotency_key TEXT NOT NULL,created_at INTEGER NOT NULL,UNIQUE(merchant_id,viewer_id,idempotency_key));
+        CREATE TABLE engagement_events(id TEXT PRIMARY KEY,redemption_id TEXT NOT NULL REFERENCES engagement_redemptions(id),state TEXT NOT NULL,actor_id TEXT NOT NULL,note TEXT NOT NULL,created_at INTEGER NOT NULL,UNIQUE(redemption_id,state));
+        CREATE INDEX engagement_redemptions_owner ON engagement_redemptions(merchant_id,viewer_id,created_at);
+      `);
+      for (const table of [
+        "engagement_programs",
+        "engagement_checkins",
+        "engagement_points",
+        "engagement_gift_history",
+        "engagement_events",
+      ]) {
+        db.exec(
+          `CREATE TRIGGER ${table}_immutable_update BEFORE UPDATE ON ${table} BEGIN SELECT RAISE(ABORT,'immutable'); END; CREATE TRIGGER ${table}_immutable_delete BEFORE DELETE ON ${table} BEGIN SELECT RAISE(ABORT,'immutable'); END;`,
+        );
+      }
+      db.prepare("INSERT INTO schema_migrations VALUES(?,?)").run(
+        10,
+        Date.now(),
+      );
+    });
   return db;
 }
 export type DB = ReturnType<typeof openDatabase>;

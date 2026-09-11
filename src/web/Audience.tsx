@@ -1,3 +1,4 @@
+import { ViewerEngagement } from "./EngagementPanel.js";
 import {
   useCallback,
   useEffect,
@@ -29,7 +30,7 @@ type Heartbeat = { watchSeconds: number; counting: boolean };
 type Panel = "questions" | "rewards" | "information";
 const panelNames: Record<Panel, string> = {
   questions: "向主播提问",
-  rewards: "直播红包",
+  rewards: "签到与互动活动",
   information: "观看信息",
 };
 
@@ -531,6 +532,13 @@ function AudienceRoom({ id }: { id: string }) {
 
               {panel === "rewards" && (
                 <>
+                  {ready && (
+                    <ViewerEngagement
+                      roomId={id}
+                      watch={watch}
+                      counting={counting}
+                    />
+                  )}
                   <p className="audience-help">
                     本场有效观看 <strong>{duration(watch)}</strong>
                     。红包为演示，不发生真实转账。
@@ -706,7 +714,7 @@ function AudienceRoom({ id }: { id: string }) {
             <Gift size={22} aria-hidden="true" />
             {openReward && <i aria-hidden="true" />}
           </span>
-          <span>红包{openReward ? " · 已开启" : ""}</span>
+          <span>活动{openReward ? " · 红包已开启" : ""}</span>
         </button>
         <button
           onClick={(event) => openPanel("information", event.currentTarget)}

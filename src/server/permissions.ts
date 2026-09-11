@@ -38,7 +38,10 @@ export function memberMayAccess(
   path: string,
 ) {
   if (role === "owner") return true;
-  if (path.startsWith("/api/merchant/attribution"))
+  if (
+    path.startsWith("/api/merchant/attribution") ||
+    path.startsWith("/api/merchant/engagement")
+  )
     return role === "analyst" && ["GET", "HEAD"].includes(method);
   if (method === "GET" || method === "HEAD") {
     if (/\/stream(?:\/|$)/.test(path)) return role === "presenter";

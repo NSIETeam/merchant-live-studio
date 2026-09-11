@@ -1,3 +1,4 @@
+import { attachEngagement } from "./engagement.js";
 import { attachAttribution, recordAttribution } from "./attribution.js";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
@@ -412,6 +413,7 @@ export function createApp(
   attachMaterials(app, db, owned, (roomId) => factsFor(db, roomId), clock);
   attachContent(app, db, clock, agentBridge);
   attachAttribution(app, db, owned, clock);
+  attachEngagement(app, db, clock);
   const agentBasis = (roomId: string, tenant: string) => {
     const r = owned(roomId, tenant);
     const binding = getRoomContentBinding(

@@ -1057,3 +1057,36 @@ test("offline customer records are limited to owner and analyst, mutations to ow
     f.db.close();
   }
 });
+
+test("engagement configuration and fulfillment require owner; analyst has read access only", async () => {
+  const f = fixture();
+  try {
+    for (const id of ["writer", "checker", "host"]) {
+      const cookie = await f.login(id);
+      assert.equal(
+        (await f.call("/merchant/engagement/gifts", "GET", undefined, cookie))
+          .status,
+        403,
+      );
+    }
+    const analyst = await f.login("metrics");
+    assert.equal(
+      (await f.call("/merchant/engagement/gifts", "GET", undefined, analyst))
+        .status,
+      200,
+    );
+    assert.equal(
+      (
+        await f.call(
+          "/merchant/engagement/rooms/demo-room",
+          "POST",
+          {},
+          analyst,
+        )
+      ).status,
+      403,
+    );
+  } finally {
+    f.db.close();
+  }
+});

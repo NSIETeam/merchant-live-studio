@@ -1,3 +1,4 @@
+import { MerchantEngagement } from "./EngagementPanel.js";
 import { AttributionPanel } from "./AttributionPanel.js";
 import { Audience } from "./Audience.js";
 import { memberRoleNames, type MemberRole } from "../shared/membership.js";
@@ -663,7 +664,20 @@ function Workspace({
                 />
               )}
               {tab === "rewards" && (
-                <Rewards key={selected.id} room={selected} onError={setError} />
+                <>
+                  {(memberRole === "owner" || memberRole === "analyst") && (
+                    <MerchantEngagement
+                      key={selected.id}
+                      roomId={selected.id}
+                      editable={memberRole === "owner"}
+                    />
+                  )}
+                  <Rewards
+                    key={selected.id}
+                    room={selected}
+                    onError={setError}
+                  />
+                </>
               )}
               {tab === "analytics" && (
                 <>
