@@ -1,3 +1,4 @@
+import { StudioVideo } from "./StudioVideo.js";
 import { DeferredPanel } from "./DeferredPanel.js";
 import { LedgerPanel } from "./LedgerPanel.js";
 import { TeamPanel } from "./TeamPanel.js";
@@ -66,7 +67,6 @@ import type {
   StreamState,
 } from "../shared/types";
 import { api, duration, money } from "./api";
-import { Player } from "./Player";
 import "./styles.css";
 import "./merchant-density.css";
 import "./live-stage.css";
@@ -601,10 +601,11 @@ function Workspace({
                         <h2>直播预览</h2>
                         <span className="muted">{selected.productName}</span>
                       </div>
-                      <Player
+                      <StudioVideo
                         key={selected.id}
                         url={selected.playbackUrl}
                         live={selected.status === "live"}
+                        canPreview={["owner", "presenter"].includes(memberRole)}
                       />
                       <Signal
                         key={selected.id + selected.status}
