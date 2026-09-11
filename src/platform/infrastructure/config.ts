@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import type { Membership } from "../../shared/membership.js";
+import type { PlatformComplianceData } from "../../shared/platform-compliance.js";
 export interface Config {
   production: boolean;
   recordingsRoot: string;
@@ -25,6 +26,7 @@ export interface Config {
   basePath: string;
   agentServiceUrl: string;
   agentServiceToken: string;
+  platformCompliance: PlatformComplianceData | null;
 }
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const production = env.NODE_ENV === "production";
@@ -86,6 +88,36 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const appOrigin = z.url().parse(env.APP_ORIGIN || "http://127.0.0.1:5173");
   if (production && !appOrigin.startsWith("https://"))
     throw new Error("Production APP_ORIGIN must use HTTPS");
+  const policyUrl = z
+    .url()
+    .max(1000)
+    .refine((value) => {
+      const parsed = new URL(value);
+      return (
+        parsed.protocol === "https:" ||
+        (parsed.protocol === "http:" &&
+          ["127.0.0.1", "localhost", "::1"].includes(parsed.hostname))
+      );
+    }, "Policy URLs must use HTTPS outside local development");
+  const complianceSchema = z
+    .object({
+      operatorName: z.string().trim().min(2).max(120),
+      creditCode: z
+        .string()
+        .trim()
+        .regex(/^[0-9A-Z]{18}$/),
+      address: z.string().trim().min(5).max(240),
+      contact: z.string().trim().min(5).max(120),
+      complaintContact: z.string().trim().min(5).max(240),
+      privacyContact: z.string().trim().min(5).max(240),
+      effectiveDate: z.iso.date(),
+      privacyPolicyUrl: policyUrl,
+      serviceTermsUrl: policyUrl,
+    })
+    .strict();
+  const platformCompliance = env.PLATFORM_COMPLIANCE?.trim()
+    ? complianceSchema.parse(JSON.parse(env.PLATFORM_COMPLIANCE))
+    : null;
   const agentServiceUrl = (
     env.AGENT_SERVICE_URL ?? (production ? "" : "http://127.0.0.1:8788")
   ).replace(/\/$/, "");
@@ -153,5 +185,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       .filter(Boolean),
     agentServiceUrl,
     agentServiceToken,
+    platformCompliance,
   };
 }

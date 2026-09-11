@@ -1792,3 +1792,71 @@ progress::-moz-progress-bar {
 .complaint-appeal h4 {
   margin-top: 0;
 }
+
+.platform-compliance {
+  color: #252830;
+}
+.platform-compliance.is-compact {
+  padding-bottom: 18px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid #dfe2e7;
+}
+.platform-compliance dl {
+  display: grid;
+  gap: 10px;
+}
+.platform-compliance dl > div {
+  min-width: 0;
+}
+.platform-compliance dt {
+  color: #747b88;
+  font-size: 0.78rem;
+}
+.platform-compliance dd {
+  margin: 3px 0 0;
+  overflow-wrap: anywhere;
+}
+.platform-compliance li {
+  margin-block: 8px;
+  line-height: 1.6;
+}
+.platform-policy-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-block: 14px;
+}
+.platform-policy-links a,
+.login-compliance-link {
+  color: #3f526b;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.platform-compliance-missing {
+  color: #8c3a32;
+  background: #fff2f1;
+  border: 1px solid #edcfcc;
+  border-radius: 7px;
+  padding: 12px;
+}
+.compliance-page {
+  width: min(760px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 30px 0 60px;
+}
+.compliance-page > a {
+  display: inline-block;
+  color: #3f526b;
+  margin-bottom: 20px;
+}
+.compliance-page .platform-compliance {
+  background: #fff;
+  border: 1px solid #dfe2e7;
+  border-radius: 10px;
+  padding: clamp(20px, 4vw, 36px);
+}
+.login-compliance-link {
+  display: inline-block;
+  margin-top: 16px;
+  font-size: 0.82rem;
+}

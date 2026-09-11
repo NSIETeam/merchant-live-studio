@@ -528,6 +528,29 @@
   background: #fff2f2;
   border-color: #efcccc;
 }
+.audience-drawer .platform-compliance,
+.audience-drawer .platform-compliance h2,
+.audience-drawer .platform-compliance h3,
+.audience-drawer .platform-compliance dd,
+.audience-drawer .platform-compliance li,
+.audience-drawer .platform-compliance p {
+  color: #e7e9ed;
+}
+.audience-drawer .platform-compliance dt,
+.audience-drawer .platform-compliance .muted {
+  color: #b8bec8;
+}
+.audience-drawer .platform-compliance.is-compact {
+  border-bottom-color: #4b4f5a;
+}
+.audience-drawer .platform-compliance-missing {
+  color: #f0c4c0;
+  background: #3d292b;
+  border-color: #70464a;
+}
+.audience-drawer .platform-policy-links a {
+  color: #d7e2f0;
+}
 @media (max-width: 600px) {
   .audience-topbar {
     min-height: 54px;

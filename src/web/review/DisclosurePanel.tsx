@@ -6,6 +6,7 @@ import type {
   PublicDisclosure,
 } from "../../shared/disclosure.js";
 import type { MemberRole } from "../../shared/membership.js";
+import { PlatformCompliance } from "../shared/PlatformCompliance.js";
 const fields = {
   name: "企业名称",
   creditCode: "统一社会信用代码",
@@ -75,6 +76,7 @@ export function PublicDisclosurePanel({ roomId }: { roomId: string }) {
   }, [roomId]);
   return (
     <section className="disclosure-panel">
+      <PlatformCompliance compact />
       <h2>经营者信息</h2>
       {error ? (
         <p role="alert">{error}</p>
