@@ -5,6 +5,26 @@ import { once } from "node:events";
 import { loadConfig } from "../src/platform/infrastructure/public.js";
 import { openDatabase } from "../src/server/db.js";
 import { createApp, seedDemo } from "../src/composition/studio.js";
+import { createAdmissionChecker } from "../src/modules/live/admission.js";
+
+const platformCompliance = {
+  operatorName: "合成测试平台运营企业",
+  creditCode: "91310100MA12345678",
+  address: "合成测试经营地址不用于经营",
+  contact: "合成公开联系 00000000",
+  complaintContact: "合成平台投诉联系 00000001",
+  privacyContact: "合成隐私联系 privacy@example.test",
+  effectiveDate: "2026-09-11",
+  privacyPolicyUrl: "https://example.test/privacy",
+  serviceTermsUrl: "https://example.test/terms",
+};
+const retentionPolicy = {
+  effectiveDate: "2026-09-11",
+  liveContentDays: 60,
+  commerceRecordsMonths: 36,
+  securityLogsMonths: 6,
+  deletionReviewContact: "合成删除与争议保留联系 00000002",
+};
 
 test("production cannot disable reviewed live admission", () => {
   const config = loadConfig({
@@ -19,6 +39,35 @@ test("production cannot disable reviewed live admission", () => {
   });
   assert.equal(config.requireReviewedLive, true);
   assert.equal(loadConfig({ DEMO_MODE: "true" }).requireReviewedLive, false);
+});
+
+test("reviewed admission exposes missing platform and retention configuration", () => {
+  const db = openDatabase(":memory:");
+  try {
+    seedDemo(db);
+    const checker = createAdmissionChecker(
+      db,
+      loadConfig({ DEMO_MODE: "true", REQUIRE_REVIEWED_LIVE: "true" }),
+      {
+        disclosure: () => ({ published: true, version: 1, valid: true }),
+        binding: () => null,
+      },
+    );
+    const result = checker("demo-room", "demo", true);
+    assert.equal(result.ready, false);
+    assert.equal(
+      result.checks.find((item) => item.code === "platform")?.passed,
+      false,
+    );
+    assert.equal(
+      result.checks.find((item) => item.code === "retention")?.passed,
+      false,
+    );
+    assert.equal(result.basis.platformPolicyEffectiveDate, null);
+    assert.equal(result.basis.retentionPolicyEffectiveDate, null);
+  } finally {
+    db.close();
+  }
 });
 
 test("admission blocks missing or revoked basis, records successful starts, and rechecks publish after awaits", async () => {
@@ -61,6 +110,8 @@ test("admission blocks missing or revoked basis, records successful starts, and 
     MERCHANT_MEMBERSHIPS: JSON.stringify({
       reviewer: { merchantId: "demo", role: "reviewer" },
     }),
+    PLATFORM_COMPLIANCE: JSON.stringify(platformCompliance),
+    DATA_RETENTION_POLICY: JSON.stringify(retentionPolicy),
   });
   let now = Date.now();
   const app = createApp(db, config, () => now);
@@ -103,7 +154,10 @@ test("admission blocks missing or revoked basis, records successful starts, and 
       .data;
     assert.equal(initial.enforced, true);
     assert.equal(initial.ready, false);
-    assert.equal(initial.checks[2].passed, true);
+    assert.equal(
+      initial.checks.find((item: any) => item.code === "media").passed,
+      true,
+    );
     assert.equal(
       (await call(room + "/admission", "GET", undefined, other)).status,
       404,
@@ -248,6 +302,14 @@ test("admission blocks missing or revoked basis, records successful starts, and 
     assert.equal(history.items.length, 1);
     assert.equal(history.items[0].basis.disclosureVersion, 1);
     assert.equal(history.items[0].basis.scriptVersion, 1);
+    assert.equal(
+      history.items[0].basis.platformPolicyEffectiveDate,
+      "2026-09-11",
+    );
+    assert.equal(
+      history.items[0].basis.retentionPolicyEffectiveDate,
+      "2026-09-11",
+    );
     assert.throws(() => db.exec("DELETE FROM live_admissions"));
     const secret = db
       .prepare("SELECT stream_secret FROM rooms WHERE id='demo-room'")
