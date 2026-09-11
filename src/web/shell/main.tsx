@@ -647,13 +647,13 @@ function Workspace({
                         </button>
                       </div>
                       <AudienceShare
-                        key={selected.id}
+                        key={`${selected.id}-audience-share`}
                         url={watchUrl}
                         title={selected.title}
                       />
                       {["owner", "presenter"].includes(memberRole) && (
                         <StreamSettings
-                          key={selected.id}
+                          key={`${selected.id}-stream-settings`}
                           roomId={selected.id}
                           copy={copy}
                           canRotate={memberRole === "owner"}

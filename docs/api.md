@@ -33,6 +33,7 @@
 | 商家   | `GET /merchant/rooms/:id/ledger`             | 最近 200 笔账本                                               |
 | 商家   | `GET /merchant/rooms/:id/analytics`          | 房间累计访问、停留、问题与领取分析                            |
 | 商家   | `GET /merchant/rooms/:id/questions`          | 按文本精确聚合的前 20 类问题                                  |
+| 商家   | `GET /merchant/rooms/:id/speech/status`      | 语音供应方、最近最终分段及 Agent 入队状态                     |
 | 公开   | `GET /public/rooms/:id`                      | 房间及 signal、活动、serverTime、requirePlayback、paymentMode |
 | 观众   | `POST /viewer/rooms/:id/heartbeat`           | `{visible,playing}`，返回本场/累计时长及计时状态              |
 | 观众   | `POST /viewer/rooms/:id/questions`           | `{text}`，直播中可提问，每会话每房间至少间隔 5 秒             |
@@ -40,6 +41,7 @@
 | 观众   | `GET /viewer/rooms/:id/claims`               | 当前观众在该房间的历史领取记录                                |
 | 引擎   | `POST /streams/mediamtx/auth?secret=...`     | 引擎原生发布/观看鉴权载荷                                     |
 | 引擎   | `POST /streams/srs/publish?secret=...`       | SRS on_publish 回调                                           |
+| 语音方 | `POST /streams/speech/segments`              | Bearer 鉴权的最终转写分段 webhook；幂等接入                   |
 | 未实现 | `POST /payments/wechat/notify`               | 固定 501，不更新状态                                          |
 
 ## 会话与限流
@@ -110,7 +112,26 @@ MediaMTX 支持 RTMP/RTMPS 踢连接后再次查询。未配置、协议不支�
 
 无有效会话为 401；跨站操作或资格不足为 403；无权访问另一商家资源统一为 404；状态、窗口和信号冲突通常为 409；格式验证为 400；超限为 429。微信通知能力未接入，返回 501 并保持支付状态不变。
 
-当前契约由共享 DTO、Zod 与回归测试维护，尚未生成 OpenAPI。后续需增加 API 版本化、分页、稳定错误码与审计。微信 OAuth/支付和实时 ASR 尚未接入；模型 HTTP 适配已实现但真实模型按用户选择保持未配置，见[Agent 说明](agent.md)、[架构](architecture.md)与[支付说明](payments.md)。
+当前契约由共享 DTO、Zod 与回归测试维护，尚未生成 OpenAPI。后续需增加 API 版本化、分页、稳定错误码与审计。微信 OAuth/支付尚未接入；实时转写已有供应方无关的 webhook 边界，但尚未配置真实 ASR 服务。模型 HTTP 适配已实现但真实模型按用户选择保持未配置，见[Agent 说明](agent.md)、[架构](architecture.md)与[支付说明](payments.md)。
+
+## 实时语音分段
+
+启用 `SPEECH_PROVIDER=webhook` 后，语音供应方使用独立的 `SPEECH_INGEST_SECRET` 调用 `POST /api/streams/speech/segments`，密钥只放在 `Authorization: Bearer ...` 请求头。该入口不接受商家 Cookie 代替供应方凭据，也不从正文接受租户、模型地址或 Agent 凭据。
+
+```json
+{
+  "roomId": "当前房间 ID",
+  "eventId": "供应方稳定事件 ID",
+  "text": "最终识别文本",
+  "startedOffsetMs": 1000,
+  "endedOffsetMs": 2500,
+  "final": true
+}
+```
+
+非最终分段返回 `accepted:false` 且不保存。最终分段只在房间正在直播时保存；同一场次的相同事件重复请求返回原记录，相同事件 ID 携带不同正文或时间范围返回 409。接口在同一事务内写入 Live 数据库并建立持久待处理任务，随后立即返回，不等待 Agent 推理。后台按 `SPEECH_DISPATCH_CONCURRENCY` 有界处理，取同一场次最近 8 段组成不超过 4000 字的上下文，再按服务端固定的 `SPEECH_AGENT_PROFILE_ID` 创建 `live` Agent 任务。Agent 未配置、超时或限流不会回滚转写，任务会退避重试；进程重启恢复中断任务，Agent 幂等键阻止重复运行。
+
+商家通过 `GET /api/merchant/rooms/:id/speech/status` 查看配置、最近分段和入队状态。转写属于非公开直播记录，观众房间接口不返回正文或 Agent 运行标识。此边界不采集浏览器麦克风；真实 ASR 服务的音频采集、签名协议和服务商效果需要独立接入与验收。
 
 ## 独立 Agent 网关（0.3）
 

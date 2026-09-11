@@ -65,6 +65,9 @@
     "recordings": "live",
     "recording_ingest_errors": "live",
     "identity_accounts": "identity",
-    "identity_account_events": "identity"
+    "identity_account_events": "identity",
+    "speech_segments": "live",
+    "speech_segment_analyses": "live",
+    "speech_analysis_jobs": "live"
   }
 }

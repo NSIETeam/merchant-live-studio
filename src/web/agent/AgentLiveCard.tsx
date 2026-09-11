@@ -3,6 +3,22 @@ import { Sparkles, ArrowUpRight } from "lucide-react";
 import type { AgentRun } from "../../shared/agent.js";
 import { api } from "../shared/api.js";
 
+type SpeechStatus = {
+  provider: "disabled" | "webhook";
+  configured: boolean;
+  agentProfileConfigured: boolean;
+  latest: null | {
+    text: string;
+    receivedAt: number;
+    currentSession: boolean;
+    analysis: {
+      state: "queued" | "pending" | "retrying" | "waiting_profile";
+      runId?: string;
+      attempts?: number;
+    };
+  };
+};
+
 export function AgentLiveCard({
   roomId,
   onOpen,
@@ -14,19 +30,28 @@ export function AgentLiveCard({
     available: boolean;
     run: AgentRun | null;
   } | null>(null);
+  const [speech, setSpeech] = useState<SpeechStatus | null>(null);
   useEffect(() => {
     let active = true;
     setState(null);
-    const refresh = () =>
-      api<{ available: boolean; run: AgentRun | null }>(
-        `/merchant/rooms/${roomId}/agent/latest`,
-      )
-        .then((value) => {
-          if (active) setState(value);
-        })
-        .catch(() => {
-          if (active) setState({ available: false, run: null });
-        });
+    setSpeech(null);
+    const refresh = async () => {
+      const [agentResult, speechResult] = await Promise.allSettled([
+        api<{ available: boolean; run: AgentRun | null }>(
+          `/merchant/rooms/${roomId}/agent/latest`,
+        ),
+        api<SpeechStatus>(`/merchant/rooms/${roomId}/speech/status`),
+      ]);
+      if (!active) return;
+      setState(
+        agentResult.status === "fulfilled"
+          ? agentResult.value
+          : { available: false, run: null },
+      );
+      setSpeech(
+        speechResult.status === "fulfilled" ? speechResult.value : null,
+      );
+    };
     void refresh();
     const timer = setInterval(() => {
       if (document.visibilityState === "visible") void refresh();
@@ -46,6 +71,16 @@ export function AgentLiveCard({
         </h2>
         <span className="muted">独立协作</span>
       </div>
+      <p className="fine-print">
+        实时语音：
+        {speech === null
+          ? "正在确认接入状态"
+          : !speech.configured
+            ? "未配置供应方"
+            : speech.latest?.currentSession
+              ? `${new Date(speech.latest.receivedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })} 收到片段 · ${{ queued: "已交给 Agent", pending: "等待分析", retrying: "等待 Agent 重试", waiting_profile: "待选择表达方案" }[speech.latest.analysis.state]}`
+              : "已连接，等待本场语音"}
+      </p>
       {run?.stale ? (
         <p className="empty-copy">{run.staleReason}</p>
       ) : run?.result ? (

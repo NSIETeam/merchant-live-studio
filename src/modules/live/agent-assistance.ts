@@ -12,9 +12,12 @@ import type {
   LivePort,
 } from "../../shared/live-ports.js";
 import type { Fact } from "../../shared/types.js";
+import type { DB } from "../../shared/persistence.js";
+import { attachSpeechIngestion } from "./speech.js";
 type App = Hono<{ Variables: { merchantId: string; viewerId: string } }>;
 export function attachLiveAssistance(
   app: App,
+  db: DB,
   config: Config,
   live: LivePort,
   engagement: EngagementPort,
@@ -83,27 +86,32 @@ export function attachLiveAssistance(
           },
     );
   });
+  const contextFor = (
+    roomId: string,
+    tenant: string,
+    input: { transcript: string; question?: string },
+  ) => {
+    const r = owned(roomId, tenant);
+    const basis = agentBasis(roomId, tenant);
+    const campaign = engagement.nextCampaign(r.id, clock()) as
+      CampaignRow | undefined;
+    const cue = campaign
+      ? `演示红包：观看满 ${campaign.min_watch_seconds} 秒可参与。${clock() < campaign.opens_at ? Math.ceil((campaign.opens_at - clock()) / 1000) + " 秒后开启" : "现已开启"}；不发生实际转账。`
+      : undefined;
+    return {
+      transcript: input.transcript,
+      question: input.question,
+      roomId: r.id,
+      productName: basis.productName,
+      category: basis.category,
+      facts: basis.facts,
+      campaignCue: cue,
+    };
+  };
   attachAgentGateway(
     app,
     agentBridge,
-    (roomId, tenant, input) => {
-      const r = owned(roomId, tenant);
-      const basis = agentBasis(roomId, tenant);
-      const campaign = engagement.nextCampaign(r.id, clock()) as
-        CampaignRow | undefined;
-      const cue = campaign
-        ? `演示红包：观看满 ${campaign.min_watch_seconds} 秒可参与。${clock() < campaign.opens_at ? Math.ceil((campaign.opens_at - clock()) / 1000) + " 秒后开启" : "现已开启"}；不发生实际转账。`
-        : undefined;
-      return {
-        transcript: input.transcript,
-        question: input.question,
-        roomId: r.id,
-        productName: basis.productName,
-        category: basis.category,
-        facts: basis.facts,
-        campaignCue: cue,
-      };
-    },
+    contextFor,
     (tenant, run) => {
       const current = owned(run.roomId, tenant);
       const basis = agentBasis(run.roomId, tenant);
@@ -123,15 +131,26 @@ export function attachLiveAssistance(
       return {
         ...run,
         stale: Boolean(run.stale || basis.stale || evidenceChanged || expired),
-        staleReason: run.stale ? run.staleReason : basis.stale
-          ? "本场定稿的商品依据已变化，请先复核课程讲稿。"
-          : evidenceChanged
-            ? "引用的事实已撤回，请重新生成。"
-            : expired
-              ? "直播场次或时间已变化，请重新生成当前建议。"
-              : undefined,
+        staleReason: run.stale
+          ? run.staleReason
+          : basis.stale
+            ? "本场定稿的商品依据已变化，请先复核课程讲稿。"
+            : evidenceChanged
+              ? "引用的事实已撤回，请重新生成。"
+              : expired
+                ? "直播场次或时间已变化，请重新生成当前建议。"
+                : undefined,
       };
     },
     ports.onRevocation,
+  );
+  return attachSpeechIngestion(
+    app,
+    db,
+    config,
+    live,
+    agentBridge,
+    contextFor,
+    clock,
   );
 }

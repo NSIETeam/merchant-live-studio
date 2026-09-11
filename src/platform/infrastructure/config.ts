@@ -22,6 +22,10 @@ export interface Config {
   streamRtmpBase: string;
   streamHlsBase: string;
   streamAuthSecret: string;
+  speechProvider: "disabled" | "webhook";
+  speechIngestSecret: string;
+  speechAgentProfileId: string;
+  speechDispatchConcurrency: number;
   mediaControlUrl: string;
   requirePlayback: boolean;
   trustedProxyIps: string[];
@@ -166,6 +170,26 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     );
   if (Boolean(env.RECORDINGS_ROOT) !== Boolean(env.RECORDING_OUTBOX))
     throw new Error("Configure both RECORDINGS_ROOT and RECORDING_OUTBOX");
+  const speechProvider = z
+    .enum(["disabled", "webhook"])
+    .parse(env.SPEECH_PROVIDER || "disabled");
+  const speechIngestSecret = env.SPEECH_INGEST_SECRET || "";
+  if (speechProvider === "webhook" && speechIngestSecret.length < 32)
+    throw new Error(
+      "SPEECH_INGEST_SECRET must contain at least 32 characters when speech ingestion is enabled",
+    );
+  const speechAgentProfileId = env.SPEECH_AGENT_PROFILE_ID
+    ? z
+        .string()
+        .regex(/^[a-zA-Z0-9_-]{1,100}$/)
+        .parse(env.SPEECH_AGENT_PROFILE_ID)
+    : "";
+  const speechDispatchConcurrency = z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(16)
+    .parse(env.SPEECH_DISPATCH_CONCURRENCY || 2);
   return {
     recordingsRoot: env.RECORDINGS_ROOT || "",
     recordingOutbox: env.RECORDING_OUTBOX || "",
@@ -190,6 +214,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     streamRtmpBase: env.STREAM_RTMP_BASE || "rtmp://localhost:1935/live",
     streamHlsBase: env.STREAM_HLS_BASE || "http://localhost:8888/live",
     streamAuthSecret: env.STREAM_AUTH_SECRET || "",
+    speechProvider,
+    speechIngestSecret,
+    speechAgentProfileId,
+    speechDispatchConcurrency,
     mediaControlUrl: env.MEDIA_CONTROL_URL || "",
     mediaControlToken: env.MEDIA_CONTROL_TOKEN || "",
     basePath: env.APP_BASE_PATH || "/",

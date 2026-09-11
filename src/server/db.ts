@@ -411,6 +411,54 @@ export function openDatabase(path: string) {
         Date.now(),
       );
     });
+  if (version < 21)
+    transaction(db, () => {
+      db.exec(`CREATE TABLE speech_segments(
+        id TEXT PRIMARY KEY,
+        room_id TEXT NOT NULL REFERENCES rooms(id),
+        provider TEXT NOT NULL CHECK(provider IN('webhook')),
+        provider_event_id TEXT NOT NULL,
+        text TEXT NOT NULL,
+        live_started_at INTEGER NOT NULL,
+        started_offset_ms INTEGER NOT NULL CHECK(started_offset_ms>=0),
+        ended_offset_ms INTEGER NOT NULL CHECK(ended_offset_ms>=started_offset_ms),
+        received_at INTEGER NOT NULL,
+        UNIQUE(room_id,live_started_at,provider,provider_event_id)
+      );
+      CREATE INDEX speech_segments_room ON speech_segments(room_id,received_at DESC);
+      CREATE TABLE speech_segment_analyses(
+        segment_id TEXT PRIMARY KEY REFERENCES speech_segments(id),
+        agent_run_id TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      );
+      CREATE TRIGGER speech_segments_immutable_update BEFORE UPDATE ON speech_segments BEGIN SELECT RAISE(ABORT,'immutable'); END;
+      CREATE TRIGGER speech_segments_immutable_delete BEFORE DELETE ON speech_segments BEGIN SELECT RAISE(ABORT,'immutable'); END;
+      CREATE TRIGGER speech_segment_analyses_immutable_update BEFORE UPDATE ON speech_segment_analyses BEGIN SELECT RAISE(ABORT,'immutable'); END;
+      CREATE TRIGGER speech_segment_analyses_immutable_delete BEFORE DELETE ON speech_segment_analyses BEGIN SELECT RAISE(ABORT,'immutable'); END;`);
+      db.prepare("INSERT INTO schema_migrations VALUES(?,?)").run(
+        21,
+        Date.now(),
+      );
+    });
+  if (version < 22)
+    transaction(db, () => {
+      db.exec(`CREATE TABLE speech_analysis_jobs(
+        segment_id TEXT PRIMARY KEY REFERENCES speech_segments(id),
+        state TEXT NOT NULL CHECK(state IN('pending','running','completed')),
+        attempts INTEGER NOT NULL DEFAULT 0 CHECK(attempts>=0),
+        next_attempt_at INTEGER NOT NULL,
+        last_error TEXT NOT NULL DEFAULT '',
+        updated_at INTEGER NOT NULL
+      );
+      CREATE INDEX speech_analysis_jobs_due ON speech_analysis_jobs(state,next_attempt_at);
+      INSERT INTO speech_analysis_jobs(segment_id,state,next_attempt_at,updated_at)
+        SELECT id,'pending',received_at,received_at FROM speech_segments
+        WHERE id NOT IN (SELECT segment_id FROM speech_segment_analyses);`);
+      db.prepare("INSERT INTO schema_migrations VALUES(?,?)").run(
+        22,
+        Date.now(),
+      );
+    });
   return db;
 }
 export type DB = ReturnType<typeof openDatabase>;
