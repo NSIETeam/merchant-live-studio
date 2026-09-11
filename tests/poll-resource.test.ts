@@ -77,3 +77,18 @@ test("pausing and switching away cancel updates, while resuming reads afresh", a
   assert.deepEqual(values, [2]);
   assert.equal(pending.length, 3);
 });
+
+test("resource-specific deadline message is reported instead of a misleading script warning", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const errors: string[] = [];
+  const polling = pollResource({
+    read: () => new Promise<never>(() => {}), onValue: () => assert.fail(),
+    onError: error => errors.push(error.message), intervalMs: 5000, timeoutMs: 8000,
+    timeoutMessage: "现场处置状态核对超时，请检查网络后重试。",
+  });
+  try {
+    await flush();
+    t.mock.timers.tick(8000);
+    assert.deepEqual(errors, ["现场处置状态核对超时，请检查网络后重试。"]);
+  } finally { polling.stop(); }
+});

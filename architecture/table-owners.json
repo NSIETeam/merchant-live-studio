@@ -61,6 +61,8 @@
     "moderation_actions": "live",
     "moderation_results": "live",
     "recordings": "live",
-    "recording_ingest_errors": "live"
+    "recording_ingest_errors": "live",
+    "identity_accounts": "identity",
+    "identity_account_events": "identity"
   }
 }

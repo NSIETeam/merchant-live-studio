@@ -1,3 +1,5 @@
+import { managedAccount } from "./managed-accounts.js";
+import { listManagedAccounts } from "./persistence/accounts.js";
 import { findRoleOverride } from "./persistence/permissions-queries.js";
 import type { DB } from "../../shared/persistence.js";
 import type { MemberRole, MerchantIdentity } from "../../shared/membership.js";
@@ -9,9 +11,10 @@ declare module "hono" {
     requireIndependentReview: boolean;
   }
 }
-export function requiresIndependentReview(config: Config, merchantId: string) {
+export function requiresIndependentReview(config: Config, merchantId: string, db?: DB) {
   return (
     config.production ||
+    Boolean(db && listManagedAccounts(db, merchantId).length) ||
     Object.values(config.merchantMemberships || {}).some(
       (member) => member.merchantId === merchantId,
     )
@@ -23,7 +26,8 @@ export function merchantIdentity(
   actorId: string,
   db?: DB,
 ): MerchantIdentity {
-  const member = config.merchantMemberships?.[actorId];
+  const account = managedAccount(db, config, actorId);
+  const member = config.merchantMemberships?.[actorId] || (account ? {merchantId: account.merchant_id, role: account.role} : undefined);
   const access =
     member && db
       ? findRoleOverride(db, actorId, member.merchantId, member.role)
@@ -38,6 +42,7 @@ export function merchantIdentity(
     requiresIndependentReview: requiresIndependentReview(
       config,
       member?.merchantId ?? actorId,
+      db,
     ),
   };
 }

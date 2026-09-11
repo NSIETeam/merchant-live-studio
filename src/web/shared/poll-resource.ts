@@ -5,6 +5,7 @@ export function pollResource<T>(options: {
   onError: (error: Error) => void;
   intervalMs: number;
   timeoutMs: number;
+  timeoutMessage?: string;
 }) {
   let stopped = false;
   let generation = 0;
@@ -35,7 +36,7 @@ export function pollResource<T>(options: {
       () =>
         finish(() =>
           options.onError(
-            new Error("讲稿核对超时，请检查网络；重新核对成功后恢复展示。"),
+            new Error(options.timeoutMessage || "讲稿核对超时，请检查网络；重新核对成功后恢复展示。"),
           ),
         ),
       options.timeoutMs,

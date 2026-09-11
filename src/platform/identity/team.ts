@@ -1,4 +1,7 @@
 import { findTeamAccess, listTeamAccessEvents, findTeamAccessVersion, upsertTeamAccess, updateTeamRole, insertTeamAccessEvent } from "./persistence/team-queries.js";
+import { listManagedAccounts } from "./persistence/accounts.js";
+import { managedAccount } from "./managed-accounts.js";
+import type { Membership } from "../../shared/membership.js";
 import { merchantIdentity } from "./permissions.js";
 import type { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
@@ -13,12 +16,14 @@ export function attachTeam(
 ) {
   app.get("/api/merchant/team", (c) =>
     c.json({
-      members: Object.entries(config.merchantMemberships || {})
+      members: Object.entries({ ...Object.fromEntries(listManagedAccounts(db, c.get("merchantId")).filter(a => managedAccount(db,config,a.actor_id)).map(a => [a.actor_id, {merchantId:a.merchant_id,role:a.role} as Membership])), ...config.merchantMemberships })
         .filter(([, m]) => m.merchantId === c.get("merchantId"))
         .map(([actorId, m]) => {
           const row = findTeamAccess(db, actorId);
+          const account = managedAccount(db,config,actorId);
           return {
             actorId,
+            ...(account ? {managed:true,credentialVersion:account.credential_version} : {}),
             role: merchantIdentity(config, actorId, db).memberRole,
             disabled: Boolean(row?.disabled),
             version: Number(row?.version || 0),
@@ -42,7 +47,8 @@ export function attachTeam(
   });
   app.put("/api/merchant/team/:actorId", async (c) => {
     const actorId = c.req.param("actorId"),
-      member = config.merchantMemberships?.[actorId];
+      account = managedAccount(db,config,actorId),
+      member = config.merchantMemberships?.[actorId] || (account ? {merchantId:account.merchant_id,role:account.role} : undefined);
     if (
       !member ||
       member.merchantId !== c.get("merchantId") ||

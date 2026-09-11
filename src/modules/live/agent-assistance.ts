@@ -4,7 +4,6 @@ import {
   attachAgentGateway,
   type AgentBridge,
 } from "../../platform/adapters/public.js";
-import { requiresIndependentReview } from "../../platform/identity/public.js";
 import { type Config } from "../../platform/infrastructure/public.js";
 import type { ContentBinding } from "../../shared/content.js";
 import type {
@@ -21,6 +20,7 @@ export function attachLiveAssistance(
   engagement: EngagementPort,
   agentBridge: AgentBridge,
   ports: {
+    requiresIndependentReview: (tenant: string) => boolean;
     binding: (
       id: string,
       tenant: string,
@@ -37,7 +37,7 @@ export function attachLiveAssistance(
     const binding = ports.binding(
       roomId,
       tenant,
-      requiresIndependentReview(config, tenant),
+      ports.requiresIndependentReview(tenant),
     );
     if (!binding)
       return {

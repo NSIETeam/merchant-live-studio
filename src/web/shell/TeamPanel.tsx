@@ -1,8 +1,11 @@
+import { AccountProvisioning } from "./AccountProvisioning.js";
 import { useState } from "react";
 import { api } from "../shared/api.js";
 import { memberRoleNames, type MemberRole } from "../../shared/membership.js";
 type Member = {
   actorId: string;
+  managed?: boolean;
+  credentialVersion?: number;
   role: MemberRole;
   disabled: boolean;
   version: number;
@@ -69,7 +72,7 @@ export function TeamPanel() {
       {open && (
         <>
           <p>
-            停用或变更角色后，原会话立即失效，成员须重新登录。新增账号仍通过服务器配置。
+            停用或变更角色后，原会话立即失效，成员须重新登录。可在下方新增普通成员；配置账号的密钥仍由服务器管理。
           </p>
           <label>
             本次变更原因
@@ -80,7 +83,8 @@ export function TeamPanel() {
               placeholder="至少 5 个字，记录本次成员变更原因"
             />
           </label>
-          {!members.length && <p>没有配置其他团队成员。</p>}
+          <AccountProvisioning members={members} onChanged={refresh} />
+          {!members.length && <p>暂无其他团队成员。</p>}
           {members.map((m) => (
             <div className="home-card" key={m.actorId}>
               <strong>

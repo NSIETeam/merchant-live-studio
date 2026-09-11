@@ -1,3 +1,4 @@
+import { managedAccount } from "./managed-accounts.js";
 import { findSessionAccess } from "./persistence/access-queries.js";
 import type { Context } from "hono";
 import { getCookie, setCookie } from "hono/cookie";
@@ -13,10 +14,11 @@ export interface Session {
   credentialVersion?: string;
   accessVersion?: number;
 }
-const credentialVersion = (config: Config, id: string) =>
-  createHmac("sha256", config.sessionSecret)
+const credentialVersion = (config: Config, id: string, db?: DB) => {
+  const account = managedAccount(db, config, id);
+  return createHmac("sha256", config.sessionSecret)
     .update(
-      config.demoMode && id === "demo"
+      account ? JSON.stringify([account.actor_id, account.merchant_id, account.role, account.credential_version, account.verifier]) : config.demoMode && id === "demo"
         ? "local-demo"
         : (config.merchantCredentials[id] || "disabled") +
             (config.merchantMemberships?.[id]
@@ -24,6 +26,7 @@ const credentialVersion = (config: Config, id: string) =>
               : ""),
     )
     .digest("hex");
+};
 export function equalSecret(a: string, b: string) {
   const x = Buffer.from(a),
     y = Buffer.from(b);
@@ -48,7 +51,7 @@ export function issueSession(
     sid: randomUUID(),
     expires: Date.now() + 12 * 60 * 60 * 1000,
     ...(role === "merchant"
-      ? { credentialVersion: credentialVersion(config, id) }
+      ? { credentialVersion: credentialVersion(config, id, db) }
       : {}),
   };
   const payload = Buffer.from(JSON.stringify(session)).toString("base64url");
@@ -93,9 +96,9 @@ export function readSession(
       role === "merchant" &&
       (!equalSecret(
         session.credentialVersion || "",
-        credentialVersion(config, session.id),
+        credentialVersion(config, session.id, db),
       ) ||
-        (!config.merchantCredentials[session.id] &&
+        (!config.merchantCredentials[session.id] && !managedAccount(db, config, session.id) &&
           !(config.demoMode && session.id === "demo")))
     )
       return null;
