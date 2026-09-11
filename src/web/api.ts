@@ -3,7 +3,7 @@ export async function api<T>(
   method = "GET",
   body?: unknown,
 ): Promise<T> {
-  const res = await fetch(`/api${path}`, {
+  const res = await fetch(`${import.meta.env.BASE_URL}api${path}`, {
     method,
     credentials: "same-origin",
     headers:

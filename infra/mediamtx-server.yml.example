@@ -1,0 +1,23 @@
+# Replace the shared secret locally; never commit the deployed file.
+logLevel: warn
+authMethod: http
+authHTTPAddress: http://127.0.0.1:18890/api/streams/mediamtx/auth?secret=REPLACE_WITH_RANDOM_SHARED_SECRET
+authHTTPExclude:
+  - action: api
+api: true
+apiAddress: 127.0.0.1:18892
+rtsp: false
+srt: false
+webrtc: false
+moq: false
+rtmp: true
+rtmpAddress: :1935
+hls: true
+hlsAddress: 127.0.0.1:18891
+hlsVariant: mpegts
+hlsAllowOrigins: []
+pathDefaults:
+  overridePublisher: false
+  alwaysAvailable: false
+paths:
+  all_others:

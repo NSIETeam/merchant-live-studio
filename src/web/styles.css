@@ -489,6 +489,8 @@ h2:has(svg) {
   font-size: 0.75rem;
 }
 .player {
+  width: 100%;
+  min-width: 0;
   background: #111c25;
   aspect-ratio: 16/9;
   border-radius: 11px;
@@ -1258,6 +1260,9 @@ footer {
   grid-template-columns: minmax(0, 1fr) 320px;
   gap: 26px;
 }
+.audience-grid > * {
+  min-width: 0;
+}
 .viewer-bar {
   display: flex;
   justify-content: space-between;
@@ -1578,7 +1583,7 @@ progress::-moz-progress-bar {
   .rewards-layout,
   .two-columns,
   .audience-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .studio-side {
     margin-top: 5px;
@@ -1713,4 +1718,20 @@ progress::-moz-progress-bar {
     scroll-behavior: auto !important;
     transition: none !important;
   }
+}
+.signal-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  margin-bottom: 12px;
+  background: #edf4f0;
+  border: 1px solid #d8e6dd;
+  color: #527664;
+  border-radius: 7px;
+  font-size: 0.8rem;
+}
+.signal-status small {
+  margin-left: auto;
+  font-size: 0.75rem;
 }

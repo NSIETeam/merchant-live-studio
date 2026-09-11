@@ -32,6 +32,7 @@ import type {
   Question,
   Room,
   StreamConfig,
+  StreamState,
 } from "../shared/types";
 import { api, duration, money } from "./api";
 import { Player } from "./Player";
@@ -55,7 +56,10 @@ function Notice({ children }: { children: React.ReactNode }) {
   );
 }
 function App() {
-  const path = window.location.pathname;
+  const base = import.meta.env.BASE_URL;
+  const path = window.location.pathname.startsWith(base)
+    ? "/" + window.location.pathname.slice(base.length)
+    : window.location.pathname;
   if (path.startsWith("/watch/"))
     return <Audience id={decodeURIComponent(path.slice(7))} />;
   return <Merchant />;
@@ -224,7 +228,10 @@ function Workspace({
     );
   }, []);
   useEffect(() => {
-    refreshRooms().catch((e) => setError(e.message));
+    const refresh = () => refreshRooms().catch((e) => setError(e.message));
+    void refresh();
+    const timer = setInterval(refresh, 10000);
+    return () => clearInterval(timer);
   }, [refreshRooms]);
   useEffect(() => {
     setAnalytics(null);
@@ -270,13 +277,15 @@ function Workspace({
     if (!selected) return;
     setSaving(true);
     try {
-      await api(`/merchant/rooms/${selected.id}`, "PATCH", { status });
+      const update = await api<{
+        streamAction?: { disconnected: boolean; message?: string };
+      }>(`/merchant/rooms/${selected.id}`, "PATCH", { status });
       await refreshRooms();
       setNotice(
         status === "live"
           ? "直播间已开放，请使用推流配置连接 OBS。"
           : status === "ended"
-            ? "直播间已结束，未领取的演示预算已退回。请同时停止 OBS 推流；本版不会断开已建立的推流连接。"
+            ? `直播间已结束，未领取的演示预算已退回。${update.streamAction?.disconnected ? "已断开推流连接。" : update.streamAction?.message || "请停止 OBS 推流。"}`
             : "已重置为待开播。",
       );
     } catch (e) {
@@ -299,7 +308,9 @@ function Workspace({
     { id: "rewards", label: "红包活动", icon: Gift },
     { id: "analytics", label: "直播分析", icon: Activity },
   ];
-  const watchUrl = selected ? `${location.origin}/watch/${selected.id}` : "";
+  const watchUrl = selected
+    ? `${location.origin}${import.meta.env.BASE_URL}watch/${selected.id}`
+    : "";
   return (
     <div className="workspace">
       <aside className="sidebar">
@@ -460,6 +471,7 @@ function Workspace({
                         <h2>直播预览</h2>
                         <span className="muted">{selected.productName}</span>
                       </div>
+                      <Signal roomId={selected.id} />
                       <Player
                         key={selected.id}
                         url={selected.playbackUrl}
@@ -469,7 +481,7 @@ function Workspace({
                         <div>
                           <strong>{selected.title}</strong>
                           <small>
-                            画面以实际推流信号为准；结束后请停止 OBS
+                            画面以实际推流信号为准；结束时尝试断开连接
                           </small>
                         </div>
                         <button
@@ -639,7 +651,7 @@ function Workspace({
           )}
         </div>
         <footer>
-          Live Studio <span>自托管商家直播 MVP · 0.1</span>
+          Live Studio <span>自托管商家直播 MVP · 0.2</span>
         </footer>
       </main>
       {creating && (
@@ -694,6 +706,48 @@ function Workspace({
       )}
     </div>
   );
+}
+function SignalBadge({ signal }: { signal: StreamState }) {
+  return (
+    <div className="signal-status" role="status">
+      <Radio size={16} />
+      {signal.connected === true
+        ? "已收到实时推流"
+        : signal.connected === false
+          ? "尚未收到实时推流"
+          : signal.message || "流状态暂不可用"}
+      {signal.connected === true && (
+        <small>引擎观看连接 {signal.viewers || 0}</small>
+      )}
+    </div>
+  );
+}
+function Signal({ roomId }: { roomId: string }) {
+  const [signal, setSignal] = useState<StreamState | null>(null);
+  useEffect(() => {
+    let active = true;
+    const poll = () =>
+      api<StreamState>(`/merchant/rooms/${roomId}/signal`)
+        .then((v) => {
+          if (active) setSignal(v);
+        })
+        .catch(() => {
+          if (active)
+            setSignal({
+              configured: true,
+              connected: null,
+              checkedAt: Date.now(),
+              message: "流状态暂不可用",
+            });
+        });
+    void poll();
+    const timer = setInterval(poll, 4000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [roomId]);
+  return signal ? <SignalBadge signal={signal} /> : null;
 }
 function StreamSettings({
   roomId,
@@ -767,16 +821,14 @@ function StreamSettings({
             className="text-button"
             onClick={async () => {
               try {
-                await api(
-                  `/merchant/rooms/${roomId}/stream/rotate`,
-                  "POST",
-                  {},
-                );
+                const rotation = await api<{
+                  streamAction: { disconnected: boolean; message?: string };
+                }>(`/merchant/rooms/${roomId}/stream/rotate`, "POST", {});
                 setStream(
                   await api<StreamConfig>(`/merchant/rooms/${roomId}/stream`),
                 );
                 onNotice(
-                  "推流密钥已更新，下一次连接请使用新密钥；已连接流需在引擎侧断开。",
+                  `推流密钥已更新。${rotation.streamAction.disconnected ? "已断开旧推流，请使用新密钥连接。" : rotation.streamAction.message}`,
                 );
               } catch (e) {
                 onError((e as Error).message);
@@ -1140,13 +1192,17 @@ function Rewards({
     [delay, setDelay] = useState(10),
     [seconds, setSeconds] = useState(600),
     [busy, setBusy] = useState(false);
-  const now = useClock();
+  const [clockOffset, setClockOffset] = useState(0);
+  const now = useClock() + clockOffset;
   const refresh = useCallback(async () => {
     const [c, l] = await Promise.all([
-      api<{ campaigns: Campaign[] }>(`/merchant/rooms/${room.id}/campaigns`),
+      api<{ campaigns: Campaign[]; serverTime: number }>(
+        `/merchant/rooms/${room.id}/campaigns`,
+      ),
       api<{ entries: LedgerEntry[] }>(`/merchant/rooms/${room.id}/ledger`),
     ]);
     setCampaigns(c.campaigns);
+    setClockOffset(c.serverTime - Date.now());
     setEntries(l.entries);
   }, [room.id]);
   useEffect(() => {
@@ -1379,6 +1435,7 @@ function Audience({ id }: { id: string }) {
       room: Room;
       campaigns: Campaign[];
       serverTime: number;
+      requirePlayback: boolean;
     } | null>(null),
     [claims, setClaims] = useState<Claim[]>([]),
     [watch, setWatch] = useState(0),
@@ -1389,6 +1446,8 @@ function Audience({ id }: { id: string }) {
   const [ready, setReady] = useState(false),
     [offset, setOffset] = useState(0);
   const now = useClock() + offset;
+  const playing = useRef(false);
+  const [interactive, setInteractive] = useState(false);
   useEffect(() => {
     let active = true;
     api("/auth/viewer", "POST", {})
@@ -1396,57 +1455,86 @@ function Audience({ id }: { id: string }) {
         if (active) setReady(true);
       })
       .catch((e) => {
-        if (active) setError(e.message);
+        if (active) setNotice("观看不受影响，互动暂时不可用：" + e.message);
       });
     return () => {
       active = false;
     };
   }, []);
   const refresh = useCallback(async () => {
-    const [d, c] = await Promise.all([
-      api<{ room: Room; campaigns: Campaign[]; serverTime: number }>(
-        `/public/rooms/${id}`,
-      ),
-      api<{ claims: Claim[] }>(`/viewer/rooms/${id}/claims`),
-    ]);
+    const d = await api<{
+      room: Room;
+      campaigns: Campaign[];
+      serverTime: number;
+      requirePlayback: boolean;
+    }>(`/public/rooms/${id}`);
     setData(d);
     setOffset(d.serverTime - Date.now());
-    setClaims(c.claims);
   }, [id]);
   useEffect(() => {
-    if (!ready) return;
-    let active = true;
+    let active = true,
+      inFlight = false;
     const poll = async () => {
+      if (inFlight || document.visibilityState !== "visible") return;
+      inFlight = true;
       try {
-        if (document.visibilityState === "visible") {
-          await refresh();
-          const h = await api<{ watchSeconds: number }>(
-            `/viewer/rooms/${id}/heartbeat`,
-            "POST",
-            { visible: true },
-          );
-          if (active) setWatch(h.watchSeconds);
-        }
+        await refresh();
+        if (active) setError("");
       } catch (e) {
         if (active) setError((e as Error).message);
+      } finally {
+        inFlight = false;
       }
     };
     void poll();
     const timer = setInterval(poll, 5000);
-    const visibility = () => {
-      if (document.visibilityState === "hidden")
-        void api(`/viewer/rooms/${id}/heartbeat`, "POST", {
-          visible: false,
-        }).catch(() => {});
-      else void poll();
-    };
-    document.addEventListener("visibilitychange", visibility);
     return () => {
       active = false;
       clearInterval(timer);
-      document.removeEventListener("visibilitychange", visibility);
     };
-  }, [ready, id, refresh]);
+  }, [refresh]);
+  useEffect(() => {
+    if (!ready) return;
+    let active = true,
+      inFlight = false;
+    const poll = async () => {
+      if (inFlight) return;
+      inFlight = true;
+      try {
+        const visible = document.visibilityState === "visible";
+        const h = await api<{ watchSeconds: number }>(
+          `/viewer/rooms/${id}/heartbeat`,
+          "POST",
+          { visible, playing: playing.current },
+        );
+        if (visible) {
+          const c = await api<{ claims: Claim[] }>(
+            `/viewer/rooms/${id}/claims`,
+          );
+          if (active) {
+            setWatch(h.watchSeconds);
+            setClaims(c.claims);
+            setInteractive(true);
+          }
+        }
+      } catch (e) {
+        if (active) {
+          setInteractive(false);
+          setNotice("直播可继续观看，互动暂不可用：" + (e as Error).message);
+        }
+      } finally {
+        inFlight = false;
+      }
+    };
+    void poll();
+    const timer = setInterval(poll, 5000);
+    document.addEventListener("visibilitychange", poll);
+    return () => {
+      active = false;
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", poll);
+    };
+  }, [ready, id]);
   async function claim(c: Campaign) {
     setPending(c.id);
     setError("");
@@ -1460,6 +1548,9 @@ function Audience({ id }: { id: string }) {
         `已领取演示红包 ${money(response.claim.amountCents)}，不发生真实转账。`,
       );
       await refresh();
+      setClaims(
+        (await api<{ claims: Claim[] }>(`/viewer/rooms/${id}/claims`)).claims,
+      );
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -1501,18 +1592,26 @@ function Audience({ id }: { id: string }) {
                 {statusText[data.room.status]}
               </span>
             </div>
+            {data.room.signal && <SignalBadge signal={data.room.signal} />}
             <div className="audience-grid">
               <section>
                 <Player
                   url={data.room.playbackUrl}
                   live={data.room.status === "live"}
+                  onPlayback={(value) => {
+                    playing.current = value;
+                  }}
                 />
                 <div className="viewer-bar">
                   <span>
                     <Eye size={16} />
-                    本页有效停留 {duration(watch)}
+                    本场有效观看 {duration(watch)}
                   </span>
-                  <small>页面可见时累计 · 演示资格</small>
+                  <small>
+                    {data.requirePlayback
+                      ? "直播播放时累计 · 演示资格"
+                      : "页面可见时累计 · 演示资格"}
+                  </small>
                 </div>
                 <section className="card ask">
                   <h2>
@@ -1546,7 +1645,7 @@ function Audience({ id }: { id: string }) {
                     />
                     <button
                       className="primary"
-                      disabled={data.room.status !== "live"}
+                      disabled={!interactive || data.room.status !== "live"}
                     >
                       发送
                     </button>
@@ -1601,6 +1700,7 @@ function Audience({ id }: { id: string }) {
                         <button
                           className="reward-button"
                           disabled={
+                            !interactive ||
                             !!mine ||
                             pending === c.id ||
                             waiting ||

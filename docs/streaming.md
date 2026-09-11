@@ -1,111 +1,117 @@
-# 直播流媒体适配与自托管
+# 流媒体接入与验证
 
-资料核对日期：2026-09-11。Web/API 使用 Node.js 24.10+；流媒体独立运行，通过 RTMP 接收 OBS 推流，通过 HLS 向网页分发。
+对应 0.2.0。流媒体独立接收 RTMP、通过 HLS 分发；业务 API 不转发视频字节。默认 MediaMTX 1.21.0，SRS 6.0.191 保留基础适配。
 
-## 当前实现与边界
+## 已完成的本机验证
 
-`src/server/services/stream.ts` 提供统一配置及播放地址生成。商家创建直播间后可读取推流地址、独立推流密钥，观众页使用公开 HLS 地址播放；发布密钥不包含在公开房间接口中。
+2026-09-11 在 macOS arm64 回环网络中，用真实 MediaMTX 与 FFmpeg 完成 10 项检查：
 
-目前房间 `draft / live / ended` 状态由商家手动切换。点击“开始直播”不会启动摄像头、OBS 或流媒体容器，也不代表服务器已检测到视频流。基础分析统计的是网页会话与可见页面心跳，不能当作引擎连接数或真实视频观看证明。
+1. 独立测试端口可用。
+2. 构建后的 API 与 MediaMTX 启动，开启播放资格要求。
+3. 无信号不能累计时长或领取。
+4. 错误发布密钥被拒绝。
+5. 正确 RTMP 发布上线，引擎报告 `rtmpConn`。
+6. 暂停状态的观众心跳不计时。
+7. 真实 HLS 清单与分片可下载，H.264 视频和 AAC 音频实际解码成功。
+8. 播放心跳、资格、幂等领取、账本、模拟 worker 与分析闭环通过。
+9. 结束房间实际踢出 RTMP 连接，并拒绝重连。
+10. 重新开放后，轮换前的旧密钥无法发布。
 
-默认 Compose 的两个流媒体引擎只绑定本机且没有启用推流鉴权，适用于本地试验。**仅在 `.env` 填写 `STREAM_AUTH_SECRET` 不会自动修改流媒体配置**；API 返回的 `authEnabled` 仅表示应用配置了共享密钥，不证明引擎已启用或验证回调。
+测试进程已停止，临时凭据已清理，应用数据库使用内存。该验收通过 HTTP 提供 `playing` 标志，FFmpeg 独立验证真实分片解码；没有因此声称浏览器画面、OBS 硬件、手机、微信内播放或远程服务器已验收。服务器部署与最终证据见[服务器测试说明](server-testing.md)，应用回归见[验收记录](acceptance.md)。
 
-本次未运行 Docker 容器，也未用 OBS/FFmpeg 完成真实推流到浏览器的端到端验收。下方步骤和配置依据官方资料与当前 API 编写，接入方仍需实际验证。
+## 三类状态
 
-## 引擎与环境变量
+- **房间状态**：`draft/live/ended` 由商家操作，开放房间不会启动 OBS 或摄像头。
+- **引擎信号**：MediaMTX Control API 返回真实在线来源与 reader 数，独立于房间状态。
+- **观众播放**：播放器事件报告 playing，与页面可见状态一起发送心跳。
 
-| 项目               | MediaMTX                     | SRS                          |
-| ------------------ | ---------------------------- | ---------------------------- |
-| 固定镜像           | `bluenviron/mediamtx:1.21.0` | `ossrs/srs:6.0.191`          |
-| `STREAM_PROVIDER`  | `mediamtx`                   | `srs`                        |
-| `STREAM_RTMP_BASE` | `rtmp://localhost:1935/live` | `rtmp://localhost:1935/live` |
-| `STREAM_HLS_BASE`  | `http://localhost:8888/live` | `http://localhost:8080/live` |
-| 生成播放路径       | `/<roomId>/index.m3u8`       | `/<roomId>.m3u8`             |
+`REQUIRE_PLAYBACK=true` 只有上述条件都满足才累计演示资格；无控制配置、未知信号或断线时不累计。它仍不是可靠反作弊或真人观看证明。公开房间和播放器独立加载，互动身份失败不阻断视频。
 
-SRS `6.0.191` 对应官方 `v6.0-r1` 发布；MediaMTX 官方安装页提供精确版本镜像用法。两个引擎使用同一 RTMP 主机端口，应任选一个启动。[MediaMTX 安装](https://mediamtx.org/docs/kickoff/install)、[SRS 发布](https://github.com/ossrs/srs/releases/tag/v6.0-r1)
+## 引擎与地址
 
-示例 `.env`：
+| 项目                    | MediaMTX                     | SRS                          |
+| ----------------------- | ---------------------------- | ---------------------------- |
+| 固定版本                | `bluenviron/mediamtx:1.21.0` | `ossrs/srs:6.0.191`          |
+| `STREAM_PROVIDER`       | `mediamtx`                   | `srs`                        |
+| 本机 `STREAM_RTMP_BASE` | `rtmp://localhost:1935/live` | `rtmp://localhost:1935/live` |
+| 本机 `STREAM_HLS_BASE`  | `http://localhost:8888/live` | `http://localhost:8080/live` |
+| 生成的播放路径尾部      | `/<roomId>/index.m3u8`       | `/<roomId>.m3u8`             |
+| 发布鉴权                | HTTP auth                    | on_publish 回调              |
+| 当前状态/强制断流       | MediaMTX Control API         | 尚未实现                     |
+
+两种引擎默认占用同一 1935 端口，任选一个。切换 provider 时同步修改 HLS base，不会自动切端口。公开播放 URL 不含发布 token；房间 ID 不能充当推流密码。
+
+商家端读取 Server 与完整 `<roomId>?token=<roomSecret>`，填入 OBS 自定义服务；使用 H.264/AAC，建议 2 秒关键帧。HLS 首次播放要等待分片生成。手机必须使用可访问的域名/IP，手机 `localhost` 指向手机本身。
+
+官方参考：[MediaMTX 安装](https://mediamtx.org/docs/kickoff/install)、[OBS 推流](https://mediamtx.org/docs/publish/obs-studio)、[HLS](https://mediamtx.org/docs/read/hls)、[配置参考](https://mediamtx.org/docs/references/configuration-file)、[SRS 发布](https://github.com/ossrs/srs/releases/tag/v6.0-r1)。
+
+## 本机开发与服务器配置
+
+默认 `compose.yml`、`infra/mediamtx.yml` 和 `infra/srs.conf` 用于本机试验：端口绑定回环，默认未启用发布鉴权或控制面。仅在 `.env` 设置 `STREAM_AUTH_SECRET` 不会自动改动引擎配置；`authEnabled` 表示应用具有密钥，不表示真实鉴权已验证。
+
+服务器使用[MediaMTX 配置模板](../infra/mediamtx-server.yml.example)及[systemd/代理部署说明](server-testing.md)。模板的应用回调、HLS 和 Control API 分别采用本机 18890、18891、18892；RTMP 为 1935，部署前确认空闲。应用需要匹配：
 
 ```dotenv
-HOST=127.0.0.1
-PORT=8787
-APP_ORIGIN=http://127.0.0.1:5173
 STREAM_PROVIDER=mediamtx
-STREAM_RTMP_BASE=rtmp://localhost:1935/live
-STREAM_HLS_BASE=http://localhost:8888/live
-STREAM_AUTH_SECRET=
+STREAM_RTMP_BASE=rtmp://YOUR_SERVER:1935/live
+STREAM_HLS_BASE=https://YOUR_SERVER/studio/media/live
+STREAM_AUTH_SECRET=REPLACE_WITH_RANDOM_SHARED_SECRET
+MEDIA_CONTROL_URL=http://127.0.0.1:18892
+MEDIA_CONTROL_TOKEN=
+REQUIRE_PLAYBACK=true
 ```
 
-切换引擎时同时修改 provider 与 HLS base，然后重启 API；只改 provider 不会自动修改端口。正式域名使用 HTTPS HLS，并使 CORS 允许实际网页 origin；手机上的 `localhost` 指向手机本身，不能用于访问开发电脑。
+所有示例占位值必须在部署文件中替换，真实文件放在仓库外。生产配置未显式指定 `REQUIRE_PLAYBACK` 时默认为 true；从 `.env.example` 复制而来的 false 仍需手动改成 true。
 
-## 本机联调步骤
+Control API 只留在回环或受控私网，不反代公网。当前单机模板将 `action: api` 排除 HTTP 鉴权，依赖仅回环监听；不能照搬到公网或不受控容器网络。`MEDIA_CONTROL_TOKEN` 会作为 Bearer 发给控制面，仅在控制面实际配置匹配认证时使用。
 
-1. 启动所选流媒体引擎，再按 README 启动 Web/API。
-2. 在商家端创建房间并切换到 `live`；读取 `GET /api/merchant/rooms/:id/stream` 返回值。
-3. OBS 选择自定义服务，Server 填接口的 `server`，Stream Key 填完整 `streamKey`：`<roomId>?token=<roomSecret>`。建议先使用 H.264 视频、AAC 音频、2 秒关键帧间隔。
-4. OBS 开始推流后，打开 `/watch/<roomId>`。HLS 需要积累分片，首屏可能等待数秒；若自动播放被浏览器阻止，点击播放器播放按钮。
-5. 检查音视频持续播放、停止推流后的断流提示，以及网页刷新后恢复。仅返回 m3u8 地址并不能证明视频可播放。
+## 发布鉴权
 
-MediaMTX 的完整 HLS 地址形如 `http://localhost:8888/live/<roomId>/index.m3u8`；SRS 形如 `http://localhost:8080/live/<roomId>.m3u8`。[MediaMTX HLS](https://mediamtx.org/docs/read/hls)、[OBS 推流](https://mediamtx.org/docs/publish/obs-studio)、[SRS 入门](https://ossrs.io/lts/en-us/docs/v6/doc/getting-started)
-
-当前播放器使用浏览器原生 HLS 或 hls.js。开发配置推荐 MediaMTX `hlsVariant: mpegts`；官方列其为兼容性优先选项，默认低延迟 HLS 在 Apple 设备上需要 HTTPS。[配置参考](https://mediamtx.org/docs/references/configuration-file)
-
-## 启用 MediaMTX 发布鉴权
-
-以下是需由部署者合并到引擎配置的示例，不是默认已生效配置。先生成随机共享密钥，在应用 `.env` 设置同一个 `STREAM_AUTH_SECRET`，再配置引擎：
-
-```yaml
-authMethod: http
-authHTTPAddress: http://api:8787/api/streams/mediamtx/auth?secret=REPLACE_SHARED_SECRET
-authHTTPExclude: []
-rtmp: true
-rtmpAddress: :1935
-hls: true
-hlsAddress: :8888
-hlsVariant: mpegts
-hlsAllowOrigins: ["http://localhost:5173"]
-api: false
-paths:
-  all_others:
-```
-
-`api` 是示例私有容器网络中的应用服务名；当前开发 API 在宿主机运行，不能直接照抄此主机名。在 Docker Desktop 下可改用 `host.docker.internal`，但须验证容器到宿主 API 的实际可达性。若需要调整 `HOST`，应只开放受控私有网络并限制防火墙；不要为连通性盲目公开演示登录或鉴权服务。
-
-API 要求 `POST /api/streams/mediamtx/auth?secret=<共享密钥>`，请求体使用引擎原生字段：
+MediaMTX 模板配置 `authMethod: http` 和带共享 secret 的 `authHTTPAddress`，引擎回调到应用内部地址，不通过公网 `/studio/`。请求体示例：
 
 ```json
 { "action": "publish", "path": "live/<roomId>", "query": "token=<roomSecret>" }
 ```
 
-共享密钥有效、房间状态为 `live` 且 token 匹配时返回 204；发布被拒绝时返回非 2xx。`read / playback` 在共享密钥核验后放行，其他动作拒绝。当前实现定位于公开观看，没有付费观看或分组观看权限。[MediaMTX HTTP 鉴权](https://mediamtx.org/docs/features/authentication)
+`POST /api/streams/mediamtx/auth?secret=...` 先验证引擎共享密钥，再要求房间 live、房间 token 匹配，成功返回 204；`read/playback` 通过共享密钥验证后放行。其他动作拒绝，控制 API 排除规则由引擎部署配置负责。[MediaMTX 鉴权参考](https://mediamtx.org/docs/features/authentication)
 
-## 启用 SRS 发布鉴权
-
-保留现有 HLS 配置，在目标 vhost 中加入以下配置，使用同一个应用共享密钥和可达的私有 API 地址：
+SRS 在所需 vhost 内启用 `http_hooks`，例如：
 
 ```conf
-vhost __defaultVhost__ {
-    http_hooks {
-        enabled on;
-        on_publish http://api:8787/api/streams/srs/publish?secret=REPLACE_SHARED_SECRET;
-    }
-    hls {
-        enabled on;
-        hls_path ./objs/nginx/html;
-        hls_fragment 2;
-        hls_window 10;
-    }
+http_hooks {
+    enabled on;
+    on_publish http://api:8787/api/streams/srs/publish?secret=REPLACE_SHARED_SECRET;
 }
 ```
 
-回调使用 `action: "on_publish"`、`app: "live"`、`stream: "<roomId>"`、`param: "?token=<roomSecret>"`。应用核验共享密钥、app、房间状态和房间 token，成功返回 `{"code":0}`。它不实现 `on_unpublish` 或 HLS 观看鉴权，也不从回调自动切换房间状态。[SRS HTTP 回调](https://ossrs.io/lts/en-us/docs/v6/doc/http-callback)
+`api` 仅为容器网络服务名示例，须改成实际可达的私网应用地址。SRS 载荷含 `action:"on_publish"`、`app:"live"`、`stream` 和 `param:"?token=..."`；应用核验后返回 `{"code":0}`。SRS 没有接入 `on_unpublish`、控制面或强制断流；不能把其基础地址适配视为与 MediaMTX 功能完全相同。[SRS HTTP 回调](https://ossrs.io/lts/en-us/docs/v6/doc/http-callback)
 
-## 密钥、结束直播与后续验收
+token 与共享密钥可能出现在 URL，应避免进入访问日志或对外错误内容。远程 RTMP 明文传输需要受控网络或另外配置 RTMPS 等保护，当前模板未自动配置推流 TLS。
 
-`POST /api/merchant/rooms/:id/stream/rotate` 只更新数据库内的房间密钥；应重新读取推流配置并更新 OBS。启用回调后，新连接必须使用新密钥；**密钥轮换或把房间改为 `ended` 不会自动断开已经建立的 OBS 推流连接**。当前未接引擎断流 API，停播时还须停止 OBS；后续要实现强制断流与连接状态同步。
+## 流状态、轮换与停止
 
-公开观看 URL 不携带发布 token。房间 ID 是公开标识，不能当作推流密码。共享密钥与发布 token 会出现在请求 URL 中，应限制为可信网络并对日志脱敏；远程推流还需评估 RTMPS、VPN 或其他传输保护。
+`GET /api/merchant/rooms/:id/signal` 读取 MediaMTX 路径，公开房间 DTO 同样包含 signal。返回 `configured`、`connected`、`checkedAt`、可选 `viewers/message`。查询约缓存 2.5 秒，请求超时为 3 秒；未知状态为 null，不会伪装在线。引擎 reader 数与业务可见页面人数是不同指标。
 
-启用鉴权后至少实测：正确密钥允许发布，错误/空/旧密钥拒绝新连接，非 `live` 房间拒绝发布，鉴权服务不可达时拒绝发布，普通观众仍能观看。另需测试重连、长播、断网、移动端、HTTPS/CORS，以及真实流存在性与应用状态不一致时的体验。
+以下操作会尝试断流：
 
-自托管配置和提词器提示不构成直播资质、广告宣传或支付合规结论。正式运营需结合商品类别、主体及平台规则完成实际审核。
+- 把房间改为 `ended`，同时关闭未完成活动。
+- 轮换房间推流密钥。
+- 调用 `POST /api/merchant/rooms/:id/stream/disconnect`。
+
+实现读取当前来源，使用 RTMP/RTMPS 对应 kick API，再次读取路径验证结果。未配置控制服务、协议不支持、请求出错或仍有在线来源时，返回 `disconnected:false` 和人工处理提示。客户端必须检查该字段，不能把 HTTP 200 或业务房间已结束当作推流已断开的证据。
+
+轮换/结束先更新业务状态或密钥，断流失败不会回滚。轮换后更新 OBS 密钥；结束后新连接会被发布鉴权拒绝。独立断流接口不会结束房间或轮换密钥，因此原密钥仍可在 live 状态下重连；长期停播使用结束房间并停止 OBS。
+
+## HTTPS 与 `/studio/` 代理
+
+使用 `VITE_BASE_PATH=/studio/ npm run build`，运行环境设 `APP_BASE_PATH=/studio/`；`APP_ORIGIN` 只填 HTTPS origin。代理从 `/studio/` 转到应用根路径，前端资源、API、观看链接与 Cookie 保持一致。开发默认使用根路径，改变部署前缀必须重建。
+
+HLS base 对应 `https://YOUR_SERVER/studio/media/live`，代理把 `/studio/media/` 转到引擎 HLS 根路径。MediaMTX 1.21 的 HLS 使用重定向和 session，需保留 Location 改写、Cookie、查询参数以及后续分片访问；仅请求一次 m3u8 返回 200 不足以证明播放成功。模板见 [Nginx 片段](../infra/nginx-studio.conf)。
+
+同源 HTTPS 分发避免浏览器混合内容问题；如果独立跨域分发，应配置实际网页 origin 的 CORS。不要公开 Control API、发布回调或部署凭据。服务器实际安装、端口暴露、原站健康和回滚结果统一记录在[服务器测试说明](server-testing.md)。
+
+远程公网、长播重连、浏览器暂停/隐藏、OBS 硬件、手机和微信内播放须按实际环境继续验收。微信支付、远程模型及 ASR 尚未接入，流媒体通过不代表这些能力已完成。
+
+## 浏览器播放兼容性
+
+播放器按需加载 hls.js，在 `Hls.isSupported()` 可用时优先使用 MSE；不支持时回退原生 HLS。部分 Chromium 版本会报告原生 HLS 支持，却无法持续播放某些 TS 直播；本次浏览器验收实际遇到并修复这一问题。参考 [hls.js 官方说明](https://github.com/video-dev/hls.js#using-hlsjs)。播放错误会立即撤销播放器的播放中标志，避免错误状态继续累计资格。

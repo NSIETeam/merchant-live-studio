@@ -17,6 +17,9 @@ if (existsSync("dist/web/index.html")) {
 }
 const worker = setInterval(() => {
   try {
+    db.prepare("DELETE FROM revoked_sessions WHERE expires_at<?").run(
+      Date.now(),
+    );
     expireCampaigns(db);
     processSimulationJobs(db);
   } catch (error) {

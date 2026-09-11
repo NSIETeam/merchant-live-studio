@@ -67,14 +67,16 @@ export function reserveClaim(
       throw new HTTPException(409, { message: "直播尚未开始或已经结束" });
     const visit = db
       .prepare(
-        "SELECT watch_seconds,last_seen FROM visits WHERE room_id=? AND viewer_id=?",
+        "SELECT session_watch_millis,last_seen,active FROM visits WHERE room_id=? AND viewer_id=?",
       )
       .get(row.room_id, viewerId) as
-      { watch_seconds: number; last_seen: number } | undefined;
+      | { session_watch_millis: number; last_seen: number; active: number }
+      | undefined;
     if (
       !visit ||
       now - visit.last_seen > 30000 ||
-      visit.watch_seconds < row.min_watch_seconds
+      !visit.active ||
+      visit.session_watch_millis < row.min_watch_seconds * 1000
     )
       throw new HTTPException(403, {
         message: "观看时长尚未达到要求，请保持直播页打开",

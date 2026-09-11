@@ -7,6 +7,14 @@ export interface Room {
   createdAt: number;
   playbackUrl: string;
   productName: string;
+  signal?: StreamState;
+}
+export interface StreamState {
+  configured: boolean;
+  connected: boolean | null;
+  checkedAt: number;
+  viewers?: number;
+  message?: string;
 }
 export interface StreamConfig {
   provider: "srs" | "mediamtx";

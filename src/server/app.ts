@@ -4,6 +4,9 @@ import { bodyLimit } from "hono/body-limit";
 import { secureHeaders } from "hono/secure-headers";
 import { deleteCookie } from "hono/cookie";
 import { randomBytes, randomUUID } from "node:crypto";
+import { isIP } from "node:net";
+import { MediaController } from "./services/media-control.js";
+import { recordPresence } from "./services/presence.js";
 import { z, ZodError } from "zod";
 import type { Config } from "./config.js";
 import { type DB, transaction } from "./db.js";
@@ -55,6 +58,7 @@ export function createApp(db: DB, config: Config, clock = Date.now) {
   }>();
   const stream = createStreamAdapter(config),
     copilot = new GroundedCopilot();
+  const media = new MediaController(config);
   const roomDto = (r: RoomRow): Room => ({
     id: r.id,
     merchantId: r.merchant_id,
@@ -111,27 +115,36 @@ export function createApp(db: DB, config: Config, clock = Date.now) {
   const buckets = new Map<string, { count: number; reset: number }>();
   app.use("/api/*", async (c, next) => {
     // Single-instance guard; do not trust arbitrary X-Forwarded-For headers.
-    const remote =
+    let remote =
       (c.env as { incoming?: { socket?: { remoteAddress?: string } } })
         ?.incoming?.socket?.remoteAddress || "local";
-    const group = c.req.path.startsWith("/api/auth/")
-      ? "auth"
-      : c.req.method === "GET"
-        ? "read"
-        : "write";
+    const forwarded = c.req.header("x-real-ip");
+    if (config.trustedProxyIps.includes(remote) && forwarded && isIP(forwarded))
+      remote = forwarded;
+    const group =
+      c.req.path === "/api/auth/viewer"
+        ? "viewer-auth"
+        : c.req.path.startsWith("/api/auth/")
+          ? "merchant-auth"
+          : c.req.method === "GET"
+            ? "read"
+            : "write";
     const role = c.req.path.startsWith("/api/merchant/")
       ? "merchant"
       : "viewer";
-    const session = readSession(c, config, role);
+    const session = readSession(c, config, role, db);
     const engine =
       c.req.path.startsWith("/api/streams/") &&
       config.streamAuthSecret &&
       equalSecret(c.req.query("secret") || "", config.streamAuthSecret);
-    const identity = engine
-      ? "engine"
-      : session
-        ? `${role}:${session.id}`
-        : `anonymous:${remote}`;
+    const identity =
+      group === "merchant-auth"
+        ? `login:${remote}`
+        : engine
+          ? "engine"
+          : session
+            ? `${role}:${session.id}`
+            : `anonymous:${remote}`;
     const key = `${identity}:${group}`,
       now = clock();
     if (buckets.size > 10000)
@@ -141,7 +154,14 @@ export function createApp(db: DB, config: Config, clock = Date.now) {
       b = { count: 0, reset: now + 60000 };
       buckets.set(key, b);
     }
-    const limit = group === "auth" ? 60 : group === "read" ? 1200 : 300;
+    const limit =
+      group === "merchant-auth"
+        ? 60
+        : group === "viewer-auth"
+          ? 600
+          : group === "read"
+            ? 1200
+            : 300;
     if (++b.count > limit) {
       c.header("Retry-After", "60");
       return c.json({ error: "请求过于频繁，请稍后重试" }, 429);
@@ -176,11 +196,13 @@ export function createApp(db: DB, config: Config, clock = Date.now) {
       payments: "simulation",
       copilot: "grounded-rules",
       streamProvider: config.streamProvider,
+      mediaControl: media.configured,
+      requirePlayback: config.requirePlayback,
     });
   });
   app.get("/api/auth/me", (c) =>
     c.json({
-      merchantId: readSession(c, config, "merchant")?.id || null,
+      merchantId: readSession(c, config, "merchant", db)?.id || null,
       demoMode: config.demoMode,
     }),
   );
@@ -200,12 +222,18 @@ export function createApp(db: DB, config: Config, clock = Date.now) {
     return c.json({ merchantId: input.merchantId });
   });
   app.post("/api/auth/logout", (c) => {
-    deleteCookie(c, "studio_merchant", { path: "/" });
+    const session = readSession(c, config, "merchant", db);
+    if (session)
+      db.prepare("INSERT OR IGNORE INTO revoked_sessions VALUES(?,?)").run(
+        session.sid,
+        session.expires,
+      );
+    deleteCookie(c, "studio_merchant", { path: config.basePath });
     return c.json({ ok: true });
   });
   app.post("/api/auth/viewer", (c) => {
     const session =
-      readSession(c, config, "viewer") || issueSession(c, config, "viewer");
+      readSession(c, config, "viewer", db) || issueSession(c, config, "viewer");
     return c.json({
       viewerId: session.id,
       identity: "anonymous",
@@ -213,14 +241,14 @@ export function createApp(db: DB, config: Config, clock = Date.now) {
     });
   });
   app.use("/api/merchant/*", async (c, next) => {
-    const session = readSession(c, config, "merchant");
+    const session = readSession(c, config, "merchant", db);
     if (!session)
       throw new HTTPException(401, { message: "请先登录商家工作台" });
     c.set("merchantId", session.id);
     await next();
   });
   app.use("/api/viewer/*", async (c, next) => {
-    const session = readSession(c, config, "viewer");
+    const session = readSession(c, config, "viewer", db);
     if (!session)
       throw new HTTPException(401, { message: "观看会话已过期，请刷新页面" });
     c.set("viewerId", session.id);
@@ -279,6 +307,10 @@ export function createApp(db: DB, config: Config, clock = Date.now) {
           : r.live_started_at,
         r.id,
       );
+      if (input.status === "live" && r.status !== "live")
+        db.prepare(
+          "UPDATE visits SET session_watch_millis=0,active=0 WHERE room_id=?",
+        ).run(r.id);
       // Ended campaigns are closed separately to avoid nesting SQLite transactions.
     });
     if (input.status === "ended")
@@ -286,19 +318,29 @@ export function createApp(db: DB, config: Config, clock = Date.now) {
         .prepare(`SELECT id FROM campaigns WHERE room_id=? AND status='active'`)
         .all(r.id) as { id: string }[])
         closeCampaign(db, row.id, clock());
-    return c.json({ room: roomDto(room(r.id)) });
+    const streamAction =
+      input.status === "ended" ? await media.disconnect(r.id) : undefined;
+    return c.json({ room: roomDto(room(r.id)), streamAction });
   });
   app.get("/api/merchant/rooms/:id/stream", (c) => {
     const r = owned(c.req.param("id"), c.get("merchantId"));
     return c.json(stream.configuration(r.id, r.stream_secret));
   });
-  app.post("/api/merchant/rooms/:id/stream/rotate", (c) => {
+  app.post("/api/merchant/rooms/:id/stream/rotate", async (c) => {
     const r = owned(c.req.param("id"), c.get("merchantId"));
     db.prepare("UPDATE rooms SET stream_secret=? WHERE id=?").run(
       randomBytes(24).toString("hex"),
       r.id,
     );
-    return c.json({ ok: true });
+    return c.json({ ok: true, streamAction: await media.disconnect(r.id) });
+  });
+  app.get("/api/merchant/rooms/:id/signal", async (c) => {
+    const r = owned(c.req.param("id"), c.get("merchantId"));
+    return c.json(await media.status(r.id));
+  });
+  app.post("/api/merchant/rooms/:id/stream/disconnect", async (c) => {
+    const r = owned(c.req.param("id"), c.get("merchantId"));
+    return c.json(await media.disconnect(r.id));
   });
   app.get("/api/merchant/rooms/:id/facts", (c) => {
     owned(c.req.param("id"), c.get("merchantId"));
@@ -363,6 +405,7 @@ export function createApp(db: DB, config: Config, clock = Date.now) {
   app.get("/api/merchant/rooms/:id/campaigns", (c) => {
     owned(c.req.param("id"), c.get("merchantId"));
     return c.json({
+      serverTime: clock(),
       campaigns: (
         db
           .prepare(
@@ -498,7 +541,7 @@ export function createApp(db: DB, config: Config, clock = Date.now) {
         .all(c.req.param("id")),
     });
   });
-  app.get("/api/public/rooms/:id", (c) => {
+  app.get("/api/public/rooms/:id", async (c) => {
     const r = room(c.req.param("id"));
     const campaigns = (
       db
@@ -510,7 +553,8 @@ export function createApp(db: DB, config: Config, clock = Date.now) {
     // Stream publish secrets, merchant facts and copilot output never cross this boundary.
     const { merchantId: _merchantId, ...publicRoom } = roomDto(r);
     return c.json({
-      room: publicRoom,
+      room: { ...publicRoom, signal: await media.status(r.id) },
+      requirePlayback: config.requirePlayback,
       campaigns,
       serverTime: clock(),
       paymentMode: "simulation",
@@ -520,43 +564,23 @@ export function createApp(db: DB, config: Config, clock = Date.now) {
     const r = room(c.req.param("id")),
       now = clock(),
       viewer = c.get("viewerId");
-    const { visible } = z
-      .object({ visible: z.boolean() })
+    const input = z
+      .object({ visible: z.boolean(), playing: z.boolean().default(false) })
       .parse(await c.req.json());
-    const prev = db
-      .prepare(
-        "SELECT last_seen,watch_seconds FROM visits WHERE room_id=? AND viewer_id=?",
-      )
-      .get(r.id, viewer) as
-      { last_seen: number; watch_seconds: number } | undefined;
-    // Credit elapsed server time only while live/visible and a heartbeat arrives within 20 seconds.
-    const elapsed = prev
-      ? (now - Math.max(prev.last_seen, r.live_started_at)) / 1000
-      : 0;
-    const gap = prev ? (now - prev.last_seen) / 1000 : 0;
-    const credited =
-      visible && r.status === "live" && elapsed > 0 && gap > 0 && gap <= 20
-        ? Math.floor(elapsed)
-        : 0;
-    if (visible) {
-      db.prepare(
-        "INSERT INTO visits VALUES(?,?,?,?,?) ON CONFLICT(room_id,viewer_id) DO UPDATE SET last_seen=excluded.last_seen,watch_seconds=visits.watch_seconds+excluded.watch_seconds",
-      ).run(r.id, viewer, now, now, credited);
-      if (r.status === "live")
-        db.prepare("INSERT OR IGNORE INTO presence VALUES(?,?,?)").run(
-          r.id,
-          viewer,
-          Math.floor(now / 60000),
-        );
-    } else if (prev) {
-      db.prepare(
-        "UPDATE visits SET last_seen=? WHERE room_id=? AND viewer_id=?",
-      ).run(now - 31000, r.id, viewer);
-    }
-    return c.json({
-      watchSeconds: (prev?.watch_seconds || 0) + credited,
-      qualifiedBy: "server-heartbeats-demo-only",
-    });
+    const connected = config.requirePlayback
+      ? (await media.status(r.id)).connected === true
+      : false;
+    return c.json(
+      recordPresence(
+        db,
+        r,
+        viewer,
+        input,
+        config.requirePlayback,
+        connected,
+        now,
+      ),
+    );
   });
   app.post("/api/viewer/rooms/:id/questions", async (c) => {
     const r = room(c.req.param("id"));
@@ -581,12 +605,21 @@ export function createApp(db: DB, config: Config, clock = Date.now) {
     );
     return c.json({ ok: true }, 201);
   });
-  app.post("/api/viewer/campaigns/:id/claim", (c) =>
-    c.json({
+  app.post("/api/viewer/campaigns/:id/claim", async (c) => {
+    if (config.requirePlayback) {
+      const campaign = db
+        .prepare("SELECT room_id FROM campaigns WHERE id=?")
+        .get(c.req.param("id")) as { room_id: string } | undefined;
+      if (campaign && (await media.status(campaign.room_id)).connected !== true)
+        throw new HTTPException(409, {
+          message: "当前没有有效直播信号，请等待主播恢复推流",
+        });
+    }
+    return c.json({
       claim: reserveClaim(db, c.req.param("id"), c.get("viewerId"), clock()),
       paymentMode: "simulation",
-    }),
-  );
+    });
+  });
   app.get("/api/viewer/rooms/:id/claims", (c) => {
     room(c.req.param("id"));
     return c.json({
@@ -614,7 +647,12 @@ export function createApp(db: DB, config: Config, clock = Date.now) {
         query: z.string().optional(),
       })
       .parse(await c.req.json());
-    if (["read", "playback"].includes(input.action)) return c.body(null, 204);
+    if (!input.path.startsWith("live/")) throw new HTTPException(403);
+    if (["read", "playback"].includes(input.action)) {
+      const r = room(input.path.slice(5));
+      if (r.status !== "live") throw new HTTPException(403);
+      return c.body(null, 204);
+    }
     if (input.action !== "publish") throw new HTTPException(403);
     const r = room(input.path.replace(/^live\//, ""));
     const token = new URLSearchParams(input.query || "").get("token") || "";

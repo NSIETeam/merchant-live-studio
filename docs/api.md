@@ -1,39 +1,77 @@
 # API 索引
 
-API 前缀 `/api`。成功返回 JSON（MediaMTX 鉴权成功为 204）；错误为 `{ "error": "说明" }`，SRS 拒绝时返回 `{ "code": 403 }`。金额用整数分，时间用毫秒 Unix 时间戳。写入请求使用 `Content-Type: application/json`，空参数也传 `{}`。
+对应 0.2.0。应用内部前缀为 `/api`；经 `/studio/` 代理部署时，浏览器请求 `/studio/api/...`，代理剥离 `/studio/`。`APP_BASE_PATH` 控制 Cookie 路径，前端使用构建时 `VITE_BASE_PATH`，详见[服务器部署](server-testing.md)。
 
-| 认证   | 方法 / 路径                              | 说明                                   |
-| ------ | ---------------------------------------- | -------------------------------------- |
-| 公开   | `GET /health`                            | 服务状态及支付/提词 provider           |
-| 公开   | `GET /auth/me`                           | 当前商家会话与 demo 开关               |
-| 公开   | `POST /auth/demo`                        | 本地演示登录，生产禁用                 |
-| 公开   | `POST /auth/merchant`                    | `{merchantId,token}`，签发商家 Cookie  |
-| 公开   | `POST /auth/viewer`                      | 签发/复用匿名观众 Cookie               |
-| 会话   | `POST /auth/logout`                      | 清除商家 Cookie                        |
-| 商家   | `GET /merchant/rooms`                    | 仅当前商家的房间                       |
-| 商家   | `POST /merchant/rooms`                   | `{title,productName}`                  |
-| 商家   | `PATCH /merchant/rooms/:id`              | `{status: "draft" / "live" / "ended"}` |
-| 商家   | `GET /merchant/rooms/:id/stream`         | RTMP server、streamKey、HLS URL        |
-| 商家   | `POST /merchant/rooms/:id/stream/rotate` | 更换未来推流连接的密钥                 |
-| 商家   | `GET /merchant/rooms/:id/facts`          | 事实、出处、批准状态                   |
-| 商家   | `POST /merchant/rooms/:id/facts`         | `{text,evidence,approved:false}`       |
-| 商家   | `PATCH /merchant/facts/:id`              | `{approved:boolean}`，人工审核         |
-| 商家   | `POST /merchant/rooms/:id/copilot`       | `{transcript,question?}`，本地规则建议 |
-| 商家   | `GET/POST /merchant/rooms/:id/campaigns` | 列表 / 新建活动                        |
-| 商家   | `POST /merchant/campaigns/:id/close`     | 幂等关闭，返还演示余量                 |
-| 商家   | `GET /merchant/rooms/:id/ledger`         | 最近 200 笔账本                        |
-| 商家   | `GET /merchant/rooms/:id/analytics`      | 实际访问和领取统计                     |
-| 商家   | `GET /merchant/rooms/:id/questions`      | 按文本精确聚合的前 20 类问题           |
-| 公开   | `GET /public/rooms/:id`                  | 公开房间、可参与活动、服务端时间       |
-| 观众   | `POST /viewer/rooms/:id/heartbeat`       | `{visible:boolean}`，返回 watchSeconds |
-| 观众   | `POST /viewer/rooms/:id/questions`       | `{text}`，每会话每房间至少间隔 5 秒    |
-| 观众   | `POST /viewer/campaigns/:id/claim`       | 幂等领取，返回 claim 与模拟模式        |
-| 观众   | `GET /viewer/rooms/:id/claims`           | 当前观众在该房间的领取记录             |
-| 引擎   | `POST /streams/mediamtx/auth?secret=...` | 引擎原生发布鉴权载荷                   |
-| 引擎   | `POST /streams/srs/publish?secret=...`   | SRS on_publish 回调                    |
-| 未实现 | `POST /payments/wechat/notify`           | 固定 501，不更新状态                   |
+成功通常返回 JSON，MediaMTX 鉴权成功为 204。普通错误为 `{ "error": "说明" }`，SRS 拒绝使用 `{ "code": 403 }`。金额用整数分，时间戳用 Unix 毫秒。普通写请求使用 `Content-Type: application/json`，空参数也传 `{}`。
 
-创建演示活动请求：
+## 接口表
+
+下列路径均接在 `/api` 后。
+
+| 认证   | 方法 / 路径                                  | 说明                                                          |
+| ------ | -------------------------------------------- | ------------------------------------------------------------- |
+| 公开   | `GET /health`                                | 数据库健康、演示/支付/提词/流媒体配置及播放要求               |
+| 公开   | `GET /auth/me`                               | 当前有效商家会话与 demo 开关                                  |
+| 公开   | `POST /auth/demo`                            | 本地演示登录，生产禁用                                        |
+| 公开   | `POST /auth/merchant`                        | `{merchantId,token}`，签发含 sid 与凭据版本的商家 Cookie      |
+| 公开   | `POST /auth/viewer`                          | 签发/复用匿名互动 Cookie，不是观看前置条件                    |
+| 会话   | `POST /auth/logout`                          | 持久撤销当前商家 sid，并清 Cookie；重复调用安全               |
+| 商家   | `GET /merchant/rooms`                        | 仅当前商家的房间                                              |
+| 商家   | `POST /merchant/rooms`                       | `{title,productName}`                                         |
+| 商家   | `PATCH /merchant/rooms/:id`                  | `{status:"draft"/"live"/"ended"}`；结束时附断流结果           |
+| 商家   | `GET /merchant/rooms/:id/stream`             | provider、RTMP server、完整 streamKey、HLS URL、authEnabled   |
+| 商家   | `POST /merchant/rooms/:id/stream/rotate`     | 轮换密钥并尝试踢出旧推流，返回 streamAction                   |
+| 商家   | `GET /merchant/rooms/:id/signal`             | MediaMTX 实际信号状态、引擎 reader 数或未知提示               |
+| 商家   | `POST /merchant/rooms/:id/stream/disconnect` | 踢出支持的推流连接并二次查询核验                              |
+| 商家   | `GET /merchant/rooms/:id/facts`              | 事实、出处、批准状态                                          |
+| 商家   | `POST /merchant/rooms/:id/facts`             | `{text,evidence,approved:false}`                              |
+| 商家   | `PATCH /merchant/facts/:id`                  | `{approved:boolean}`，人工审核                                |
+| 商家   | `POST /merchant/rooms/:id/copilot`           | `{transcript,question?}`，本地规则建议                        |
+| 商家   | `GET /merchant/rooms/:id/campaigns`          | 活动列表与 serverTime                                         |
+| 商家   | `POST /merchant/rooms/:id/campaigns`         | 创建演示活动                                                  |
+| 商家   | `POST /merchant/campaigns/:id/close`         | 幂等关闭，返回演示余量                                        |
+| 商家   | `GET /merchant/rooms/:id/ledger`             | 最近 200 笔账本                                               |
+| 商家   | `GET /merchant/rooms/:id/analytics`          | 房间累计访问、停留、问题与领取分析                            |
+| 商家   | `GET /merchant/rooms/:id/questions`          | 按文本精确聚合的前 20 类问题                                  |
+| 公开   | `GET /public/rooms/:id`                      | 房间及 signal、活动、serverTime、requirePlayback、paymentMode |
+| 观众   | `POST /viewer/rooms/:id/heartbeat`           | `{visible,playing}`，返回本场/累计时长及计时状态              |
+| 观众   | `POST /viewer/rooms/:id/questions`           | `{text}`，直播中可提问，每会话每房间至少间隔 5 秒             |
+| 观众   | `POST /viewer/campaigns/:id/claim`           | 幂等领取，返回 claim 与 simulation 模式                       |
+| 观众   | `GET /viewer/rooms/:id/claims`               | 当前观众在该房间的历史领取记录                                |
+| 引擎   | `POST /streams/mediamtx/auth?secret=...`     | 引擎原生发布/观看鉴权载荷                                     |
+| 引擎   | `POST /streams/srs/publish?secret=...`       | SRS on_publish 回调                                           |
+| 未实现 | `POST /payments/wechat/notify`               | 固定 501，不更新状态                                          |
+
+## 会话与限流
+
+商家会话有独立 `sid`，注销后重放原 Cookie 仍返回 401；同商家的其他有效登录不受影响。凭据删除或轮换使旧凭据版本失效，部署环境配置需重启后生效。Cookie 为 HttpOnly / SameSite=Strict，生产为 Secure，Path 为 `APP_BASE_PATH`。
+
+观众建会话返回 `viewerId`、`identity:"anonymous"`、`canReceiveRealMoney:false`。公开房间和 HLS 不依赖 Cookie；只有提问、心跳、领取及领取历史需要观众身份。
+
+商家鉴权每分钟 60 次、观众建会话每分钟 600 次，预算独立。读取和写入限额分别为每分钟 1200、300 次；已验证业务会话单独计数，商家登录预算按可信客户端地址计数。超额返回 429 与 `Retry-After: 60`。仅 `TRUSTED_PROXY_IPS` 中的代理可提供有效 `X-Real-IP`，不能用观众 Cookie 或任意代理头绕过商家登录预算。
+
+## 房间与媒体控制
+
+业务状态允许 `draft → live → ended → draft`，可重复写入当前状态。进入新的 `live` 清本场资格，历史累计与账本保留。结束房间关闭活动并尝试断流；轮换密钥先更新密钥，再尝试断流。
+
+信号字段 `configured` 表示控制面是否配置，`connected` 为 `true/false/null`，`null` 表示未知；`viewers` 为引擎报告的 reader 数，不是房间的去重观众人数。响应不包含控制地址或控制凭据。
+
+断流结果形如：
+
+```json
+{
+  "disconnected": false,
+  "message": "断流请求失败，请手动停止 OBS 后重试"
+}
+```
+
+MediaMTX 支持 RTMP/RTMPS 踢连接后再次查询。未配置、协议不支持、请求失败或仍在线都不能报成功。显式断流接口直接返回此对象；结束和轮换响应将其放在 `streamAction`。HTTP 200 仅表示业务请求已处理，客户端仍需检查 `disconnected`。控制失败不会回滚已经生效的业务状态或新密钥。SRS 尚未实现控制面。
+
+`authEnabled` 只表示应用配置了共享回调密钥，不证明引擎配置已实际启用鉴权。详细接入见[流媒体说明](streaming.md)。
+
+## 演示红包与资格
+
+创建活动：
 
 ```json
 {
@@ -45,6 +83,31 @@ API 前缀 `/api`。成功返回 JSON（MediaMTX 鉴权成功为 204）；错误
 }
 ```
 
-房间状态允许 `draft → live → ended → draft`，同状态重复请求可接受。已结束房间不允许新建活动。领取需房间开放、活动已开始未过期、有效心跳时长达标；失败会返回 403/409。无权访问商家房间返回 404，不暴露其他商家资源。
+已结束房间不能创建活动。商家列表 `{campaigns,serverTime}` 与公开房间的 `serverTime` 使用同一个服务端时钟，前端据此显示倒计时。真正的开启、过期和资格检查仍在服务端执行。
 
-接口契约当前用共享 DTO、Zod 和测试维护；尚未生成 OpenAPI。生产 API 应增加版本化、分页、审计、稳定错误码和合理的数据保留策略。
+心跳请求与响应示例：
+
+```json
+{ "visible": true, "playing": true }
+```
+
+```json
+{
+  "watchSeconds": 12,
+  "totalWatchSeconds": 132,
+  "counting": true,
+  "qualifiedBy": "playback-heartbeats-demo-only"
+}
+```
+
+`watchSeconds` 是本场资格整秒数，`totalWatchSeconds` 是房间历史累计整秒数，数据库按毫秒保存。`playing` 缺省为 false。`REQUIRE_PLAYBACK=true` 时必须页面可见、房间 live、playing=true 且引擎信号在线；关闭该要求时 `qualifiedBy` 为 `server-heartbeats-demo-only`，只用于本地演示。
+
+只累计相邻有效心跳间大于零且不超过 20 秒的服务端时间，隐藏、暂停、断线及无信号不补算。领取还要求最近 30 秒内有效心跳和 active 状态、当前场次时长达标、活动可领以及房间 live；严格模式额外要求当前信号在线。失败返回 403/409。
+
+服务端对同一活动和匿名会话只创建一个 claim；严格模式下断线可阻止重复领取入口，历史结果应通过 `/claims` 查询。金额和账本只属于模拟流程，`reserved → simulated` 不表示真实到账。
+
+## 错误与后续接口
+
+无有效会话为 401；跨站操作或资格不足为 403；无权访问另一商家资源统一为 404；状态、窗口和信号冲突通常为 409；格式验证为 400；超限为 429。微信通知能力未接入，返回 501 并保持支付状态不变。
+
+当前契约由共享 DTO、Zod 与 26 项回归测试维护，尚未生成 OpenAPI。后续需增加 API 版本化、分页、稳定错误码与审计。微信 OAuth/支付、远程 LLM 和 ASR 仍是待实现边界，见[架构](architecture.md)与[支付说明](payments.md)。

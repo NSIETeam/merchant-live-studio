@@ -290,7 +290,7 @@ test("eligibility credits only live, visible, continuous server time", async () 
           v,
         )
       ).data.watchSeconds,
-      1,
+      0,
     );
     f.advance(5000);
     assert.equal(
@@ -302,7 +302,7 @@ test("eligibility credits only live, visible, continuous server time", async () 
           v,
         )
       ).data.watchSeconds,
-      6,
+      5,
     );
     assert.equal(
       (
@@ -313,7 +313,7 @@ test("eligibility credits only live, visible, continuous server time", async () 
           v,
         )
       ).data.watchSeconds,
-      6,
+      5,
     );
     await f.request(
       "/viewer/rooms/demo-room/heartbeat",
@@ -331,7 +331,7 @@ test("eligibility credits only live, visible, continuous server time", async () 
           v,
         )
       ).data.watchSeconds,
-      6,
+      5,
     );
     f.advance(30000);
     assert.equal(
@@ -343,7 +343,7 @@ test("eligibility credits only live, visible, continuous server time", async () 
           v,
         )
       ).data.watchSeconds,
-      6,
+      5,
     );
     const c = await f.campaign(m, { minWatchSeconds: 10 });
     assert.equal(

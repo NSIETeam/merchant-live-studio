@@ -55,6 +55,21 @@ export function openDatabase(path: string) {
     CREATE INDEX IF NOT EXISTS questions_room ON questions(room_id);
     INSERT OR IGNORE INTO schema_migrations VALUES(1,unixepoch());
   `);
+  const version = Number(
+    db.prepare("SELECT max(version) AS version FROM schema_migrations").get()
+      ?.version || 1,
+  );
+  if (version < 2)
+    transaction(db, () => {
+      db.exec(`
+      ALTER TABLE visits ADD COLUMN watch_millis INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE visits ADD COLUMN active INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE visits ADD COLUMN session_watch_millis INTEGER NOT NULL DEFAULT 0;
+      UPDATE visits SET watch_millis=watch_seconds*1000;
+      CREATE TABLE revoked_sessions (id TEXT PRIMARY KEY, expires_at INTEGER NOT NULL);
+      INSERT INTO schema_migrations VALUES(2,unixepoch());
+    `);
+    });
   return db;
 }
 export type DB = ReturnType<typeof openDatabase>;

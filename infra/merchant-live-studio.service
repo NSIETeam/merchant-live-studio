@@ -1,0 +1,25 @@
+[Unit]
+Description=Merchant Live Studio API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=live-studio
+Group=live-studio
+WorkingDirectory=/opt/merchant-live-studio/current
+EnvironmentFile=/etc/merchant-live-studio/studio.env
+ExecStart=/opt/merchant-live-studio/runtime/node/bin/node dist/server/server/index.js
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/merchant-live-studio
+MemoryMax=384M
+TasksMax=64
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

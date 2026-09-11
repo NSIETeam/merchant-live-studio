@@ -5,12 +5,16 @@ export function Player({
   url,
   live,
   compact = false,
+  onPlayback,
 }: {
   url: string;
   live: boolean;
   compact?: boolean;
+  onPlayback?: (playing: boolean) => void;
 }) {
   const ref = useRef<HTMLVideoElement>(null);
+  const callback = useRef(onPlayback);
+  callback.current = onPlayback;
   const [active, setActive] = useState(false);
   const [message, setMessage] = useState("");
   useEffect(() => {
@@ -26,35 +30,41 @@ export function Player({
       video.play().catch(() => {
         if (!cancelled) setMessage("请点击画面中的播放按钮开始观看。");
       });
-    if (video.canPlayType("application/vnd.apple.mpegurl")) {
-      video.src = url;
-      void play();
-    } else
-      void import("hls.js")
-        .then(({ default: Hls }) => {
-          if (cancelled) return;
-          if (!Hls.isSupported()) {
-            setMessage(
-              "当前浏览器暂不支持 HLS 播放，请使用 Safari 或更新浏览器。",
-            );
+    // Some Chromium versions advertise native HLS but cannot play all TS streams.
+    // Prefer MSE playback; retain native HLS for browsers without MSE support.
+    void import("hls.js")
+      .then(({ default: Hls }) => {
+        if (cancelled) return;
+        if (!Hls.isSupported()) {
+          if (video.canPlayType("application/vnd.apple.mpegurl")) {
+            video.src = url;
+            void play();
             return;
           }
-          hls = new Hls({ maxBufferLength: 20 });
-          hls.loadSource(url);
-          hls.attachMedia(video);
-          hls.on(Hls.Events.MANIFEST_PARSED, () => {
-            void play();
-          });
-          hls.on(Hls.Events.ERROR, (_, data) => {
-            if (data.fatal && !cancelled)
-              setMessage("暂未收到直播信号，请确认主播已推流后重试。");
-          });
-        })
-        .catch(() => {
-          if (!cancelled) setMessage("播放器载入失败，请刷新页面重试。");
+          setMessage(
+            "当前浏览器暂不支持 HLS 播放，请使用 Safari 或更新浏览器。",
+          );
+          return;
+        }
+        hls = new Hls({ maxBufferLength: 20 });
+        hls.loadSource(url);
+        hls.attachMedia(video);
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          void play();
         });
+        hls.on(Hls.Events.ERROR, (_, data) => {
+          if (data.fatal && !cancelled) {
+            callback.current?.(false);
+            setMessage("暂未收到直播信号，请确认主播已推流后重试。");
+          }
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setMessage("播放器载入失败，请刷新页面重试。");
+      });
     return () => {
       cancelled = true;
+      callback.current?.(false);
       hls?.destroy();
       video.removeAttribute("src");
       video.load();
@@ -68,8 +78,18 @@ export function Player({
           controls
           playsInline
           muted
-          onPlaying={() => setMessage("")}
-          onError={() => setMessage("暂未收到直播信号，请确认推流与播放地址。")}
+          onPlaying={() => {
+            setMessage("");
+            callback.current?.(true);
+          }}
+          onPause={() => callback.current?.(false)}
+          onWaiting={() => callback.current?.(false)}
+          onStalled={() => callback.current?.(false)}
+          onEnded={() => callback.current?.(false)}
+          onError={() => {
+            callback.current?.(false);
+            setMessage("暂未收到直播信号，请确认推流与播放地址。");
+          }}
         />
       ) : (
         <div className="player-empty">

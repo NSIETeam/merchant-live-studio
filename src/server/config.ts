@@ -13,6 +13,11 @@ export interface Config {
   streamRtmpBase: string;
   streamHlsBase: string;
   streamAuthSecret: string;
+  mediaControlUrl: string;
+  requirePlayback: boolean;
+  trustedProxyIps: string[];
+  mediaControlToken: string;
+  basePath: string;
 }
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const production = env.NODE_ENV === "production";
@@ -54,5 +59,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     streamRtmpBase: env.STREAM_RTMP_BASE || "rtmp://localhost:1935/live",
     streamHlsBase: env.STREAM_HLS_BASE || "http://localhost:8888/live",
     streamAuthSecret: env.STREAM_AUTH_SECRET || "",
+    mediaControlUrl: env.MEDIA_CONTROL_URL || "",
+    mediaControlToken: env.MEDIA_CONTROL_TOKEN || "",
+    basePath: env.APP_BASE_PATH || "/",
+    requirePlayback:
+      (env.REQUIRE_PLAYBACK ?? (production ? "true" : "false")) === "true",
+    trustedProxyIps: (env.TRUSTED_PROXY_IPS || "")
+      .split(",")
+      .map((v) => v.trim())
+      .filter(Boolean),
   };
 }
