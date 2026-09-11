@@ -1,3 +1,4 @@
+import { attachRecordings } from "./recordings.js";
 import { activeModerationHold, attachModeration } from "./moderation.js";
 import { admissionCheck } from "./admission.js";
 import { attachDisclosure } from "./disclosure.js";
@@ -518,6 +519,7 @@ export function createApp(
   attachComplaints(app, db, clock);
   attachDisclosure(app, db, clock);
   attachModeration(app, db, media, clock);
+  attachRecordings(app, db, config);
   const agentBasis = (roomId: string, tenant: string) => {
     const r = owned(roomId, tenant);
     const binding = getRoomContentBinding(

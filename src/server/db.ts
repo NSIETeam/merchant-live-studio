@@ -353,6 +353,18 @@ export function openDatabase(path: string) {
         Date.now(),
       );
     });
+  if (version < 16)
+    transaction(db, () => {
+      db.exec(`CREATE TABLE recordings(id TEXT PRIMARY KEY,merchant_id TEXT NOT NULL,room_id TEXT NOT NULL REFERENCES rooms(id),relative_path TEXT NOT NULL UNIQUE,started_at INTEGER NOT NULL,completed_at INTEGER NOT NULL,duration_seconds REAL NOT NULL,bytes INTEGER NOT NULL,sha256 TEXT NOT NULL,registered_at INTEGER NOT NULL);
+      CREATE INDEX recordings_room ON recordings(room_id,id);
+      CREATE TABLE recording_ingest_errors(receipt TEXT PRIMARY KEY,merchant_id TEXT,message TEXT NOT NULL,updated_at INTEGER NOT NULL);
+      CREATE TRIGGER recordings_immutable_update BEFORE UPDATE ON recordings BEGIN SELECT RAISE(ABORT,'immutable'); END;
+      CREATE TRIGGER recordings_immutable_delete BEFORE DELETE ON recordings BEGIN SELECT RAISE(ABORT,'immutable'); END;`);
+      db.prepare("INSERT INTO schema_migrations VALUES(?,?)").run(
+        16,
+        Date.now(),
+      );
+    });
   return db;
 }
 export type DB = ReturnType<typeof openDatabase>;

@@ -1,3 +1,6 @@
+import { PersonalHome, type Destination } from "./PersonalHome.js";
+import { Home } from "lucide-react";
+import { RecordingsPanel } from "./RecordingsPanel.js";
 import { ModerationPanel } from "./ModerationPanel.js";
 import { AdmissionPanel } from "./AdmissionPanel.js";
 import { MerchantDisclosure } from "./DisclosurePanel.js";
@@ -51,8 +54,7 @@ import { Player } from "./Player";
 import "./styles.css";
 import "./merchant-density.css";
 
-type Tab =
-  "content" | "studio" | "copilot" | "training" | "rewards" | "analytics";
+type Tab = "home" | Destination;
 const statusText = { draft: "待开播", live: "直播间开放", ended: "已结束" };
 function useClock() {
   const [now, set] = useState(Date.now());
@@ -237,13 +239,7 @@ function Workspace({
 }) {
   const [rooms, setRooms] = useState<Room[]>([]),
     [roomId, setRoomId] = useState(""),
-    [tab, setTab] = useState<Tab>(
-      memberRole === "analyst"
-        ? "analytics"
-        : memberRole === "presenter"
-          ? "studio"
-          : "content",
-    ),
+    [tab, setTab] = useState<Tab>("home"),
     [error, setError] = useState(""),
     [notice, setNotice] = useState("");
   const [creating, setCreating] = useState(false),
@@ -338,6 +334,7 @@ function Workspace({
     }
   }
   const tabs: { id: Tab; label: string; icon: typeof Radio }[] = [
+    { id: "home", label: "我的主页", icon: Home },
     { id: "content", label: "商品与课程", icon: Layers },
     { id: "studio", label: "直播现场", icon: Video },
     { id: "copilot", label: "表达与提示词", icon: Sparkles },
@@ -345,6 +342,18 @@ function Workspace({
     { id: "rewards", label: "互动活动", icon: Gift },
     { id: "analytics", label: "数据复盘", icon: Activity },
   ];
+  const allowed = tabs
+    .filter(
+      (t) =>
+        t.id !== "home" &&
+        (memberRole === "owner" ||
+          (memberRole === "analyst"
+            ? t.id === "analytics"
+            : memberRole === "reviewer"
+              ? ["content", "studio", "analytics"].includes(t.id)
+              : t.id !== "rewards")),
+    )
+    .map((t) => t.id as Destination);
   const watchUrl = selected
     ? `${location.origin}${import.meta.env.BASE_URL}watch/${selected.id}`
     : "";
@@ -357,12 +366,11 @@ function Workspace({
           {tabs
             .filter(
               (t) =>
-                memberRole === "owner" ||
-                (memberRole === "analyst"
-                  ? t.id === "analytics"
-                  : memberRole === "reviewer"
-                    ? ["content", "studio", "analytics"].includes(t.id)
-                    : t.id !== "rewards"),
+                t.id === "home" ||
+                (allowed.includes(t.id as Destination) &&
+                  (memberRole === "analyst"
+                    ? t.id === "analytics"
+                    : ["content", "studio"].includes(t.id))),
             )
             .map((t) => (
               <button
@@ -420,46 +428,48 @@ function Workspace({
               role={memberRole}
             />
           )}
-          <div className="page-heading">
-            <div>
-              <span className="eyebrow">
-                {tab === "content"
-                  ? "内容准备"
-                  : tab === "studio"
-                    ? "ON AIR, IN CONTROL"
-                    : tab === "copilot"
-                      ? "SPEAK WITH CONFIDENCE"
-                      : tab === "training"
-                        ? "PREPARE, COMPARE, REVIEW"
-                        : tab === "rewards"
-                          ? "MAKE EVERY MOMENT COUNT"
-                          : "MEASURE WHAT HAPPENED"}
-              </span>
-              <h1>{tabs.find((t) => t.id === tab)?.label}</h1>
-              <p>
-                {tab === "content"
-                  ? "商品资料 → 课程讲稿 → 审改定稿 → 真人直播"
-                  : tab === "studio"
-                    ? "查看定稿，准备信号与现场互动。"
-                    : tab === "copilot"
-                      ? "用已核实的信息，组织下一句话。"
-                      : tab === "training"
-                        ? "整理商品证据与品牌话术，用场景打磨表达。"
-                        : tab === "rewards"
-                          ? "设置领取规则，追踪每一笔演示记录。"
-                          : "来自当前直播间的实际访问与互动记录。"}
-              </p>
+          {tab !== "home" && (
+            <div className="page-heading">
+              <div>
+                <span className="eyebrow">
+                  {tab === "content"
+                    ? "内容准备"
+                    : tab === "studio"
+                      ? "ON AIR, IN CONTROL"
+                      : tab === "copilot"
+                        ? "SPEAK WITH CONFIDENCE"
+                        : tab === "training"
+                          ? "PREPARE, COMPARE, REVIEW"
+                          : tab === "rewards"
+                            ? "MAKE EVERY MOMENT COUNT"
+                            : "MEASURE WHAT HAPPENED"}
+                </span>
+                <h1>{tabs.find((t) => t.id === tab)?.label}</h1>
+                <p>
+                  {tab === "content"
+                    ? "商品资料 → 课程讲稿 → 审改定稿 → 真人直播"
+                    : tab === "studio"
+                      ? "查看定稿，准备信号与现场互动。"
+                      : tab === "copilot"
+                        ? "用已核实的信息，组织下一句话。"
+                        : tab === "training"
+                          ? "整理商品证据与品牌话术，用场景打磨表达。"
+                          : tab === "rewards"
+                            ? "设置领取规则，追踪每一笔演示记录。"
+                            : "来自当前直播间的实际访问与互动记录。"}
+                </p>
+              </div>
+              <button
+                className="primary"
+                disabled={memberRole !== "owner"}
+                onClick={() => setCreating(true)}
+              >
+                <Plus size={17} />
+                创建直播间
+              </button>
             </div>
-            <button
-              className="primary"
-              disabled={memberRole !== "owner"}
-              onClick={() => setCreating(true)}
-            >
-              <Plus size={17} />
-              创建直播间
-            </button>
-          </div>
-          {tab !== "content" && (
+          )}
+          {tab !== "home" && tab !== "content" && (
             <div className="room-bar">
               <label>
                 当前直播间
@@ -529,7 +539,31 @@ function Workspace({
               <ContentWorkbench rooms={rooms} memberRole={memberRole} />
             </div>
           )}
-          {tab === "content" ? null : !selected ? (
+          {tab === "home" && (
+            <>
+              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                {memberRole === "owner" && (
+                  <button className="primary" onClick={() => setCreating(true)}>
+                    <Plus size={16} />
+                    创建直播间
+                  </button>
+                )}
+              </div>
+              <PersonalHome
+                key={merchantId + ":" + actorId}
+                merchantId={merchantId}
+                actorId={actorId}
+                allowed={allowed}
+                rooms={rooms}
+                onOpen={setTab}
+                onRoom={(id) => {
+                  setRoomId(id);
+                  setTab(memberRole === "analyst" ? "analytics" : "studio");
+                }}
+              />
+            </>
+          )}
+          {tab === "home" || tab === "content" ? null : !selected ? (
             <div className="empty-state">
               <Radio size={44} />
               <h2>准备你的第一场直播</h2>
@@ -542,14 +576,6 @@ function Workspace({
             <>
               {tab === "studio" && (
                 <>
-                  {memberRole === "owner" && (
-                    <ComplaintsPanel
-                      key={selected.id}
-                      roomId={selected.id}
-                      merchant
-                    />
-                  )}
-                  <Stats analytics={analytics} />
                   <AdmissionPanel
                     key={selected.id + selected.status + admissionRevision}
                     roomId={selected.id}
@@ -637,7 +663,8 @@ function Workspace({
                         roomId={selected.id}
                         onOpen={() => setTab("copilot")}
                       />
-                      <section className="card readiness">
+                      <details className="card readiness">
+                        <summary>更多准备工具</summary>
                         <span className="eyebrow">BEFORE YOU GO LIVE</span>
                         <h2>开播准备</h2>
                         <div className="check-row">
@@ -669,7 +696,7 @@ function Workspace({
                           </div>
                           <ChevronRight size={16} />
                         </button>
-                      </section>
+                      </details>
                       <Questions
                         roomId={selected.id}
                         onChoose={() => setTab("copilot")}
@@ -684,6 +711,23 @@ function Workspace({
                       </div>
                     </div>
                   </div>
+                  <details className="live-management">
+                    <summary>直播管理 · 投诉、录像与数据</summary>
+                    {memberRole === "owner" && (
+                      <ComplaintsPanel
+                        key={selected.id}
+                        roomId={selected.id}
+                        merchant
+                      />
+                    )}
+                    <Stats analytics={analytics} />
+                    {["owner", "reviewer"].includes(memberRole) && (
+                      <RecordingsPanel
+                        key={selected.id + "-recordings"}
+                        roomId={selected.id}
+                      />
+                    )}
+                  </details>
                 </>
               )}
               {tab === "training" && (

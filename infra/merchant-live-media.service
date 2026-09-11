@@ -4,6 +4,7 @@ After=network-online.target merchant-live-studio.service
 Wants=merchant-live-studio.service
 
 [Service]
+EnvironmentFile=-/etc/merchant-live-studio/recordings.env
 Type=simple
 User=live-studio
 Group=live-studio

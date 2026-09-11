@@ -38,6 +38,12 @@ export function memberMayAccess(
   path: string,
 ) {
   if (role === "owner") return true;
+  if (
+    /^\/api\/merchant\/(?:recordings(?:\/|$)|rooms\/[^/]+\/recordings$)/.test(
+      path,
+    )
+  )
+    return role === "reviewer" && method === "GET";
   if (/^\/api\/merchant\/rooms\/[^/]+\/moderation(?:\/\d+\/retry)?$/.test(path))
     return (
       (role === "reviewer" && (method === "POST" || method === "GET")) ||
