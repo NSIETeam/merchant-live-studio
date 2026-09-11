@@ -1,6 +1,6 @@
 # API 索引
 
-对应 0.3.0。应用内部前缀为 `/api`；经 `/studio/` 代理部署时，浏览器请求 `/studio/api/...`，代理剥离 `/studio/`。`APP_BASE_PATH` 控制 Cookie 路径，前端使用构建时 `VITE_BASE_PATH`，详见[服务器部署](server-testing.md)。
+对应 0.6.0 当前契约。应用内部前缀为 `/api`；经 `/studio/` 代理部署时，浏览器请求 `/studio/api/...`，代理剥离 `/studio/`。`APP_BASE_PATH` 控制 Cookie 路径，前端使用构建时 `VITE_BASE_PATH`，详见[服务器部署](server-testing.md)。
 
 成功通常返回 JSON，MediaMTX 鉴权成功为 204。普通错误为 `{ "error": "说明" }`，SRS 拒绝使用 `{ "code": 403 }`。金额用整数分，时间戳用 Unix 毫秒。普通写请求使用 `Content-Type: application/json`，空参数也传 `{}`。
 
@@ -8,41 +8,48 @@
 
 下列路径均接在 `/api` 后。
 
-| 认证   | 方法 / 路径                                  | 说明                                                          |
-| ------ | -------------------------------------------- | ------------------------------------------------------------- |
-| 公开   | `GET /health`                                | 数据库健康、演示/支付/提词/流媒体配置及播放要求               |
-| 公开   | `GET /auth/me`                               | 当前有效商家会话与 demo 开关                                  |
-| 公开   | `POST /auth/demo`                            | 本地演示登录，生产禁用                                        |
-| 公开   | `POST /auth/merchant`                        | `{merchantId,token}`，签发含 sid 与凭据版本的商家 Cookie      |
-| 公开   | `POST /auth/viewer`                          | 签发/复用匿名互动 Cookie，不是观看前置条件                    |
-| 会话   | `POST /auth/logout`                          | 持久撤销当前商家 sid，并清 Cookie；重复调用安全               |
-| 商家   | `GET /merchant/rooms`                        | 仅当前商家的房间                                              |
-| 商家   | `POST /merchant/rooms`                       | `{title,productName}`                                         |
-| 商家   | `PATCH /merchant/rooms/:id`                  | `{status:"draft"/"live"/"ended"}`；结束时附断流结果           |
-| 商家   | `GET /merchant/rooms/:id/stream`             | provider、RTMP server、完整 streamKey、HLS URL、authEnabled   |
-| 商家   | `POST /merchant/rooms/:id/stream/rotate`     | 轮换密钥并尝试踢出旧推流，返回 streamAction                   |
-| 商家   | `GET /merchant/rooms/:id/signal`             | MediaMTX 实际信号状态、引擎 reader 数或未知提示               |
-| 商家   | `POST /merchant/rooms/:id/stream/disconnect` | 踢出支持的推流连接并二次查询核验                              |
-| 商家   | `GET /merchant/rooms/:id/facts`              | 事实、出处、批准状态                                          |
-| 商家   | `POST /merchant/rooms/:id/facts`             | `{text,evidence,approved:false}`                              |
-| 商家   | `PATCH /merchant/facts/:id`                  | `{approved:boolean}`，人工审核                                |
-| 商家   | `POST /merchant/rooms/:id/copilot`           | `{transcript,question?}`，经私有 Agent 服务进行本地规则检查   |
-| 商家   | `GET /merchant/rooms/:id/campaigns`          | 活动列表与 serverTime                                         |
-| 商家   | `POST /merchant/rooms/:id/campaigns`         | 创建演示活动                                                  |
-| 商家   | `POST /merchant/campaigns/:id/close`         | 幂等关闭，返回演示余量                                        |
-| 商家   | `GET /merchant/rooms/:id/ledger`             | 最近 200 笔账本                                               |
-| 商家   | `GET /merchant/rooms/:id/analytics`          | 房间累计访问、停留、问题与领取分析                            |
-| 商家   | `GET /merchant/rooms/:id/questions`          | 按文本精确聚合的前 20 类问题                                  |
-| 商家   | `GET /merchant/rooms/:id/speech/status`      | 语音供应方、最近最终分段及 Agent 入队状态                     |
-| 公开   | `GET /public/rooms/:id`                      | 房间及 signal、活动、serverTime、requirePlayback、paymentMode |
-| 观众   | `POST /viewer/rooms/:id/heartbeat`           | `{visible,playing}`，返回本场/累计时长及计时状态              |
-| 观众   | `POST /viewer/rooms/:id/questions`           | `{text}`，直播中可提问，每会话每房间至少间隔 5 秒             |
-| 观众   | `POST /viewer/campaigns/:id/claim`           | 幂等领取，返回 claim 与 simulation 模式                       |
-| 观众   | `GET /viewer/rooms/:id/claims`               | 当前观众在该房间的历史领取记录                                |
-| 引擎   | `POST /streams/mediamtx/auth?secret=...`     | 引擎原生发布/观看鉴权载荷                                     |
-| 引擎   | `POST /streams/srs/publish?secret=...`       | SRS on_publish 回调                                           |
-| 语音方 | `POST /streams/speech/segments`              | Bearer 鉴权的最终转写分段 webhook；幂等接入                   |
-| 未实现 | `POST /payments/wechat/notify`               | 固定 501，不更新状态                                          |
+| 认证   | 方法 / 路径                                                         | 说明                                                          |
+| ------ | ------------------------------------------------------------------- | ------------------------------------------------------------- |
+| 公开   | `GET /health`                                                       | 数据库健康、演示/支付/提词/流媒体配置及播放要求               |
+| 公开   | `GET /auth/me`                                                      | 当前有效商家会话与 demo 开关                                  |
+| 公开   | `POST /auth/demo`                                                   | 本地演示登录，生产禁用                                        |
+| 公开   | `POST /auth/merchant`                                               | `{merchantId,token}`，签发含 sid 与凭据版本的商家 Cookie      |
+| 公开   | `POST /auth/viewer`                                                 | 签发/复用匿名互动 Cookie，不是观看前置条件                    |
+| 会话   | `POST /auth/logout`                                                 | 持久撤销当前商家 sid，并清 Cookie；重复调用安全               |
+| 商家   | `GET /merchant/rooms`                                               | 仅当前商家的房间                                              |
+| 商家   | `POST /merchant/rooms`                                              | `{title,productName}`                                         |
+| 商家   | `PATCH /merchant/rooms/:id`                                         | `{status:"draft"/"live"/"ended"}`；结束时附断流结果           |
+| 商家   | `GET /merchant/rooms/:id/stream`                                    | provider、RTMP server、完整 streamKey、HLS URL、authEnabled   |
+| 商家   | `POST /merchant/rooms/:id/stream/rotate`                            | 轮换密钥并尝试踢出旧推流，返回 streamAction                   |
+| 商家   | `GET /merchant/rooms/:id/signal`                                    | MediaMTX 实际信号状态、引擎 reader 数或未知提示               |
+| 商家   | `POST /merchant/rooms/:id/stream/disconnect`                        | 踢出支持的推流连接并二次查询核验                              |
+| 商家   | `GET /merchant/rooms/:id/facts`                                     | 事实、出处、批准状态                                          |
+| 商家   | `POST /merchant/rooms/:id/facts`                                    | `{text,evidence,approved:false}`                              |
+| 商家   | `PATCH /merchant/facts/:id`                                         | `{approved:boolean}`，人工审核                                |
+| 商家   | `POST /merchant/rooms/:id/copilot`                                  | `{transcript,question?}`，经私有 Agent 服务进行本地规则检查   |
+| 商家   | `GET /merchant/rooms/:id/campaigns`                                 | 活动列表与 serverTime                                         |
+| 商家   | `POST /merchant/rooms/:id/campaigns`                                | 创建演示活动                                                  |
+| 商家   | `POST /merchant/campaigns/:id/close`                                | 幂等关闭，返回演示余量                                        |
+| 商家   | `GET /merchant/rooms/:id/ledger`                                    | 最近 200 笔账本                                               |
+| 商家   | `GET /merchant/rooms/:id/analytics`                                 | 房间累计访问、停留、问题与领取分析                            |
+| 商家   | `GET /merchant/rooms/:id/questions`                                 | 按文本精确聚合的前 20 类问题                                  |
+| 商家   | `GET /merchant/rooms/:id/speech/status`                             | 语音供应方、最近最终分段及 Agent 入队状态                     |
+| 商家   | `GET /merchant/rooms/:id/recordings`                                | 已登记录像片段、校验信息和删除状态                            |
+| 商家   | `GET /merchant/recordings/:id/download`                             | 再次校验后下载；已复核删除返回 410                            |
+| 商家   | `GET /merchant/recordings/:id/retention`                            | 保存期限、争议、保留及删除复核历史                            |
+| 商家   | `POST /merchant/recordings/:id/retention/holds`                     | 建立争议、监管或业务保留                                      |
+| 商家   | `POST /merchant/recordings/:id/retention/holds/:holdId/release`     | 由另一账号复核释放保留                                        |
+| 商家   | `POST /merchant/recordings/:id/deletion-requests`                   | 到期后提交删除申请                                            |
+| 审核员 | `POST /merchant/recordings/:id/deletion-requests/:requestId/review` | 退回或复核执行物理删除                                        |
+| 公开   | `GET /public/rooms/:id`                                             | 房间及 signal、活动、serverTime、requirePlayback、paymentMode |
+| 观众   | `POST /viewer/rooms/:id/heartbeat`                                  | `{visible,playing}`，返回本场/累计时长及计时状态              |
+| 观众   | `POST /viewer/rooms/:id/questions`                                  | `{text}`，直播中可提问，每会话每房间至少间隔 5 秒             |
+| 观众   | `POST /viewer/campaigns/:id/claim`                                  | 幂等领取，返回 claim 与 simulation 模式                       |
+| 观众   | `GET /viewer/rooms/:id/claims`                                      | 当前观众在该房间的历史领取记录                                |
+| 引擎   | `POST /streams/mediamtx/auth?secret=...`                            | 引擎原生发布/观看鉴权载荷                                     |
+| 引擎   | `POST /streams/srs/publish?secret=...`                              | SRS on_publish 回调                                           |
+| 语音方 | `POST /streams/speech/segments`                                     | Bearer 鉴权的最终转写分段 webhook；幂等接入                   |
+| 未实现 | `POST /payments/wechat/notify`                                      | 固定 501，不更新状态                                          |
 
 ## 会话与限流
 
@@ -132,6 +139,12 @@ MediaMTX 支持 RTMP/RTMPS 踢连接后再次查询。未配置、协议不支�
 非最终分段返回 `accepted:false` 且不保存。最终分段只在房间正在直播时保存；同一场次的相同事件重复请求返回原记录，相同事件 ID 携带不同正文或时间范围返回 409。接口在同一事务内写入 Live 数据库并建立持久待处理任务，随后立即返回，不等待 Agent 推理。后台按 `SPEECH_DISPATCH_CONCURRENCY` 有界处理，取同一场次最近 8 段组成不超过 4000 字的上下文，再按服务端固定的 `SPEECH_AGENT_PROFILE_ID` 创建 `live` Agent 任务。Agent 未配置、超时或限流不会回滚转写，任务会退避重试；进程重启恢复中断任务，Agent 幂等键阻止重复运行。
 
 商家通过 `GET /api/merchant/rooms/:id/speech/status` 查看配置、最近分段和入队状态。转写属于非公开直播记录，观众房间接口不返回正文或 Agent 运行标识。此边界不采集浏览器麦克风；真实 ASR 服务的音频采集、签名协议和服务商效果需要独立接入与验收。
+
+## 录像保留与删除复核
+
+录像删除只接受已经结束的直播间，并以服务器配置的 `DATA_RETENTION_POLICY.liveContentDays` 和录像完成时间计算最早删除时间。没有真实政策、尚未到期、存在有效主动保留或本直播间仍有未解决投诉/申诉时均返回 409。owner 提交删除申请；团队和生产空间由不同 actor 的 reviewer 复核，申请人不能自审。
+
+批准后服务先校验登记大小和 SHA-256，把文件原子移动到录像根目录内的私有删除隔离区，再次同步核对保留与争议状态。复核通过后写入 `deleting` 事件并物理移除；中断时可从确定的隔离路径继续或恢复。所有申请、保留和状态事件不可修改或删除，录像登记也继续保存。完成删除的下载接口返回 410，不把文件缺失当作完成删除。接口正文中的理由/说明为 8–1000 字，建立保留与删除申请使用 UUID 幂等键。
 
 ## 独立 Agent 网关（0.3）
 

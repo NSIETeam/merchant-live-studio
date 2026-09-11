@@ -66,6 +66,18 @@ export function memberMayAccess(
   if (path === "/api/merchant/team" || path.startsWith("/api/merchant/team/"))
     return false;
   if (
+    /^\/api\/merchant\/recordings\/[^/]+\/retention\/holds(?:\/[^/]+\/release)?$/.test(
+      path,
+    )
+  )
+    return role === "reviewer" && ["GET", "POST"].includes(method);
+  if (
+    /^\/api\/merchant\/recordings\/[^/]+\/deletion-requests\/[^/]+\/review$/.test(
+      path,
+    )
+  )
+    return role === "reviewer" && method === "POST";
+  if (
     /^\/api\/merchant\/(?:recordings(?:\/|$)|rooms\/[^/]+\/recordings$)/.test(
       path,
     )

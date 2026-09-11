@@ -1,17 +1,38 @@
-import { attachDisclosure, attachComplaints, disclosureState } from "../modules/review/public.js";
+import {
+  attachDisclosure,
+  attachComplaints,
+  disclosureState,
+  hasOpenComplaintDispute,
+} from "../modules/review/public.js";
 import { createCustomers } from "../modules/customers/public.js";
 import { Hono } from "hono";
-import { attachAnalytics, attachAttributionSummary } from "../modules/analytics/public.js";
-import { attachEngagement, createEngagement } from "../modules/engagement/public.js";
+import {
+  attachAnalytics,
+  attachAttributionSummary,
+} from "../modules/analytics/public.js";
+import {
+  attachEngagement,
+  createEngagement,
+} from "../modules/engagement/public.js";
 import { createRoomKnowledge } from "../modules/knowledge/public.js";
-import { attachLiveAssistance, createLive, createSourceViewing, attachRecordings, processRecordingOutbox as ingestRecordings } from "../modules/live/public.js";
+import {
+  attachLiveAssistance,
+  createLive,
+  createSourceViewing,
+  attachRecordings,
+  processRecordingOutbox as ingestRecordings,
+} from "../modules/live/public.js";
 import { createPayments } from "../modules/payments/public.js";
 import {
   HttpAgentBridge,
   type AgentBridge,
 } from "../platform/adapters/public.js";
 import { attachHome, createIdentity } from "../platform/identity/public.js";
-import { loadConfig, createRecordingStorage, type Config } from "../platform/infrastructure/public.js";
+import {
+  loadConfig,
+  createRecordingStorage,
+  type Config,
+} from "../platform/infrastructure/public.js";
 import { attachOperations } from "../platform/operations/public.js";
 import type { DB } from "../shared/persistence.js";
 import { createContentSystem } from "./content.js";
@@ -25,13 +46,20 @@ export function createStudio(
   const app = new Hono<{
     Variables: { merchantId: string; viewerId: string };
   }>();
-  const recordingStorage = createRecordingStorage(config.recordingsRoot, config.recordingOutbox);
+  const recordingStorage = createRecordingStorage(
+    config.recordingsRoot,
+    config.recordingOutbox,
+  );
   const identity = createIdentity(db, config, clock);
   const content = createContentSystem(db, clock, agentBridge);
   let live: ReturnType<typeof createLive>;
   let engagement: ReturnType<typeof createEngagement>;
   let payments: ReturnType<typeof createPayments>;
-  const customers = createCustomers(db, (id, tenant) => live.owned(id, tenant), clock);
+  const customers = createCustomers(
+    db,
+    (id, tenant) => live.owned(id, tenant),
+    clock,
+  );
   const viewing = createSourceViewing(db, customers.validSource);
   const knowledge = createRoomKnowledge(db, () => live, clock);
   live = createLive(
@@ -51,13 +79,28 @@ export function createStudio(
   payments = createPayments(db, engagement, live, clock);
   identity.attach(app);
   app.use("/api/merchant/*", async (c, next) => {
-    if (c.req.path.startsWith("/api/merchant/content/") || /\/rooms\/[^/]+\/(agent(?:\/|$)|copilot(?:\/|$))/.test(c.req.path)) await content.review.syncAuthorization(c.get("merchantId"));
+    if (
+      c.req.path.startsWith("/api/merchant/content/") ||
+      /\/rooms\/[^/]+\/(agent(?:\/|$)|copilot(?:\/|$))/.test(c.req.path)
+    )
+      await content.review.syncAuthorization(c.get("merchantId"));
     await next();
   });
-  attachHome(app, db, tenant => ({products: content.knowledge.productIds(tenant).length, drafts: content.content.draftCount(tenant), ...content.live.preparationCounts(tenant)}));
+  attachHome(app, db, (tenant) => ({
+    products: content.knowledge.productIds(tenant).length,
+    drafts: content.content.draftCount(tenant),
+    ...content.live.preparationCounts(tenant),
+  }));
   attachOperations(app, db, config, { configured: live.mediaConfigured });
   live.attach(app);
-  attachRecordings(app, db, config, recordingStorage);
+  attachRecordings(
+    app,
+    db,
+    config,
+    recordingStorage,
+    (tenant, roomId) => hasOpenComplaintDispute(db, tenant, roomId),
+    clock,
+  );
   attachDisclosure(app, db, live, clock);
   attachComplaints(app, db, live, clock);
   knowledge.attach(app);
@@ -91,7 +134,8 @@ export function createStudio(
   return {
     app,
     seedDemo: live.seedDemo,
-    processRecordingOutbox: () => ingestRecordings(db, config, recordingStorage),
+    processRecordingOutbox: () =>
+      ingestRecordings(db, config, recordingStorage),
     expireCampaigns: engagement.expireCampaigns,
     processSimulationJobs: payments.processSimulationJobs,
     tick() {
@@ -123,6 +167,30 @@ export function processSimulationJobs(db: DB, now = Date.now()) {
 
 export { WeChatPaymentProvider } from "../modules/payments/public.js";
 
-export function recordAttribution(db: DB, room:string, viewer:string, code:string|undefined, now:number) { const customers=createCustomers(db,()=>{},()=>now); createSourceViewing(db,customers.validSource).record(room,viewer,code,now); }
+export function recordAttribution(
+  db: DB,
+  room: string,
+  viewer: string,
+  code: string | undefined,
+  now: number,
+) {
+  const customers = createCustomers(
+    db,
+    () => {},
+    () => now,
+  );
+  createSourceViewing(db, customers.validSource).record(
+    room,
+    viewer,
+    code,
+    now,
+  );
+}
 
-export function processRecordingOutbox(db:DB,config:Config){return ingestRecordings(db,config,createRecordingStorage(config.recordingsRoot,config.recordingOutbox));}
+export function processRecordingOutbox(db: DB, config: Config) {
+  return ingestRecordings(
+    db,
+    config,
+    createRecordingStorage(config.recordingsRoot, config.recordingOutbox),
+  );
+}
