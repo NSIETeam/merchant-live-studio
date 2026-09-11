@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { transaction, type DB } from "./db.js";
 import { checkScript, CONTENT_RULE_VERSION } from "./content-check.js";
+import { compareScripts } from "../shared/content-diff.js";
 import {
   CONTENT_LIMITS,
   type ContentProduct,
@@ -534,6 +535,27 @@ export function attachContent(
       ).map((row) => scriptVersion(db, course.id, row.version, merchant)),
     });
   });
+  app.get("/api/merchant/content/courses/:id/compare", (c) => {
+    const query = z
+      .object({
+        from: z.coerce.number().int().positive(),
+        to: z.coerce.number().int().positive(),
+      })
+      .parse(c.req.query());
+    const before = scriptVersion(
+      db,
+      c.req.param("id"),
+      query.from,
+      c.get("merchantId"),
+    );
+    const after = scriptVersion(
+      db,
+      c.req.param("id"),
+      query.to,
+      c.get("merchantId"),
+    );
+    return c.json({ comparison: compareScripts(before, after), before, after });
+  });
   app.patch("/api/merchant/content/courses/:id", async (c) => {
     const { base, ...input } = courseFieldsSchema
       .extend({ base: courseFieldsSchema })
@@ -646,6 +668,28 @@ export function attachContent(
       ),
     }),
   );
+  app.get("/api/merchant/content/rooms/:id/binding-history", (c) => {
+    const roomId = c.req.param("id");
+    roomOwned(db, roomId, c.get("merchantId"));
+    const before = z.coerce
+      .number()
+      .int()
+      .positive()
+      .max(Number.MAX_SAFE_INTEGER)
+      .optional()
+      .parse(c.req.query("before"));
+    const rows = db
+      .prepare(
+        `SELECT id,room_id AS roomId,course_id AS courseId,script_version AS scriptVersion,
+      bound_at AS boundAt,actor_id AS actorId,source,room_title AS roomTitle,course_title AS courseTitle,product_name AS productName
+      FROM content_binding_history WHERE room_id=? AND id<? ORDER BY id DESC LIMIT 51`,
+      )
+      .all(roomId, before ?? Number.MAX_SAFE_INTEGER);
+    return c.json({
+      history: rows.slice(0, 50),
+      nextBefore: rows.length > 50 ? rows[49].id : null,
+    });
+  });
   app.post("/api/merchant/content/rooms/:id/binding", async (c) => {
     const input = z
         .object({
@@ -666,9 +710,35 @@ export function attachContent(
       );
       if (script.stale || !script.confirmation || script.check.blockingCount)
         conflict("仅可绑定当前商品依据下、无阻断项且已人工定稿的讲稿。");
+      const previous = db
+        .prepare(
+          "SELECT course_id,script_version FROM content_room_bindings WHERE room_id=?",
+        )
+        .get(roomId);
+      if (
+        previous?.course_id === input.courseId &&
+        previous.script_version === input.scriptVersion
+      )
+        return;
+      const boundAt = clock();
       db.prepare(
         "INSERT INTO content_room_bindings VALUES(?,?,?,?) ON CONFLICT(room_id) DO UPDATE SET course_id=excluded.course_id,script_version=excluded.script_version,bound_at=excluded.bound_at",
-      ).run(roomId, input.courseId, input.scriptVersion, clock());
+      ).run(roomId, input.courseId, input.scriptVersion, boundAt);
+      db.prepare(
+        `INSERT INTO content_binding_history(room_id,course_id,script_version,bound_at,actor_id,source,room_title,course_title,product_name)
+        VALUES(?,?,?,?,?,'binding',?,?,?)`,
+      ).run(
+        roomId,
+        input.courseId,
+        input.scriptVersion,
+        boundAt,
+        merchant,
+        String(
+          db.prepare("SELECT title FROM rooms WHERE id=?").get(roomId)!.title,
+        ),
+        courseOwned(db, input.courseId, merchant).title,
+        script.productSnapshot.name,
+      );
     });
     return c.json(
       { binding: getRoomContentBinding(db, roomId, merchant) },

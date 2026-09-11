@@ -757,7 +757,7 @@ test("Content migration preserves legacy data and product, course, finalization 
         restored.db
           .prepare("SELECT max(version) AS v FROM schema_migrations")
           .get()!.v,
-        4,
+        5,
       );
       assert.equal(
         restored.db.prepare("SELECT count(*) AS n FROM facts").get()!.n,
@@ -785,5 +785,212 @@ test("Content migration preserves legacy data and product, course, finalization 
       f.close();
     } catch {}
     rmSync(folder, { recursive: true, force: true });
+  }
+});
+
+test("version comparison retains both evidence snapshots and isolates foreign requests", async () => {
+  const f = await fixture();
+  try {
+    const { product, course } = await f.setup();
+    const base = `/courses/${course.id}`;
+    await f.request(base + "/scripts", "POST", scriptInput);
+    const edited = { ...paragraph, text: "这只杯子的容量为500毫升。" };
+    await f.request(base + "/scripts", "POST", {
+      ...scriptInput,
+      baseVersion: 1,
+      paragraphs: [
+        {
+          id: "welcome",
+          kind: "transition",
+          text: "我们一起看看。",
+          factIds: [],
+        },
+        edited,
+      ],
+    });
+    const comparison = await f.request(base + "/compare?from=1&to=2");
+    assert.equal(comparison.status, 200);
+    assert.equal(comparison.data.before.paragraphs[0].text, paragraph.text);
+    assert.equal(comparison.data.after.paragraphs[1].text, edited.text);
+    assert.deepEqual(comparison.data.comparison.counts, {
+      added: 1,
+      removed: 0,
+      changed: 1,
+      unchanged: 0,
+    });
+    assert.deepEqual(comparison.data.comparison.changes[1].fields, [
+      "text",
+      "position",
+    ]);
+    assert.equal(
+      (await f.request(base + "/compare?from=1&to=2", "GET", undefined, true))
+        .status,
+      404,
+    );
+    assert.equal((await f.request(base + "/compare?from=0&to=2")).status, 400);
+    assert.equal(
+      (await f.request(base + "/compare?from=1&to=999")).status,
+      404,
+    );
+    await f.request(`/products/${product.id}/versions`, "POST", {
+      ...productInput,
+      baseVersion: 1,
+      category: "修改后的测试分类",
+    });
+    await f.request(base + "/scripts", "POST", {
+      ...scriptInput,
+      baseVersion: 2,
+      productVersion: 2,
+    });
+    const later = (await f.request(base + "/compare?from=1&to=3")).data;
+    assert.equal(later.comparison.evidenceChanged, true);
+    assert.equal(later.before.productSnapshot.category, "测试教具");
+    assert.equal(later.after.productSnapshot.category, "修改后的测试分类");
+    assert.equal(later.comparison.counts.unchanged, 1);
+    const reverse = (await f.request(base + "/compare?from=2&to=1")).data
+      .comparison;
+    assert.equal(reverse.counts.removed, 1);
+  } finally {
+    f.close();
+  }
+});
+
+test("binding audit preserves each changed selection atomically without duplicate retries", async () => {
+  const f = await fixture();
+  try {
+    const { course } = await f.setup();
+    const base = `/courses/${course.id}`;
+    for (let version = 1; version <= 2; version++) {
+      await f.request(base + "/scripts", "POST", {
+        ...scriptInput,
+        baseVersion: version - 1,
+      });
+      await f.request(
+        base + `/scripts/${version}/confirm`,
+        "POST",
+        confirmation,
+      );
+    }
+    const bind = (version: number) =>
+      f.request("/rooms/demo-room/binding", "POST", {
+        courseId: course.id,
+        scriptVersion: version,
+      });
+    assert.equal((await bind(1)).status, 201);
+    assert.equal((await bind(1)).status, 201);
+    assert.equal((await bind(2)).status, 201);
+    const history = (await f.request("/rooms/demo-room/binding-history")).data
+      .history;
+    assert.equal(history.length, 2);
+    assert.deepEqual(
+      history.map((r: any) => r.scriptVersion),
+      [2, 1],
+    );
+    assert.equal(history[0].actorId, "demo");
+    assert.equal(history[0].source, "binding");
+    assert.equal(history[0].courseTitle, "第一课");
+    f.db
+      .prepare("UPDATE content_courses SET title='改名后的课程' WHERE id=?")
+      .run(course.id);
+    assert.equal(
+      (await f.request("/rooms/demo-room/binding-history")).data.history[0]
+        .courseTitle,
+      "第一课",
+    );
+    assert.equal(
+      (
+        await f.request(
+          `/rooms/demo-room/binding-history?before=${history[0].id}`,
+        )
+      ).data.history.length,
+      1,
+    );
+    assert.equal(
+      (
+        await f.request(
+          "/rooms/demo-room/binding-history",
+          "GET",
+          undefined,
+          true,
+        )
+      ).status,
+      404,
+    );
+    assert.throws(
+      () => f.db.exec("UPDATE content_binding_history SET actor_id='forged'"),
+      /immutable/,
+    );
+    assert.throws(
+      () => f.db.exec("DELETE FROM content_binding_history"),
+      /immutable/,
+    );
+    f.db.exec(
+      "CREATE TRIGGER fail_binding_audit BEFORE INSERT ON content_binding_history BEGIN SELECT RAISE(ABORT,'injected audit failure'); END;",
+    );
+    assert.equal((await bind(1)).status, 500);
+    assert.equal(
+      (await f.request("/rooms/demo-room/binding")).data.binding.scriptVersion,
+      2,
+    );
+    assert.equal(
+      (await f.request("/rooms/demo-room/binding-history")).data.history.length,
+      2,
+    );
+  } finally {
+    f.close();
+  }
+});
+
+test("v4 migration records only the known current binding and does not invent its actor", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "kaopu-binding-migration-"));
+  const path = join(directory, "test.sqlite");
+  const f = await fixture(path);
+  try {
+    const { course } = await f.setup();
+    await f.request(`/courses/${course.id}/scripts`, "POST", scriptInput);
+    await f.request(
+      `/courses/${course.id}/scripts/1/confirm`,
+      "POST",
+      confirmation,
+    );
+    await f.request("/rooms/demo-room/binding", "POST", {
+      courseId: course.id,
+      scriptVersion: 1,
+    });
+    f.db.exec(
+      "DROP TABLE content_binding_history; DELETE FROM schema_migrations WHERE version=5;",
+    );
+    f.close();
+    const migrated = openDatabase(path);
+    try {
+      const row = migrated
+        .prepare("SELECT * FROM content_binding_history")
+        .get()!;
+      assert.equal(row.actor_id, null);
+      assert.equal(row.source, "legacy_snapshot");
+      assert.equal(row.course_id, course.id);
+      assert.equal(row.script_version, 1);
+      assert.equal(
+        row.bound_at,
+        migrated.prepare("SELECT bound_at FROM content_room_bindings").get()!
+          .bound_at,
+      );
+    } finally {
+      migrated.close();
+    }
+    const reopened = openDatabase(path);
+    try {
+      assert.equal(
+        reopened
+          .prepare("SELECT COUNT(*) AS n FROM content_binding_history")
+          .get()!.n,
+        1,
+      );
+    } finally {
+      reopened.close();
+    }
+  } finally {
+    if (f.db.isOpen) f.close();
+    rmSync(directory, { recursive: true, force: true });
   }
 });

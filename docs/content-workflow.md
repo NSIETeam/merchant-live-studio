@@ -64,7 +64,11 @@ flowchart LR
 
 每篇讲稿保存当时的商品依据快照。商品新增任何资料版本后，引用旧商品版本的稿件变为 `needs_review`，历史确认仍保留用于追溯，但不能凭旧确认再次绑定。重新核对当前资料、保存新稿、确认并绑定后恢复使用。
 
-每个直播间只保存当前绑定，指向具体讲稿版本；重新绑定会替换该关系。历史讲稿与定稿确认仍保留，但当前没有逐次绑定记录或分场播出审计。查询发现资料已变化时返回 `stale: true`。控制台在下一次读取绑定时暂停展示该稿，提示重新核对；当前每 5 秒检查一次。此处理不会停止媒体推流，真人主播仍需管理现场播讲。
+每个直播间保存当前绑定，指向具体讲稿版本；重新绑定会替换该关系。开发增量已新增不可变的逐次绑定记录，保存绑定当时的课程、商品和房间标题、操作账号及时间。重复提交同一绑定不会新增记录，绑定与历史写入使用同一事务；历史不是实际播出证明。迁移前的当前关系以 `legacy_snapshot` 保留，操作者为未知，不补造更早记录。
+
+查询发现资料已变化时返回 `stale: true`。控制台在下一次读取绑定时暂停展示该稿，提示重新核对；当前每 5 秒检查一次。此处理不会停止媒体推流，真人主播仍需管理现场播讲。
+
+讲稿编辑页已新增“原稿与修改稿对照”，比较任意两个已保存版本，显示新增、删除、正文、类型、引用及顺序变化，同时展示各自保存的依据快照。正文未变但商品或规则版本改变时另行提示。未保存的编辑不会被伪装为已存版本，也不会因查看对照改变稿件或定稿状态。独立审核角色和逐条建议处置仍在完整交付清单中。
 
 ## 与 Agent、资料导入和评测的接口
 
@@ -80,20 +84,22 @@ flowchart LR
 
 以下路径均位于 `/api/merchant/content` 下，需要商家会话。
 
-| 方法       | 路径                                    | 行为                                           |
-| ---------- | --------------------------------------- | ---------------------------------------------- |
-| GET / POST | `/products`                             | 列出 / 创建商品                                |
-| GET        | `/products/:id`                         | 读取商品与历史资料版本                         |
-| POST       | `/products/:id/versions`                | 基于 `baseVersion` 新增商品资料版本            |
-| GET / POST | `/plans`                                | 列出 / 创建营销周期；GET 可用 `productId` 筛选 |
-| GET        | `/plans/:id`                            | 读取周期与课程列表                             |
-| PATCH      | `/plans/:id`                            | 携带原字段 `base` 修改周期名称、受众与天数；冲突返回 409 |
-| POST       | `/plans/:id/courses`                    | 创建课程                                       |
-| GET        | `/courses/:id`                          | 读取课程、商品和讲稿历史版本                   |
-| PATCH      | `/courses/:id`                          | 携带原字段 `base` 修改课次与排期；冲突返回 409 |
-| POST       | `/courses/:id/scripts`                  | 保存新稿并运行有限规则检查                     |
-| POST       | `/courses/:id/scripts/:version/confirm` | 保存商家本人定稿确认                           |
-| GET / POST | `/rooms/:id/binding`                    | 读取 / 替换直播间当前讲稿绑定                  |
+| 方法       | 路径                                    | 行为                                                                   |
+| ---------- | --------------------------------------- | ---------------------------------------------------------------------- |
+| GET / POST | `/products`                             | 列出 / 创建商品                                                        |
+| GET        | `/products/:id`                         | 读取商品与历史资料版本                                                 |
+| POST       | `/products/:id/versions`                | 基于 `baseVersion` 新增商品资料版本                                    |
+| GET / POST | `/plans`                                | 列出 / 创建营销周期；GET 可用 `productId` 筛选                         |
+| GET        | `/plans/:id`                            | 读取周期与课程列表                                                     |
+| PATCH      | `/plans/:id`                            | 携带原字段 `base` 修改周期名称、受众与天数；冲突返回 409               |
+| POST       | `/plans/:id/courses`                    | 创建课程                                                               |
+| GET        | `/courses/:id`                          | 读取课程、商品和讲稿历史版本                                           |
+| GET        | `/courses/:id/compare?from=1&to=2`      | 比较本课程两个已保存版本，返回双方快照与段落变化                       |
+| PATCH      | `/courses/:id`                          | 携带原字段 `base` 修改课次与排期；冲突返回 409                         |
+| POST       | `/courses/:id/scripts`                  | 保存新稿并运行有限规则检查                                             |
+| POST       | `/courses/:id/scripts/:version/confirm` | 保存商家本人定稿确认                                                   |
+| GET / POST | `/rooms/:id/binding`                    | 读取 / 替换直播间当前讲稿绑定                                          |
+| GET        | `/rooms/:id/binding-history`            | 读取最近 50 条绑定记录，以 `nextBefore` 作为 `before` 参数读取更早记录 |
 
 接口类型见 [`src/shared/content.ts`](../src/shared/content.ts)，实现见 [`src/server/content.ts`](../src/server/content.ts)。
 

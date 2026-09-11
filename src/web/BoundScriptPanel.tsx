@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import type { ContentBinding } from "../shared/content.js";
 import { api } from "./api.js";
+import { BindingHistory } from "./BindingHistory.js";
 
 export function BoundScriptPanel({
   roomId,
@@ -215,6 +216,7 @@ export function BoundScriptPanel({
       >
         前往商品与课程 <ChevronRight size={14} />
       </button>
+      <BindingHistory key={roomId} roomId={roomId} />
     </section>
   );
 }

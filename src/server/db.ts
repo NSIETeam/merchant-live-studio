@@ -140,6 +140,31 @@ export function openDatabase(path: string) {
             BEGIN SELECT RAISE(ABORT,'Content versions and confirmations are immutable'); END;
         `);
     });
+  if (version < 5)
+    transaction(db, () => {
+      db.exec(`
+        CREATE TABLE content_binding_history (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          room_id TEXT NOT NULL REFERENCES rooms(id), course_id TEXT NOT NULL,
+          script_version INTEGER NOT NULL, bound_at INTEGER NOT NULL,
+          actor_id TEXT, source TEXT NOT NULL CHECK(source IN ('binding','legacy_snapshot')),
+          room_title TEXT NOT NULL, course_title TEXT NOT NULL, product_name TEXT NOT NULL,
+          FOREIGN KEY(course_id,script_version) REFERENCES content_script_versions(course_id,version)
+        );
+        CREATE INDEX content_binding_history_room ON content_binding_history(room_id,id DESC);
+        INSERT INTO content_binding_history(room_id,course_id,script_version,bound_at,actor_id,source,room_title,course_title,product_name)
+          SELECT b.room_id,b.course_id,b.script_version,b.bound_at,NULL,'legacy_snapshot',r.title,c.title,
+            json_extract(s.product_snapshot_json,'$.name')
+          FROM content_room_bindings b JOIN rooms r ON r.id=b.room_id
+            JOIN content_courses c ON c.id=b.course_id
+            JOIN content_script_versions s ON s.course_id=b.course_id AND s.version=b.script_version;
+        CREATE TRIGGER content_binding_history_immutable_update BEFORE UPDATE ON content_binding_history
+          BEGIN SELECT RAISE(ABORT,'Binding history is immutable'); END;
+        CREATE TRIGGER content_binding_history_immutable_delete BEFORE DELETE ON content_binding_history
+          BEGIN SELECT RAISE(ABORT,'Binding history is immutable'); END;
+        INSERT INTO schema_migrations VALUES(5,unixepoch());
+      `);
+    });
   return db;
 }
 export type DB = ReturnType<typeof openDatabase>;

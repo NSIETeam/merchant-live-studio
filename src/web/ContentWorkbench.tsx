@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { ScriptComparison } from "./ScriptComparison.js";
 import {
   BookOpen,
   Check,
@@ -1707,6 +1708,14 @@ function CourseEditor({
             </div>
           </fieldset>
           <Feedback error={error} notice={notice} />
+          {selected && detail && (
+            <ScriptComparison
+              key={`${course.id}:${selected.version}`}
+              versions={detail.versions}
+              selected={selected}
+              dirty={dirty}
+            />
+          )}
         </div>
       </main>
       <aside className="cw-review-panel">
