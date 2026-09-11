@@ -8,11 +8,23 @@ import { transaction } from "../../platform/infrastructure/public.js";
 import type { DB } from "../../shared/persistence.js";
 type Storage = ReturnType<typeof createRecordingStorage>;
 const running = new WeakMap<DB, Promise<void>>();
+const processor = new WeakMap<DB, { startedAt: number; completedAt: number; failed: boolean }>();
+function processorState(db: DB, configured: boolean) {
+  if (!configured) return "unconfigured";
+  const state = processor.get(db);
+  if (!state) return "checking";
+  if (state.failed) return "unavailable";
+  const last = running.has(db) ? state.startedAt : state.completedAt;
+  if (Date.now() - last > 60000) return "stalled";
+  return state.completedAt ? "available" : "checking";
+}
 export function processRecordingOutbox(db: DB, config: Config, storage:Storage) {
   if (!config.recordingsRoot || !config.recordingOutbox)
     return Promise.resolve();
   const existing = running.get(db);
   if (existing) return existing;
+  const state = { startedAt: Date.now(), completedAt: processor.get(db)?.completedAt || 0, failed: false };
+  processor.set(db, state);
   const job = (async () => {
     for (const name of await storage.pending()) {
       let merchantId: string | null = null;
@@ -57,7 +69,10 @@ export function processRecordingOutbox(db: DB, config: Config, storage:Storage) 
         await storage.failed(name);
       }
     }
-  })().finally(() => running.delete(db));
+  })().then(() => { state.completedAt = Date.now(); }, (error) => {
+    state.failed = true;
+    throw error;
+  }).finally(() => running.delete(db));
   running.set(db, job);
   return job;
 }
@@ -71,6 +86,7 @@ export function attachRecordings(
     c.header("Cache-Control", "no-store");
     return c.json({
       storage: await storage.health(),
+      processor: processorState(db, Boolean(config.recordingsRoot && config.recordingOutbox)),
       ingestErrorCount: Number(
         recordingQuery6(db, c.get("merchantId"))!.n,
       ),
