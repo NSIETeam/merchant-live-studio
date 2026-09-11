@@ -2,11 +2,13 @@ export async function api<T>(
   path: string,
   method = "GET",
   body?: unknown,
+  options?: { signal?: AbortSignal },
 ): Promise<T> {
   let res: Response;
   try {
     res = await fetch(`${import.meta.env.BASE_URL}api${path}`, {
       method,
+      signal: options?.signal,
       credentials: "same-origin",
       headers:
         body !== undefined ? { "Content-Type": "application/json" } : undefined,

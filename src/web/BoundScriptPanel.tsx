@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import type { ContentBinding } from "../shared/content.js";
 import { api } from "./api.js";
+import { pollResource } from "./poll-resource.js";
 import { BindingHistory } from "./BindingHistory.js";
 
 export function BoundScriptPanel({
@@ -29,33 +30,43 @@ export function BoundScriptPanel({
   const toggleRef = useRef<HTMLButtonElement | null>(null);
   const restoreFocus = useRef(false);
   useEffect(() => {
-    let alive = true;
     setBinding(null);
     setLoading(true);
     setIndex(0);
     setExpanded(false);
-    const read = async () => {
-      try {
-        const data = await api<{ binding: ContentBinding | null }>(
+    const polling = pollResource({
+      read: (signal) =>
+        api<{ binding: ContentBinding | null }>(
           `/merchant/content/rooms/${encodeURIComponent(roomId)}/binding`,
-        );
-        if (alive) {
-          setBinding(data.binding);
-          setError("");
-        }
-      } catch (e) {
-        if (alive) setError((e as Error).message);
-      } finally {
-        if (alive) setLoading(false);
+          "GET",
+          undefined,
+          { signal },
+        ),
+      onValue: (data) => {
+        setBinding(data.binding);
+        setError("");
+        setLoading(false);
+      },
+      onError: (error) => {
+        setError(error.message);
+        setLoading(false);
+      },
+      intervalMs: 5000,
+      timeoutMs: 8000,
+    });
+    const resume = () => {
+      if (document.visibilityState === "visible") {
+        setError("正在重新核对当前讲稿…");
+        polling.refresh();
+      } else {
+        polling.pause();
       }
     };
-    void read();
-    const timer = setInterval(() => {
-      if (document.visibilityState === "visible") void read();
-    }, 5000);
+    if (document.visibilityState === "hidden") polling.pause();
+    document.addEventListener("visibilitychange", resume);
     return () => {
-      alive = false;
-      clearInterval(timer);
+      polling.stop();
+      document.removeEventListener("visibilitychange", resume);
     };
   }, [roomId]);
   useEffect(() => {
