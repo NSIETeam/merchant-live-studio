@@ -543,6 +543,9 @@
 .audience-drawer .platform-compliance.is-compact {
   border-bottom-color: #4b4f5a;
 }
+.audience-drawer .retention-status {
+  border-top-color: #4b4f5a;
+}
 .audience-drawer .platform-compliance-missing {
   color: #f0c4c0;
   background: #3d292b;

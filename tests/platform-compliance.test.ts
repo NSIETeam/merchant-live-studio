@@ -15,6 +15,13 @@ const valid = {
   privacyPolicyUrl: "https://example.test/privacy",
   serviceTermsUrl: "https://example.test/terms",
 };
+const retention = {
+  effectiveDate: "2026-09-11",
+  liveContentDays: 60,
+  commerceRecordsMonths: 36,
+  securityLogsMonths: 6,
+  deletionReviewContact: "测试删除与争议保留联系 00000002",
+};
 
 test("platform compliance is public, explicit when missing, and strictly configured", async () => {
   const missingDb = openDatabase(":memory:");
@@ -27,11 +34,13 @@ test("platform compliance is public, explicit when missing, and strictly configu
     assert.equal(body.configured, false);
     assert.equal(body.data, null);
     assert.ok(body.dataPractices.length >= 4);
-    assert.equal(
-      ((await (await app.request("/api/health")).json()) as any)
-        .platformCompliance,
-      false,
-    );
+    assert.equal(body.retention.configured, false);
+    assert.equal(body.retention.data, null);
+    assert.ok(body.retention.enforcement.length >= 4);
+    assert.equal(body.retention.sourceLinks.length, 3);
+    const health = (await (await app.request("/api/health")).json()) as any;
+    assert.equal(health.platformCompliance, false);
+    assert.equal(health.retentionPolicy, false);
   } finally {
     missingDb.close();
   }
@@ -43,16 +52,24 @@ test("platform compliance is public, explicit when missing, and strictly configu
       loadConfig({
         DEMO_MODE: "true",
         PLATFORM_COMPLIANCE: JSON.stringify(valid),
+        DATA_RETENTION_POLICY: JSON.stringify(retention),
       }),
     );
     const response = await app.request("/api/platform/compliance");
     const body = (await response.json()) as any;
     assert.equal(body.configured, true);
     assert.deepEqual(body.data, valid);
+    assert.equal(body.retention.configured, true);
+    assert.deepEqual(body.retention.data, retention);
     assert.equal(JSON.stringify(body).includes("SESSION_SECRET"), false);
     assert.equal(
       ((await (await app.request("/api/health")).json()) as any)
         .platformCompliance,
+      true,
+    );
+    assert.equal(
+      ((await (await app.request("/api/health")).json()) as any)
+        .retentionPolicy,
       true,
     );
   } finally {
@@ -81,4 +98,19 @@ test("platform compliance is public, explicit when missing, and strictly configu
       }),
     }),
   );
+
+  for (const changed of [
+    { ...retention, liveContentDays: 59 },
+    { ...retention, commerceRecordsMonths: 35 },
+    { ...retention, securityLogsMonths: 5 },
+    { ...retention, effectiveDate: "2026-02-30" },
+    { ...retention, deletionReviewContact: "" },
+    { ...retention, extra: "not-allowed" },
+  ])
+    assert.throws(() =>
+      loadConfig({
+        DEMO_MODE: "true",
+        DATA_RETENTION_POLICY: JSON.stringify(changed),
+      }),
+    );
 });

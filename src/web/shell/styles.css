@@ -1839,6 +1839,14 @@ progress::-moz-progress-bar {
   border-radius: 7px;
   padding: 12px;
 }
+.retention-status {
+  margin-top: 24px;
+  padding-top: 4px;
+  border-top: 1px solid #dfe2e7;
+}
+.retention-status h3 {
+  margin-top: 20px;
+}
 .compliance-page {
   width: min(760px, calc(100% - 32px));
   margin: 0 auto;

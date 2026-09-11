@@ -1,7 +1,10 @@
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import type { Membership } from "../../shared/membership.js";
-import type { PlatformComplianceData } from "../../shared/platform-compliance.js";
+import type {
+  PlatformComplianceData,
+  RetentionPolicyData,
+} from "../../shared/platform-compliance.js";
 export interface Config {
   production: boolean;
   recordingsRoot: string;
@@ -27,6 +30,7 @@ export interface Config {
   agentServiceUrl: string;
   agentServiceToken: string;
   platformCompliance: PlatformComplianceData | null;
+  retentionPolicy: RetentionPolicyData | null;
 }
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const production = env.NODE_ENV === "production";
@@ -118,6 +122,18 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const platformCompliance = env.PLATFORM_COMPLIANCE?.trim()
     ? complianceSchema.parse(JSON.parse(env.PLATFORM_COMPLIANCE))
     : null;
+  const retentionSchema = z
+    .object({
+      effectiveDate: z.iso.date(),
+      liveContentDays: z.number().int().min(60).max(3650),
+      commerceRecordsMonths: z.number().int().min(36).max(120),
+      securityLogsMonths: z.number().int().min(6).max(120),
+      deletionReviewContact: z.string().trim().min(5).max(240),
+    })
+    .strict();
+  const retentionPolicy = env.DATA_RETENTION_POLICY?.trim()
+    ? retentionSchema.parse(JSON.parse(env.DATA_RETENTION_POLICY))
+    : null;
   const agentServiceUrl = (
     env.AGENT_SERVICE_URL ?? (production ? "" : "http://127.0.0.1:8788")
   ).replace(/\/$/, "");
@@ -186,5 +202,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     agentServiceUrl,
     agentServiceToken,
     platformCompliance,
+    retentionPolicy,
   };
 }

@@ -22,6 +22,7 @@ export function attachOperations(
       mediaControl: media.configured,
       requirePlayback: config.requirePlayback,
       platformCompliance: Boolean(config.platformCompliance),
+      retentionPolicy: Boolean(config.retentionPolicy),
     });
   });
   app.get("/api/channels", (c) => c.json({ channels: channelCapabilities }));
@@ -36,6 +37,30 @@ export function attachOperations(
         "商家工作台使用账号会话和角色权限；直播录像仅在服务器明确配置录像存储后生成。",
         "真实模型、微信身份与微信支付当前未配置；演示红包不会发生实际转账。",
       ],
+      retention: {
+        configured: Boolean(config.retentionPolicy),
+        data: config.retentionPolicy,
+        enforcement: [
+          "业务版本、审核、纠错、投诉、账本和处置记录不会由应用按年龄自动删除。",
+          "已登记直播录像当前没有自动删除；安全删除审批、引用检查和争议冻结流程尚未实现。",
+          "网络与安全日志、备份保留由部署基础设施负责，当前应用无法验证实际执行期限。",
+          "达到声明期限不自动触发删除；存在投诉、争议、监管调取、账务或有效引用时需要继续保留。",
+        ],
+        sourceLinks: [
+          {
+            label: "互联网直播服务管理规定",
+            url: "https://www.cac.gov.cn/2016-11/04/c_1119847629.htm",
+          },
+          {
+            label: "直播电商监督管理办法",
+            url: "https://www.cac.gov.cn/2026-01/07/c_1769516655383334.htm",
+          },
+          {
+            label: "中华人民共和国网络安全法",
+            url: "https://www.cac.gov.cn/2025-12/29/c_1768735112911946.htm",
+          },
+        ],
+      },
     });
   });
 }

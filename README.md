@@ -102,6 +102,8 @@ Agent 另外使用独立服务进程、数据目录和 `AGENT_SERVICE_TOKEN`，�
 
 平台运营主体、投诉渠道、隐私政策和服务协议通过服务器环境变量 `PLATFORM_COMPLIANCE` 配置，公开入口为 `/compliance`，观众直播间的「经营者信息」也会同时展示。缺少配置时页面与健康接口明确标为未配置，不使用品牌名或测试资料代替真实主体。字段和验收边界见[平台信息与隐私](docs/platform-compliance.md)。
 
+公开保存期限声明通过 `DATA_RETENTION_POLICY` 配置，同一合规页面会同时显示软件当前真实执行状态。声明不能代替自动清理、争议冻结、基础设施日志或备份验收；当前边界见[记录留存声明](docs/retention-policy.md)。
+
 ```dotenv
 MERCHANT_CREDENTIALS={"merchant-a":"REPLACE_WITH_RANDOM_SECRET_AT_LEAST_24_CHARS"}
 ```
