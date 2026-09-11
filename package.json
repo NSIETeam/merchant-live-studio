@@ -20,7 +20,8 @@
     "format": "prettier --write src tests docs *.json *.ts *.html *.yml README.md .github/workflows/*.yml infra/*.yml",
     "dev:agent": "tsx watch --env-file-if-exists=.env src/agent/index.ts",
     "start:agent": "node --env-file-if-exists=.env dist/server/agent/index.js",
-    "concurrency:smoke": "node scripts/concurrency-smoke.mjs"
+    "concurrency:smoke": "node scripts/concurrency-smoke.mjs",
+    "capacity:probe": "node scripts/capacity-probe.mjs"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.0",

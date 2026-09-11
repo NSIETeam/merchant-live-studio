@@ -62,6 +62,7 @@ npm run build        # Web + 直播 API + Agent 编译
 npm run smoke        # 构建后同源 HTTP 闭环
 npm run check        # 测试 + 构建 + HTTP 闭环
 npm run dev:agent    # 仅独立启动 Agent 开发进程
+npm run capacity:probe -- --room=demo-room # 分阶段只读容量基线
 ```
 
 构建后用两个终端分别运行：
@@ -111,6 +112,10 @@ MERCHANT_CREDENTIALS={"merchant-a":"REPLACE_WITH_RANDOM_SECRET_AT_LEAST_24_CHARS
 示例字符串必须替换，可用 `openssl rand -hex 32` 生成独立随机值。`.env.example` 中显式的 `REQUIRE_PLAYBACK=false` 不会因改为生产模式自动变为 true；共享媒体测试须明确覆盖此值。
 
 `TRUSTED_PROXY_IPS` 只列出实际连接应用的代理 socket 地址，代理必须覆盖 `X-Real-IP`。应用不会信任未列入的来源，也不会采用任意 `X-Forwarded-For`。商家鉴权和观众建会话使用独立限流预算，观众 Cookie 不能重置商家登录尝试预算。
+
+API 另有进程内并发门禁：生产默认最多同时处理 256 个 API 请求，其中观众建会话、公开房间和观众接口最多占 192 个，余量保留给商家控制、流媒体回调与健康检查。可用 `REQUEST_CONCURRENCY_MAX` 和 `AUDIENCE_CONCURRENCY_MAX` 调整，后者必须更小；超过门禁返回 503 与 `Retry-After: 1`。健康接口只公开当前、峰值和累计拒绝计数，不包含身份或密钥。
+
+`capacity:probe` 默认仅访问回环地址的公开房间 JSON，并按 10/25/50/100 并发逐级运行。远端测试必须同时使用 HTTPS 和与主机名完全一致的 `--allow-remote`；子路径部署还须明确 `--base-path`，例如 `--origin=https://studio.example.com --base-path=/studio/ --allow-remote=studio.example.com --room=ROOM_ID`。脚本只读、不创建观看会话、不发送心跳、不领取红包，也不传入商家凭据；它输出各阶段 p50/p95/p99、吞吐、状态码和错误率，任一阶段超过阈值立即停止。详见[容量保护与基线](docs/capacity-guard.md)。
 
 ### 部署到 `/studio/`
 

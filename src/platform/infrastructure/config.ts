@@ -35,6 +35,8 @@ export interface Config {
   agentServiceToken: string;
   platformCompliance: PlatformComplianceData | null;
   retentionPolicy: RetentionPolicyData | null;
+  requestConcurrencyMax: number;
+  audienceConcurrencyMax: number;
 }
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const production = env.NODE_ENV === "production";
@@ -190,6 +192,22 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     .min(1)
     .max(16)
     .parse(env.SPEECH_DISPATCH_CONCURRENCY || 2);
+  const requestConcurrencyMax = z.coerce
+    .number()
+    .int()
+    .min(2)
+    .max(4096)
+    .parse(env.REQUEST_CONCURRENCY_MAX || (production ? 256 : 1024));
+  const audienceConcurrencyMax = z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(4095)
+    .parse(env.AUDIENCE_CONCURRENCY_MAX || (production ? 192 : 768));
+  if (audienceConcurrencyMax >= requestConcurrencyMax)
+    throw new Error(
+      "AUDIENCE_CONCURRENCY_MAX must be lower than REQUEST_CONCURRENCY_MAX",
+    );
   return {
     recordingsRoot: env.RECORDINGS_ROOT || "",
     recordingOutbox: env.RECORDING_OUTBOX || "",
@@ -231,5 +249,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     agentServiceToken,
     platformCompliance,
     retentionPolicy,
+    requestConcurrencyMax,
+    audienceConcurrencyMax,
   };
 }

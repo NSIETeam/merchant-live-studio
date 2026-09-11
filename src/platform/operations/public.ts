@@ -3,12 +3,16 @@ import { type Config } from "../../platform/infrastructure/public.js";
 import { channelCapabilities } from "../../shared/channels.js";
 import type { DB } from "../../shared/persistence.js";
 import { findDatabase } from "./persistence/public-queries.js";
+export { attachCapacityGuard } from "./capacity.js";
+export type { CapacitySnapshot } from "./capacity.js";
+import type { CapacitySnapshot } from "./capacity.js";
 type App = Hono<{ Variables: { merchantId: string; viewerId: string } }>;
 export function attachOperations(
   app: App,
   db: DB,
   config: Config,
   media: { configured: boolean },
+  capacity?: { snapshot: () => CapacitySnapshot },
 ) {
   app.get("/api/health", (c) => {
     findDatabase(db);
@@ -26,6 +30,7 @@ export function attachOperations(
       requirePlayback: config.requirePlayback,
       platformCompliance: Boolean(config.platformCompliance),
       retentionPolicy: Boolean(config.retentionPolicy),
+      capacity: capacity?.snapshot() ?? null,
     });
   });
   app.get("/api/channels", (c) => c.json({ channels: channelCapabilities }));
