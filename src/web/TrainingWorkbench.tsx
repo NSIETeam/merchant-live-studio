@@ -1752,8 +1752,22 @@ function EvaluationResults({
         )}
       </details>
       {report.suite.cases.map((testCase) => (
-        <section className="tw-case-result" key={testCase.id}>
-          <h3>{testCase.title}</h3>
+        <details className="tw-case-result" key={`${report.id}:${testCase.id}`}>
+          <summary>
+            <strong>{testCase.title}</strong>
+            <span>
+              {report.variants
+                .map((_, index) => {
+                  const item = report.items.find(
+                    (item) =>
+                      item.caseId === testCase.id &&
+                      item.variantIndex === index,
+                  );
+                  return `${index === 0 ? "A" : "B"} · ${item?.outcome === "passed" ? "检查通过" : item?.outcome === "failed" ? "需调整" : "等待结果"}`;
+                })
+                .join(" / ")}
+            </span>
+          </summary>
           <div className="tw-case-input">
             <p>主播：{testCase.transcript}</p>
             {testCase.question && <p>观众：{testCase.question}</p>}
@@ -1863,7 +1877,7 @@ function EvaluationResults({
               );
             })}
           </div>
-        </section>
+        </details>
       ))}
       <p className="tw-footnote">
         通过检查只表示满足本场景的预设条件。人工评分不等于讲稿审核发布。评分保存在评测报告中；若准备应用提示词新版本，请前往“直播

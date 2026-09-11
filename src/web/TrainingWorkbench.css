@@ -564,3 +564,31 @@
     gap: 22px;
   }
 }
+
+/* Keep scene details compact without discarding review drafts. */
+details.tw-case-result {
+  display: block;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+}
+.tw-case-result > summary {
+  cursor: pointer;
+  padding: 12px 14px;
+  min-height: 44px;
+  line-height: 1.6;
+}
+.tw-case-result > summary strong {
+  font-size: 13px;
+}
+.tw-case-result > summary span {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 3px;
+}
+.tw-case-result > .tw-case-input,
+.tw-case-result > .tw-two {
+  margin: 0 12px 12px;
+}
