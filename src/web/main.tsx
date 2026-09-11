@@ -1,3 +1,4 @@
+import { DeferredPanel } from "./DeferredPanel.js";
 import { LedgerPanel } from "./LedgerPanel.js";
 import { TeamPanel } from "./TeamPanel.js";
 import { AudienceShare } from "./AudienceShare.js";
@@ -14,9 +15,21 @@ import { AttributionPanel } from "./AttributionPanel.js";
 import { Audience } from "./Audience.js";
 import { memberRoleNames, type MemberRole } from "../shared/membership.js";
 import { BoundScriptPanel } from "./BoundScriptPanel.js";
-import { ContentWorkbench } from "./ContentWorkbench.js";
-import { TrainingWorkbench } from "./TrainingWorkbench.js";
-import { AgentWorkbench } from "./AgentWorkbench.js";
+const ContentWorkbench = React.lazy(() =>
+  import("./ContentWorkbench.js").then((module) => ({
+    default: module.ContentWorkbench,
+  })),
+);
+const TrainingWorkbench = React.lazy(() =>
+  import("./TrainingWorkbench.js").then((module) => ({
+    default: module.TrainingWorkbench,
+  })),
+);
+const AgentWorkbench = React.lazy(() =>
+  import("./AgentWorkbench.js").then((module) => ({
+    default: module.AgentWorkbench,
+  })),
+);
 import { AgentLiveCard } from "./AgentLiveCard.js";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
@@ -255,6 +268,10 @@ function Workspace({
     "script",
   );
   const [admissionRevision, setAdmissionRevision] = useState(0);
+  const [contentOpened, setContentOpened] = useState(false);
+  useEffect(() => {
+    if (tab === "content") setContentOpened(true);
+  }, [tab]);
   const selected = rooms.find((r) => r.id === roomId);
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: "instant" });
@@ -533,9 +550,11 @@ function Workspace({
               </button>
             </Notice>
           )}
-          {memberRole !== "analyst" && (
+          {memberRole !== "analyst" && (tab === "content" || contentOpened) && (
             <div hidden={tab !== "content"}>
-              <ContentWorkbench rooms={rooms} memberRole={memberRole} />
+              <DeferredPanel>
+                <ContentWorkbench rooms={rooms} memberRole={memberRole} />
+              </DeferredPanel>
             </div>
           )}
           {tab === "home" && (
@@ -773,18 +792,21 @@ function Workspace({
                 </>
               )}
               {tab === "training" && (
-                <TrainingWorkbench
-                  roomId={selected.id}
-                  productName={selected.productName}
-                />
+                <DeferredPanel>
+                  <TrainingWorkbench
+                    roomId={selected.id}
+                    productName={selected.productName}
+                  />
+                </DeferredPanel>
               )}
               {tab === "copilot" && (
-                <AgentWorkbench
-                  canRevoke={memberRole === "owner"}
-                  key={selected.id}
-                  roomId={selected.id}
-                  productName={selected.productName}
-                />
+                <DeferredPanel key={selected.id}>
+                  <AgentWorkbench
+                    canRevoke={memberRole === "owner"}
+                    roomId={selected.id}
+                    productName={selected.productName}
+                  />
+                </DeferredPanel>
               )}
               {tab === "rewards" && (
                 <ActivityWorkspace
