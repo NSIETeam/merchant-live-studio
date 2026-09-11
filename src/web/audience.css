@@ -1,8 +1,8 @@
 .audience-view {
   --audience-muted: #b5c0c7;
-  --audience-line: #33424c;
+  --audience-line: #3a3d45;
   color: #f3f6f8;
-  background: #080e13;
+  background: #0c0d0f;
   height: 100vh;
   height: 100dvh;
   min-height: 300px;
@@ -26,8 +26,8 @@
   gap: 20px;
   padding: 8px max(20px, env(safe-area-inset-right)) 8px
     max(20px, env(safe-area-inset-left));
-  background: #101a22;
-  border-bottom: 1px solid #26313a;
+  background: #17181b;
+  border-bottom: 1px solid #2c2e34;
   min-width: 0;
 }
 .audience-brand {
@@ -82,11 +82,11 @@
   min-height: 0;
   aspect-ratio: auto;
   border-radius: 0;
-  background: #080e13;
+  background: #0c0d0f;
 }
 .audience-view .audience-stage .player video {
   object-fit: contain;
-  background: #080e13;
+  background: #0c0d0f;
 }
 .audience-view .audience-stage .player-label {
   display: none;
@@ -112,7 +112,7 @@
 .audience-view .player-message {
   font-size: 16px;
   color: #fff;
-  background: #233641f2;
+  background: #2d3037f2;
   bottom: 64px;
 }
 .audience-view .player-message button {
@@ -216,8 +216,8 @@
   display: flex;
   justify-content: center;
   gap: 16px;
-  border-top: 1px solid #2a3741;
-  background: #111b24;
+  border-top: 1px solid #31333a;
+  background: #18191d;
 }
 .audience-toolbar > button {
   display: flex;
@@ -232,7 +232,7 @@
 }
 .audience-toolbar > button:hover,
 .audience-toolbar > button.is-selected {
-  background: #2a3a43;
+  background: #32343b;
   color: #e1e3e7;
 }
 .audience-toolbar-icon {
@@ -257,9 +257,9 @@
   width: min(400px, calc(100% - 24px));
   display: flex;
   flex-direction: column;
-  border: 1px solid #445561;
+  border: 1px solid #4b4f5a;
   border-radius: 16px;
-  background: #18242efa;
+  background: #202126fa;
   box-shadow: 0 12px 40px #0006;
   overflow: hidden;
 }
@@ -283,7 +283,7 @@
   overflow-y: auto;
   padding: 20px;
   overscroll-behavior: contain;
-  scrollbar-color: #617580 #18242e;
+  scrollbar-color: #617580 #202126;
 }
 .audience-help {
   color: #c5d0d7;
@@ -309,7 +309,7 @@
 }
 .audience-view .audience-action:disabled {
   opacity: 1;
-  background: #33434d;
+  background: #3a3d46;
   color: #a9b7c0;
 }
 .audience-secondary {
@@ -325,7 +325,7 @@
 }
 .audience-question-form textarea {
   font-size: 17px;
-  background: #0e1921;
+  background: #15161a;
   color: #f2f6f8;
   border: 1px solid #607782;
   line-height: 1.6;
@@ -460,7 +460,7 @@
   flex-wrap: wrap;
   gap: 8px;
   padding: 12px 0;
-  border-top: 1px solid #33424c;
+  border-top: 1px solid #3a3d45;
 }
 .audience-claim-record span {
   color: var(--audience-muted);

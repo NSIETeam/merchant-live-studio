@@ -7,7 +7,7 @@
     "PingFang SC",
     "Microsoft YaHei",
     sans-serif;
-  color: #19252e;
+  color: #202227;
   background: #f3f5f7;
   font-synthesis: none;
   font-weight: 400;
@@ -17,7 +17,7 @@
   --accent-soft: #e2e8f0;
   --border: #e2e7eb;
   --muted: #687680;
-  --dark: #101b24;
+  --dark: #18191c;
 }
 * {
   box-sizing: border-box;
@@ -95,7 +95,7 @@ textarea {
   background: #fff;
   border-radius: 8px;
   padding: 11px 12px;
-  color: #19252e;
+  color: #202227;
   min-width: 0;
 }
 input:focus,
@@ -120,7 +120,7 @@ form button {
 }
 ::selection {
   background: #b5bac5;
-  color: #101b24;
+  color: #18191c;
 }
 .primary,
 .secondary,
@@ -146,7 +146,7 @@ form button {
 .secondary {
   border: 1px solid var(--border);
   background: white;
-  color: #253b46;
+  color: #31333a;
 }
 .secondary:hover {
   background: #f2f3f4;
@@ -199,7 +199,7 @@ form button {
 }
 .pill {
   background: #f0f3f5;
-  color: #586872;
+  color: #5c606e;
 }
 .env-badge {
   color: #5b616c;
@@ -283,7 +283,7 @@ form button {
   background: #262930;
 }
 .nav-item:hover {
-  background: #1d2b32;
+  background: #24262b;
 }
 .nav-item svg:last-child:not(:first-child) {
   margin-left: auto;
@@ -303,7 +303,7 @@ form button {
   color: #818793;
 }
 .account {
-  border-top: 1px solid #293640;
+  border-top: 1px solid #303239;
   padding: 20px 3px 0;
   display: flex;
   align-items: center;
@@ -313,7 +313,7 @@ form button {
   height: 35px;
   width: 35px;
   border-radius: 50%;
-  background: #364d55;
+  background: #3f424c;
   display: grid;
   place-items: center;
   font-size: 0.8rem;
@@ -355,7 +355,7 @@ form button {
 }
 .breadcrumb strong {
   font-weight: 500;
-  color: #455a65;
+  color: #4d515d;
 }
 .content {
   max-width: 1560px;
@@ -491,7 +491,7 @@ h2:has(svg) {
 .player {
   width: 100%;
   min-width: 0;
-  background: #111c25;
+  background: #191a1d;
   aspect-ratio: 16/9;
   border-radius: 11px;
   position: relative;
@@ -548,19 +548,19 @@ h2:has(svg) {
   letter-spacing: 0.13em;
   font-size: 0.75rem;
   color: #b7c6ce;
-  background: #25323b;
+  background: #2c2e34;
   padding: 4px 7px;
   border-radius: 4px;
 }
 .player-label span {
   letter-spacing: 0;
-  border-left: 1px solid #47545d;
+  border-left: 1px solid #4b4e59;
   margin-left: 7px;
   padding-left: 7px;
   font-size: 0.75rem;
 }
 .player-message {
-  background: #213341ef;
+  background: #2d2f35ef;
   position: absolute;
   bottom: 47px;
   left: 10px;
@@ -572,7 +572,7 @@ h2:has(svg) {
 }
 .player-message button {
   background: #eef3f5;
-  color: #304450;
+  color: #3a3d46;
   border-radius: 4px;
   margin-left: 8px;
   font-size: 0.75rem;
@@ -697,7 +697,7 @@ h2:has(svg) {
   padding: 11px 12px;
   font-size: 0.825rem;
   margin: 9px 0;
-  color: #344b55;
+  color: #3e414b;
 }
 .question span {
   overflow-wrap: anywhere;
@@ -1032,7 +1032,7 @@ td {
   border-bottom: 1px solid #ecf0f2;
 }
 td {
-  color: #546873;
+  color: #5b5f6c;
 }
 td:last-child {
   font-variant-numeric: tabular-nums;
@@ -1119,7 +1119,7 @@ footer {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: #0b1b25aa;
+  background: #16171aaa;
   z-index: 30;
   display: flex;
   justify-content: center;
@@ -1225,7 +1225,7 @@ footer {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #101b24;
+  background: #18191c;
   color: #f2f3f4;
   padding: 23px 40px;
 }

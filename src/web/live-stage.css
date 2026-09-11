@@ -1,3 +1,6 @@
+.workspace.live-workspace .content {
+  max-width: 1800px;
+}
 /* The live canvas is the primary workspace; supporting tools follow it in DOM order. */
 .workspace.live-workspace .studio-grid {
   grid-template-columns: minmax(0, 3fr) minmax(260px, 1fr);
@@ -90,12 +93,12 @@
     left: 0;
     right: 0;
     z-index: 30;
-    background: #12202a;
+    background: #1b1d21;
     padding: 6px 10px calc(6px + env(safe-area-inset-bottom));
     width: auto;
     margin: 0;
     overflow: visible;
-    border-top: 1px solid #31414a;
+    border-top: 1px solid #383b43;
   }
   .workspace .sidebar .nav-item {
     min-height: 46px;
