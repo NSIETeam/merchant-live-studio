@@ -1,3 +1,4 @@
+import { ComplaintsPanel } from "./ComplaintsPanel.js";
 import { ViewerEngagement } from "./EngagementPanel.js";
 import {
   useCallback,
@@ -27,8 +28,9 @@ type RoomData = {
   requirePlayback: boolean;
 };
 type Heartbeat = { watchSeconds: number; counting: boolean };
-type Panel = "questions" | "rewards" | "information";
+type Panel = "questions" | "rewards" | "information" | "complaints";
 const panelNames: Record<Panel, string> = {
+  complaints: "投诉举报",
   questions: "向主播提问",
   rewards: "签到与互动活动",
   information: "观看信息",
@@ -386,6 +388,7 @@ function AudienceRoom({ id }: { id: string }) {
             {roomStatus(data.room)}
           </span>
         )}
+        <button onClick={() => setPanel("complaints")}>投诉举报</button>
       </header>
 
       <main className="audience-stage" aria-label="直播画面">
@@ -475,6 +478,9 @@ function AudienceRoom({ id }: { id: string }) {
               </button>
             </div>
             <div className="audience-drawer-body">
+              {panel === "complaints" && (
+                <ComplaintsPanel key={id} roomId={id} />
+              )}
               {interactionError && <Notice>{interactionError}</Notice>}
               {(interactionError || authConnecting) && (
                 <button

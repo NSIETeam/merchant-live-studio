@@ -38,6 +38,7 @@ export function memberMayAccess(
   path: string,
 ) {
   if (role === "owner") return true;
+  if (path.startsWith("/api/merchant/complaints")) return false;
   if (
     path.startsWith("/api/merchant/attribution") ||
     path.startsWith("/api/merchant/engagement")

@@ -1,3 +1,4 @@
+import { ComplaintsPanel } from "./ComplaintsPanel.js";
 import { MerchantEngagement } from "./EngagementPanel.js";
 import { AttributionPanel } from "./AttributionPanel.js";
 import { Audience } from "./Audience.js";
@@ -530,6 +531,13 @@ function Workspace({
             <>
               {tab === "studio" && (
                 <>
+                  {memberRole === "owner" && (
+                    <ComplaintsPanel
+                      key={selected.id}
+                      roomId={selected.id}
+                      merchant
+                    />
+                  )}
                   <Stats analytics={analytics} />
                   <div className="studio-grid">
                     <section>
@@ -682,6 +690,13 @@ function Workspace({
               )}
               {tab === "analytics" && (
                 <>
+                  {memberRole === "owner" && (
+                    <ComplaintsPanel
+                      key={selected.id}
+                      roomId={selected.id}
+                      merchant
+                    />
+                  )}
                   <Stats analytics={analytics} />
                   {(memberRole === "owner" || memberRole === "analyst") && (
                     <AttributionPanel

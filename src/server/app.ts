@@ -1,3 +1,4 @@
+import { attachComplaints } from "./complaints.js";
 import {
   createContentAuthorizationSync,
   recordProfileRevocation,
@@ -430,6 +431,7 @@ export function createApp(
   attachContent(app, db, clock, agentBridge);
   attachAttribution(app, db, owned, clock);
   attachEngagement(app, db, clock);
+  attachComplaints(app, db, clock);
   const agentBasis = (roomId: string, tenant: string) => {
     const r = owned(roomId, tenant);
     const binding = getRoomContentBinding(
