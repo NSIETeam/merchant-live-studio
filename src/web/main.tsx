@@ -1,3 +1,4 @@
+import { AudienceShare } from "./AudienceShare.js";
 import { homeDestinations } from "../shared/home.js";
 import { PersonalHome, type Destination } from "./PersonalHome.js";
 import { Home } from "lucide-react";
@@ -622,6 +623,11 @@ function Workspace({
                               : "开放直播间"}
                         </button>
                       </div>
+                      <AudienceShare
+                        key={selected.id}
+                        url={watchUrl}
+                        title={selected.title}
+                      />
                       {["owner", "presenter"].includes(memberRole) && (
                         <StreamSettings
                           key={selected.id}
@@ -645,6 +651,29 @@ function Workspace({
                               key={id}
                               id={`tool-${id}`}
                               role="tab"
+                              tabIndex={liveTool === id ? 0 : -1}
+                              onKeyDown={(event) => {
+                                const tools = [
+                                  "script",
+                                  "questions",
+                                  "agent",
+                                ] as const;
+                                let next = tools.indexOf(id);
+                                if (event.key === "ArrowRight")
+                                  next = (next + 1) % tools.length;
+                                else if (event.key === "ArrowLeft")
+                                  next =
+                                    (next + tools.length - 1) % tools.length;
+                                else if (event.key === "Home") next = 0;
+                                else if (event.key === "End")
+                                  next = tools.length - 1;
+                                else return;
+                                event.preventDefault();
+                                setLiveTool(tools[next]);
+                                document
+                                  .getElementById(`tool-${tools[next]}`)
+                                  ?.focus();
+                              }}
                               aria-selected={liveTool === id}
                               aria-controls={`panel-${id}`}
                               onClick={() => setLiveTool(id)}

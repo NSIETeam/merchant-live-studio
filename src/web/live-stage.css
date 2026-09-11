@@ -192,3 +192,36 @@
     min-height: 180px;
   }
 }
+.workspace .audience-share {
+  border: 1px solid #dfe5e3;
+  border-radius: 8px;
+  background: #fff;
+  margin: 0 0 10px;
+  padding: 10px 12px;
+}
+.workspace .audience-share summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.audience-share-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+.workspace .audience-share label {
+  margin: 0;
+  min-width: 0;
+}
+.workspace .audience-share input {
+  width: 100%;
+  min-width: 0;
+  font-size: 16px;
+}
+.workspace .audience-share p {
+  margin: 8px 0 0;
+  overflow-wrap: anywhere;
+}
