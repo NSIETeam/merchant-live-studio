@@ -124,10 +124,15 @@ VITE_BASE_PATH=/studio/ npm run build
 
 模型 provider 接口已支持显式配置的兼容 HTTP 服务，当前输出为受约束的事实片段 JSON，而非任意自由话术；事实与出处由本地映射。设置方法及准确边界见[Agent 说明](docs/agent.md)。渠道另设身份/分享适配契约，`GET /api/channels` 如实报告网页入口可用、微信及合作方未配置；不模拟微信授权或真实收款。红包 provider 只能为 `simulation`，微信通知接口固定返回 501，接入要求见[支付说明](docs/payments.md)。
 
+## 资料与评测
+
+0.4.0 增加 CSV/JSON 资料预览与待审导入、授权样例新草稿、题组修订、双版本批量比较及人工评分。模型仍默认关闭；短题评测不等于完整讲稿审核发布。操作与边界见[资料与评测说明](docs/training.md)。
+
 ## 文档
 
 - [架构与数据流](docs/architecture.md)
 - [独立 Agent、提示词版本与模型配置](docs/agent.md)
+- [资料导入与场景评测](docs/training.md)
 - [接口索引](docs/api.md)
 - [流媒体接入](docs/streaming.md)
 - [服务器部署与测试](docs/server-testing.md)

@@ -137,3 +137,22 @@ MediaMTX 支持 RTMP/RTMPS 踢连接后再次查询。未配置、协议不支�
 任务单独读取、最新建议读取、创建接口的幂等重放结果及反馈结果都经过同一 `validateRun` 复核：引用事实撤回会标记 `stale`；直播任务在场次改变、房间结束或距创建超过 120 秒时也会标记 `stale` 并给出 `staleReason`。该标记在返回时根据当前直播数据计算，提交反馈或重放请求不能使旧结果重新有效。过期结果仅供历史复盘，当前建议需重新生成。
 
 详细数据结构见 `src/shared/agent.ts`，执行与模型契约见[Agent 说明](agent.md)。当前模型未配置；试演、反馈和阶段摘要不表示已经完成模型调优或微调。
+
+## 资料和场景评测（0.4.0）
+
+以下接口均要求商家会话、同源 JSON 写入，并校验房间/租户。Agent 仍通过私有接口使用服务端组装的审核事实。
+
+| 方法与路径                                                      | 内容                                                                           |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| GET `/api/merchant/rooms/:id/materials`                         | 最近导入批次与来源                                                             |
+| POST `/api/merchant/rooms/:id/materials/preview`                | `{sourceName,format,content}`，只读预览                                        |
+| POST `/api/merchant/rooms/:id/materials/import`                 | 同上加 `idempotencyKey`；原子待审导入                                          |
+| POST `/api/merchant/agent/profiles/:id/examples/import`         | `{sourceName,authorization,examples,baseVersion,idempotencyKey}`；新草稿及回执 |
+| GET `/api/merchant/agent/profiles/:id/example-imports`          | 样例来源和授权声明回执                                                         |
+| GET/POST `/api/merchant/rooms/:id/agent/suites`                 | 读取题组；`{name,cases}` 保存不可变修订                                        |
+| POST `/api/merchant/rooms/:id/agent/evaluations`                | `{suiteId,variants,idempotencyKey}`；整批入队返回 202                          |
+| GET `/api/merchant/rooms/:id/agent/evaluations`                 | 最近十份报告                                                                   |
+| GET `/api/merchant/agent/evaluations/:id`                       | 含历史快照与当前过期标记的报告                                                 |
+| POST `/api/merchant/agent/evaluations/:id/items/:itemId/review` | `{style,naturalness,decision,note}`；1–5 分人工评价，非发布审批                |
+
+完整数据契约见 `src/shared/training.ts`。材料 24 KiB/40条，样例合并最多12条，题组最多8题/2方案。新增资料不自动批准；同键不同请求409，评测队列容量不足429；新评分前后复核依据，已经过期的报告不接受新评分。

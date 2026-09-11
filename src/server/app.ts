@@ -22,6 +22,7 @@ import {
 } from "./services/rewards.js";
 import { HttpAgentBridge, type AgentBridge } from "./services/agent-bridge.js";
 import { attachAgentGateway } from "./agent-gateway.js";
+import { attachMaterials } from "./materials.js";
 import { channelCapabilities } from "../shared/channels.js";
 import type { Analytics, Fact, Room } from "../shared/types.js";
 
@@ -385,6 +386,7 @@ export function createApp(
     );
     return c.json({ ok: true });
   });
+  attachMaterials(app, db, owned, (roomId) => factsFor(db, roomId), clock);
   attachAgentGateway(
     app,
     agentBridge,

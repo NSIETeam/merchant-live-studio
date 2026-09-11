@@ -11,6 +11,7 @@ import {
 } from "./core/index.js";
 import type { AgentConfig } from "./config.js";
 import { agentTransaction, type AgentDB } from "./db.js";
+import { registerTrainingRoutes, type ReservedRun } from "./training.js";
 import type {
   AgentExecutionInput,
   AgentProfile,
@@ -194,6 +195,50 @@ export function createAgentService(
       .get(tenant, id) as RunRow | undefined;
     if (!row) throw new HTTPException(404, { message: "Agent run not found" });
     return row;
+  };
+  // Both single requests and evaluation batches use the same durable queue.
+  // Callers hold one transaction for capacity, snapshots and job insertion.
+  const reserve = (tenant: string, jobs: ReservedRun[]): string[] => {
+    const global = (
+      db
+        .prepare(
+          "SELECT count(*) AS count FROM agent_runs WHERE status IN ('queued','running')",
+        )
+        .get() as { count: number }
+    ).count;
+    const own = (
+      db
+        .prepare(
+          "SELECT count(*) AS count FROM agent_runs WHERE tenant_id=? AND status IN ('queued','running')",
+        )
+        .get(tenant) as { count: number }
+    ).count;
+    if (
+      global + jobs.length > config.queueLimit ||
+      own + jobs.length > config.tenantQueueLimit
+    )
+      throw new HTTPException(429, {
+        message: "Agent queue is full; try again later",
+      });
+    return jobs.map((job) => {
+      const id = randomUUID();
+      db.prepare(
+        "INSERT INTO agent_runs(tenant_id,id,room_id,profile_id,prompt_version,mode,status,idempotency_key,request_digest,context_digest,input_json,created_at) VALUES(?,?,?,?,?,?,'queued',?,?,?,?,?)",
+      ).run(
+        tenant,
+        id,
+        job.snapshot.context.roomId,
+        job.snapshot.profile.id,
+        job.snapshot.prompt.version,
+        job.mode,
+        job.idempotencyKey,
+        job.requestDigest,
+        digest(job.snapshot.context),
+        JSON.stringify(job.snapshot),
+        clock(),
+      );
+      return id;
+    });
   };
   const seed = (tenant: string) =>
     agentTransaction(db, () => {
@@ -530,41 +575,14 @@ export function createAgentService(
         profile: profileDto(p),
         prompt: version(tenant, p.id, number),
       };
-      const global = (
-        db
-          .prepare(
-            "SELECT count(*) AS count FROM agent_runs WHERE status IN ('queued','running')",
-          )
-          .get() as { count: number }
-      ).count;
-      const own = (
-        db
-          .prepare(
-            "SELECT count(*) AS count FROM agent_runs WHERE tenant_id=? AND status IN ('queued','running')",
-          )
-          .get(tenant) as { count: number }
-      ).count;
-      if (global >= config.queueLimit || own >= config.tenantQueueLimit)
-        throw new HTTPException(429, {
-          message: "Agent queue is full; try again later",
-        });
-      const runId = randomUUID();
-      db.prepare(
-        "INSERT INTO agent_runs(tenant_id,id,room_id,profile_id,prompt_version,mode,status,idempotency_key,request_digest,context_digest,input_json,created_at) VALUES(?,?,?,?,?,?,'queued',?,?,?,?,?)",
-      ).run(
-        tenant,
-        runId,
-        input.context.roomId,
-        p.id,
-        number,
-        input.mode,
-        input.idempotencyKey,
-        requestDigest,
-        digest(input.context),
-        JSON.stringify(snapshot),
-        clock(),
-      );
-      return runId;
+      return reserve(tenant, [
+        {
+          snapshot,
+          mode: input.mode,
+          idempotencyKey: input.idempotencyKey,
+          requestDigest,
+        },
+      ])[0];
     });
     const output = runDto(run(tenant, id));
     schedule();
@@ -630,6 +648,17 @@ export function createAgentService(
         prompt: version(tenant, p.id, p.published_version ?? p.latest_version),
       }),
     );
+  });
+  registerTrainingRoutes(app, {
+    db,
+    clock,
+    digest,
+    contextSchema,
+    profile: (tenant, id) => profileDto(profile(tenant, id)),
+    version,
+    run: (tenant, id) => runDto(run(tenant, id)),
+    reserve,
+    schedule,
   });
   if (options.autoStart !== false) start();
   return { app, start, close, status };

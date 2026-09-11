@@ -70,6 +70,20 @@ export function openDatabase(path: string) {
       INSERT INTO schema_migrations VALUES(2,unixepoch());
     `);
     });
+  if (version < 3)
+    transaction(db, () => {
+      db.exec(`
+        CREATE TABLE material_imports (
+          id TEXT PRIMARY KEY, room_id TEXT NOT NULL REFERENCES rooms(id),
+          source_name TEXT NOT NULL, format TEXT NOT NULL CHECK(format IN ('csv','json')),
+          content_hash TEXT NOT NULL, request_hash TEXT NOT NULL, idempotency_key TEXT NOT NULL,
+          created_at INTEGER NOT NULL, imported_count INTEGER NOT NULL, skipped_count INTEGER NOT NULL,
+          fact_ids_json TEXT NOT NULL, UNIQUE(room_id,idempotency_key)
+        );
+        CREATE INDEX material_imports_room ON material_imports(room_id,created_at);
+        INSERT INTO schema_migrations VALUES(3,unixepoch());
+      `);
+    });
   return db;
 }
 export type DB = ReturnType<typeof openDatabase>;

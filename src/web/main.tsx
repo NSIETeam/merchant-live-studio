@@ -1,3 +1,4 @@
+import { TrainingWorkbench } from "./TrainingWorkbench.js";
 import { AgentWorkbench } from "./AgentWorkbench.js";
 import { AgentLiveCard } from "./AgentLiveCard.js";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -10,6 +11,7 @@ import {
   ChevronRight,
   Clipboard,
   Eye,
+  FileCheck2,
   Gift,
   Layers,
   LogOut,
@@ -38,7 +40,7 @@ import { api, duration, money } from "./api";
 import { Player } from "./Player";
 import "./styles.css";
 
-type Tab = "studio" | "copilot" | "rewards" | "analytics";
+type Tab = "studio" | "copilot" | "training" | "rewards" | "analytics";
 const statusText = { draft: "待开播", live: "直播间开放", ended: "已结束" };
 function useClock() {
   const [now, set] = useState(Date.now());
@@ -305,6 +307,7 @@ function Workspace({
   const tabs: { id: Tab; label: string; icon: typeof Radio }[] = [
     { id: "studio", label: "直播工作台", icon: Video },
     { id: "copilot", label: "直播 Agent", icon: Sparkles },
+    { id: "training", label: "资料与评测", icon: FileCheck2 },
     { id: "rewards", label: "红包活动", icon: Gift },
     { id: "analytics", label: "直播分析", icon: Activity },
   ];
@@ -371,9 +374,11 @@ function Workspace({
                   ? "ON AIR, IN CONTROL"
                   : tab === "copilot"
                     ? "SPEAK WITH CONFIDENCE"
-                    : tab === "rewards"
-                      ? "MAKE EVERY MOMENT COUNT"
-                      : "MEASURE WHAT HAPPENED"}
+                    : tab === "training"
+                      ? "PREPARE, COMPARE, REVIEW"
+                      : tab === "rewards"
+                        ? "MAKE EVERY MOMENT COUNT"
+                        : "MEASURE WHAT HAPPENED"}
               </span>
               <h1>{tabs.find((t) => t.id === tab)?.label}</h1>
               <p>
@@ -381,9 +386,11 @@ function Workspace({
                   ? "从开播准备，到现场互动。"
                   : tab === "copilot"
                     ? "用已核实的信息，组织下一句话。"
-                    : tab === "rewards"
-                      ? "设置领取规则，追踪每一笔演示记录。"
-                      : "来自当前直播间的实际访问与互动记录。"}
+                    : tab === "training"
+                      ? "整理商品证据与品牌话术，用场景打磨表达。"
+                      : tab === "rewards"
+                        ? "设置领取规则，追踪每一笔演示记录。"
+                        : "来自当前直播间的实际访问与互动记录。"}
               </p>
             </div>
             <button className="primary" onClick={() => setCreating(true)}>
@@ -573,6 +580,12 @@ function Workspace({
                   </div>
                 </>
               )}
+              {tab === "training" && (
+                <TrainingWorkbench
+                  roomId={selected.id}
+                  productName={selected.productName}
+                />
+              )}
               {tab === "copilot" && (
                 <AgentWorkbench
                   key={selected.id}
@@ -659,7 +672,7 @@ function Workspace({
           )}
         </div>
         <footer>
-          Live Studio <span>直播底座 + 独立 Agent · 0.3</span>
+          Live Studio <span>直播底座 + 独立 Agent · 0.4</span>
         </footer>
       </main>
       {creating && (

@@ -55,7 +55,48 @@ export function openAgentDatabase(path: string): AgentDB {
       );
       CREATE INDEX IF NOT EXISTS agent_runs_queue ON agent_runs(status,created_at);
       CREATE INDEX IF NOT EXISTS agent_runs_tenant_room ON agent_runs(tenant_id,room_id,created_at);
+      CREATE TABLE IF NOT EXISTS agent_example_imports (
+        tenant_id TEXT NOT NULL, profile_id TEXT NOT NULL, id TEXT NOT NULL,
+        idempotency_key TEXT NOT NULL, request_digest TEXT NOT NULL,
+        version INTEGER NOT NULL, receipt_json TEXT NOT NULL, created_at INTEGER NOT NULL,
+        PRIMARY KEY(tenant_id,id), UNIQUE(tenant_id,profile_id,idempotency_key),
+        FOREIGN KEY(tenant_id,profile_id,version)
+          REFERENCES agent_prompt_versions(tenant_id,profile_id,version)
+      );
+      CREATE TABLE IF NOT EXISTS agent_evaluation_suites (
+        tenant_id TEXT NOT NULL, id TEXT NOT NULL, room_id TEXT NOT NULL,
+        name TEXT NOT NULL, revision INTEGER NOT NULL, cases_json TEXT NOT NULL,
+        created_at INTEGER NOT NULL, PRIMARY KEY(tenant_id,id),
+        UNIQUE(tenant_id,room_id,name,revision)
+      );
+      CREATE TABLE IF NOT EXISTS agent_evaluations (
+        tenant_id TEXT NOT NULL, id TEXT NOT NULL, room_id TEXT NOT NULL,
+        suite_id TEXT NOT NULL, suite_json TEXT NOT NULL, variants_json TEXT NOT NULL,
+        context_json TEXT NOT NULL, idempotency_key TEXT NOT NULL, request_digest TEXT NOT NULL,
+        created_at INTEGER NOT NULL, PRIMARY KEY(tenant_id,id), UNIQUE(tenant_id,idempotency_key),
+        FOREIGN KEY(tenant_id,suite_id) REFERENCES agent_evaluation_suites(tenant_id,id)
+      );
+      CREATE INDEX IF NOT EXISTS agent_evaluations_room ON agent_evaluations(tenant_id,room_id,created_at);
+      CREATE TABLE IF NOT EXISTS agent_evaluation_items (
+        tenant_id TEXT NOT NULL, id TEXT NOT NULL, evaluation_id TEXT NOT NULL,
+        case_id TEXT NOT NULL, variant_index INTEGER NOT NULL, run_id TEXT NOT NULL,
+        review_json TEXT, PRIMARY KEY(tenant_id,id), UNIQUE(tenant_id,evaluation_id,case_id,variant_index),
+        FOREIGN KEY(tenant_id,evaluation_id) REFERENCES agent_evaluations(tenant_id,id),
+        FOREIGN KEY(tenant_id,run_id) REFERENCES agent_runs(tenant_id,id)
+      );
     `);
+    for (const table of [
+      "agent_example_imports",
+      "agent_evaluation_suites",
+      "agent_evaluations",
+    ]) {
+      db.exec(`
+        CREATE TRIGGER IF NOT EXISTS ${table}_immutable_update
+          BEFORE UPDATE ON ${table} BEGIN SELECT RAISE(ABORT,'Training snapshots are immutable'); END;
+        CREATE TRIGGER IF NOT EXISTS ${table}_immutable_delete
+          BEFORE DELETE ON ${table} BEGIN SELECT RAISE(ABORT,'Training snapshots are immutable'); END;
+      `);
+    }
     db.prepare(
       "UPDATE agent_runs SET status='failed',error=?,completed_at=? WHERE status='running'",
     ).run(

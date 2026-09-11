@@ -2,6 +2,7 @@ import type { Hono } from "hono";
 import { z } from "zod";
 import type { AgentBridge } from "./services/agent-bridge.js";
 import type { AgentContext, AgentRun } from "../shared/agent.js";
+import { attachTrainingGateway } from "./training-gateway.js";
 
 const id = (value: string) =>
   z
@@ -40,6 +41,7 @@ export function attachAgentGateway(
   ) => AgentContext,
   validateRun: (tenant: string, run: AgentRun) => AgentRun = (_, run) => run,
 ) {
+  attachTrainingGateway(app, bridge, contextFor, validateRun);
   app.get("/api/merchant/agent/status", async (c) =>
     c.json(await bridge.status()),
   );
