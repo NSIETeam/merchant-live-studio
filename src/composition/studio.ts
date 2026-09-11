@@ -33,7 +33,10 @@ import {
   createRecordingStorage,
   type Config,
 } from "../platform/infrastructure/public.js";
-import { attachOperations } from "../platform/operations/public.js";
+import {
+  attachCapacityGuard,
+  attachOperations,
+} from "../platform/operations/public.js";
 import type { DB } from "../shared/persistence.js";
 import { createContentSystem } from "./content.js";
 
@@ -50,6 +53,7 @@ export function createStudio(
     config.recordingsRoot,
     config.recordingOutbox,
   );
+  const capacity = attachCapacityGuard(app, config);
   const identity = createIdentity(db, config, clock);
   const content = createContentSystem(db, clock, agentBridge);
   let live: ReturnType<typeof createLive>;
@@ -91,7 +95,13 @@ export function createStudio(
     drafts: content.content.draftCount(tenant),
     ...content.live.preparationCounts(tenant),
   }));
-  attachOperations(app, db, config, { configured: live.mediaConfigured });
+  attachOperations(
+    app,
+    db,
+    config,
+    { configured: live.mediaConfigured },
+    capacity,
+  );
   live.attach(app);
   attachRecordings(
     app,

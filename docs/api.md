@@ -15,6 +15,9 @@
 | 公开   | `POST /auth/demo`                                                   | 本地演示登录，生产禁用                                        |
 | 公开   | `POST /auth/merchant`                                               | `{merchantId,token}`，签发含 sid 与凭据版本的商家 Cookie      |
 | 公开   | `POST /auth/viewer`                                                 | 签发/复用匿名互动 Cookie，不是观看前置条件                    |
+| 公开   | `GET /channels`                                                     | 按服务器真实配置报告网页、微信与合作方能力                    |
+| 公开   | `GET /channels/wechat/authorize?roomId=...`                         | 已配置时签发短时 state 并返回公众号静默授权地址               |
+| 微信   | `GET /channels/wechat/callback?code=...&state=...`                  | 校验一次性 state、服务端换码并回到原观众页                    |
 | 会话   | `POST /auth/logout`                                                 | 持久撤销当前商家 sid，并清 Cookie；重复调用安全               |
 | 商家   | `GET /merchant/rooms`                                               | 仅当前商家的房间                                              |
 | 商家   | `POST /merchant/rooms`                                              | `{title,productName}`                                         |
@@ -55,7 +58,7 @@
 
 商家会话有独立 `sid`，注销后重放原 Cookie 仍返回 401；同商家的其他有效登录不受影响。凭据删除或轮换使旧凭据版本失效，部署环境配置需重启后生效。Cookie 为 HttpOnly / SameSite=Strict，生产为 Secure，Path 为 `APP_BASE_PATH`。
 
-观众建会话返回 `viewerId`、`identity:"anonymous"`、`canReceiveRealMoney:false`。公开房间和 HLS 不依赖 Cookie；只有提问、心跳、领取及领取历史需要观众身份。
+观众建会话返回 `viewerId`、`identity`、`channel`、`verified`、`canReceiveRealMoney:false`。默认身份是匿名网页会话；公众号 OAuth 成功后为不透明且稳定的 `wechat` 会话。原始 OpenID 与 access token 不进入浏览器，身份验证也不等于收款授权。公开房间和 HLS 不依赖 Cookie；只有提问、心跳、领取及领取历史需要观众身份。
 
 商家鉴权每分钟 60 次、观众建会话每分钟 600 次，预算独立。读取和写入限额分别为每分钟 1200、300 次；已验证业务会话单独计数，商家登录预算按可信客户端地址计数。超额返回 429 与 `Retry-After: 60`。仅 `TRUSTED_PROXY_IPS` 中的代理可提供有效 `X-Real-IP`，不能用观众 Cookie 或任意代理头绕过商家登录预算。
 
@@ -162,7 +165,7 @@ MediaMTX 支持 RTMP/RTMPS 踢连接后再次查询。未配置、协议不支�
 | `POST /merchant/agent/runs/:id/feedback`                      | rating 为 useful/needs_work，note 为复盘意见；返回结果也复核事实撤回与过期状态                                                                     |
 | `GET /merchant/rooms/:id/agent/latest`                        | 只读取最近的 live 任务；rehearsal 草稿不会覆盖直播卡，Agent 离线返回 available=false                                                               |
 
-公开 `GET /api/channels` 不要求商家会话，报告当前渠道能力：网页入口可用，微信和合作方未配置，不冒充已验证身份、签名分享或真实支付。
+公开 `GET /api/channels` 不要求商家会话，按当前配置报告渠道能力：网页入口始终可用；公众号 OAuth 完整配置后微信观众身份可用；签名分享和真实支付继续为 false。授权 state 同时使用服务端签名、10 分钟期限、Lax HttpOnly cookie 和一次性 nonce，错配、过期或重放均拒绝。换码固定访问微信 HTTPS 地址，8 秒超时且响应上限为 8 KiB。稳定 viewerId 由独立的 `WECHAT_IDENTITY_SECRET` 派生，该密钥轮换会改变后续身份关联，不能与普通会话密钥一起随意轮换。
 
 运行输入的商品、已审核事实与活动提示由网关从当前商家直播间提取。正文中附加 `context`、`facts`、`tenant`、模型地址或密钥会被拒绝。试演可指定草稿版本；`live` 任务入队时必须使用已发布版本。任务固定入队时的提示词与上下文快照，之后发布新版本不会改写历史任务。
 
