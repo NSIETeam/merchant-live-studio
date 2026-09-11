@@ -1,3 +1,4 @@
+import { findSessionAccess } from "./persistence/access-queries.js";
 import type { Context } from "hono";
 import { getCookie, setCookie } from "hono/cookie";
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
@@ -10,6 +11,7 @@ export interface Session {
   expires: number;
   sid: string;
   credentialVersion?: string;
+  accessVersion?: number;
 }
 const credentialVersion = (config: Config, id: string) =>
   createHmac("sha256", config.sessionSecret)
@@ -32,8 +34,15 @@ export function issueSession(
   config: Config,
   role: Session["role"],
   id: string = randomUUID(),
+  db?: DB,
 ) {
+  const access =
+    role === "merchant" && db
+      ? findSessionAccess(db, id)
+      : null;
+  if (access?.disabled) throw new Error("Account disabled");
   const session = {
+    accessVersion: Number(access?.version || 0),
     id,
     role,
     sid: randomUUID(),
@@ -71,6 +80,14 @@ export function readSession(
   if (!equalSecret(signature, expected)) return null;
   try {
     const session = JSON.parse(Buffer.from(payload, "base64url").toString());
+    if (role === "merchant" && db) {
+      const access = findSessionAccess(db, session.id);
+      if (
+        access?.disabled ||
+        Number(access?.version || 0) !== (session.accessVersion ?? 0)
+      )
+        return null;
+    }
     if (typeof session.sid !== "string") return null;
     if (
       role === "merchant" &&

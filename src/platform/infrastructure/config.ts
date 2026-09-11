@@ -3,6 +3,9 @@ import { z } from "zod";
 import type { Membership } from "../../shared/membership.js";
 export interface Config {
   production: boolean;
+  recordingsRoot: string;
+  recordingOutbox: string;
+  requireReviewedLive: boolean;
   demoMode: boolean;
   host: string;
   port: number;
@@ -97,8 +100,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     throw new Error(
       "The known development Agent token cannot be used in production",
     );
+  if (Boolean(env.RECORDINGS_ROOT) !== Boolean(env.RECORDING_OUTBOX))
+    throw new Error("Configure both RECORDINGS_ROOT and RECORDING_OUTBOX");
   return {
+    recordingsRoot: env.RECORDINGS_ROOT || "",
+    recordingOutbox: env.RECORDING_OUTBOX || "",
     production,
+    requireReviewedLive: production || env.REQUIRE_REVIEWED_LIVE === "true",
     demoMode,
     sessionSecret,
     merchantCredentials,

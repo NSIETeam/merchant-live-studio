@@ -891,3 +891,38 @@ test("Restart preserves imports, evaluation snapshots, reviews and idempotency; 
     rmSync(folder, { recursive: true, force: true });
   }
 });
+
+test("importing authorized examples preserves the presenter dossier in the next immutable version", async () => {
+  const f = fixture();
+  try {
+    const presenter = {
+      displayName: "合成主播",
+      roleDescription: "测试讲解员",
+      speakingStyle: "温和，短句",
+      pace: "balanced",
+      authorizationReference: "合成授权记录，不代表真人",
+      authorizationConfirmed: true,
+    };
+    const p = (
+      await f.call("/v1/profiles", "POST", {
+        ...content,
+        name: "主播样例测试",
+        kind: "brand",
+        presenter,
+      })
+    ).data.profile;
+    const imported = await f.call(
+      "/v1/profiles/" + p.id + "/examples/import",
+      "POST",
+      exampleBody(),
+    );
+    assert.equal(imported.status, 201);
+    assert.deepEqual(imported.data.version.presenter, presenter);
+    const history = (await f.call("/v1/profiles/" + p.id + "/versions")).data
+      .versions;
+    assert.deepEqual(history[1].presenter, presenter);
+    assert.equal(history[1].examples.length, 0);
+  } finally {
+    await f.dispose();
+  }
+});

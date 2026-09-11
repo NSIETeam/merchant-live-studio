@@ -116,6 +116,7 @@ export interface ScriptReviewRecord {
   } | null;
 }
 export interface ScriptVersion {
+  authorizationIssue?: string;
   courseId: string;
   version: number;
   productId: string;

@@ -11,14 +11,16 @@ import { performance } from "node:perf_hooks";
 // Correctness and measured local latency only. This is not a capacity benchmark.
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2);
-if (
-  args.some((arg) => !/^--concurrency=(?:2\d|3\d|40)$/.test(arg)) ||
-  args.length > 1
-)
+const concurrency =
+  args.length === 1 && /^--concurrency=\d+$/.test(args[0])
+    ? Number(args[0].split("=")[1])
+    : args.length === 0
+      ? 20
+      : NaN;
+if (!Number.isInteger(concurrency) || concurrency < 20 || concurrency > 500)
   throw new Error(
-    "Usage: node scripts/concurrency-smoke.mjs [--concurrency=20..40]",
+    "Usage: node scripts/concurrency-smoke.mjs [--concurrency=20..500]",
   );
-const concurrency = args.length ? Number(args[0].split("=")[1]) : 20;
 const rounds = Math.ceil(400 / (concurrency * 2));
 const startedAt = performance.now();
 const abort = new AbortController();
@@ -455,11 +457,28 @@ try {
         ? value
         : false;
     },
+    // Worker drains at most 100 jobs per two-second tick; retain that bound.
+    220,
   );
   assert.equal(settled.data.claims, offeredCount + 2);
-  const ledger = (
-    await request(`/api/merchant/rooms/${room}/ledger`, { cookie: merchant })
-  ).data.entries;
+  const ledger = [];
+  const cursors = new Set();
+  let before = null;
+  do {
+    const page = (
+      await request(
+        `/api/merchant/rooms/${room}/ledger${before ? `?before=${encodeURIComponent(before)}` : ""}`,
+        { cookie: merchant },
+      )
+    ).data;
+    ledger.push(...page.entries);
+    before = page.nextBefore;
+    if (before) {
+      assert.ok(!cursors.has(before), "ledger cursor must advance");
+      cursors.add(before);
+    }
+  } while (before);
+  assert.equal(new Set(ledger.map((row) => row.id)).size, ledger.length);
   const reserved = ledger.filter(
     (r) =>
       r.campaignId === pool.id &&

@@ -1,6 +1,6 @@
 import { useState } from "react";
+import type { ScriptVersion, ScriptParagraph } from "../../shared/content.js";
 import { compareScripts } from "../../shared/content-diff.js";
-import type { ScriptParagraph, ScriptVersion } from "../../shared/content.js";
 import "../review/review-history.css";
 
 function ParagraphSnapshot({

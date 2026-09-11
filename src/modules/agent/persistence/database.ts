@@ -30,6 +30,12 @@ export function openAgentDatabase(path: string): AgentDB {
         published_version INTEGER, latest_version INTEGER NOT NULL,
         created_at INTEGER NOT NULL, PRIMARY KEY(tenant_id,id)
       );
+      CREATE TABLE IF NOT EXISTS agent_profile_revocations (
+        tenant_id TEXT NOT NULL,profile_id TEXT NOT NULL,reason TEXT NOT NULL,actor_id TEXT NOT NULL,created_at INTEGER NOT NULL,
+        PRIMARY KEY(tenant_id,profile_id),FOREIGN KEY(tenant_id,profile_id) REFERENCES agent_profiles(tenant_id,id)
+      );
+      CREATE TRIGGER IF NOT EXISTS agent_profile_revocations_immutable_update BEFORE UPDATE ON agent_profile_revocations BEGIN SELECT RAISE(ABORT,'Revocations are immutable'); END;
+      CREATE TRIGGER IF NOT EXISTS agent_profile_revocations_immutable_delete BEFORE DELETE ON agent_profile_revocations BEGIN SELECT RAISE(ABORT,'Revocations are immutable'); END;
       CREATE TABLE IF NOT EXISTS agent_prompt_versions (
         tenant_id TEXT NOT NULL, profile_id TEXT NOT NULL, version INTEGER NOT NULL,
         content_json TEXT NOT NULL, created_at INTEGER NOT NULL,

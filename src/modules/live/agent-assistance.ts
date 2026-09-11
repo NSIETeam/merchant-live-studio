@@ -1,3 +1,4 @@
+import type { AgentProfile } from "../../shared/agent.js";
 import type { Hono } from "hono";
 import {
   attachAgentGateway,
@@ -26,6 +27,7 @@ export function attachLiveAssistance(
       independent: boolean,
     ) => ContentBinding | null;
     factsFor: (id: string) => Fact[];
+    onRevocation: (tenant: string, profile: AgentProfile) => void;
   },
   clock: () => number,
 ) {
@@ -120,8 +122,8 @@ export function attachLiveAssistance(
           clock() - run.createdAt > 120000);
       return {
         ...run,
-        stale: Boolean(basis.stale || evidenceChanged || expired),
-        staleReason: basis.stale
+        stale: Boolean(run.stale || basis.stale || evidenceChanged || expired),
+        staleReason: run.stale ? run.staleReason : basis.stale
           ? "本场定稿的商品依据已变化，请先复核课程讲稿。"
           : evidenceChanged
             ? "引用的事实已撤回，请重新生成。"
@@ -130,5 +132,6 @@ export function attachLiveAssistance(
               : undefined,
       };
     },
+    ports.onRevocation,
   );
 }

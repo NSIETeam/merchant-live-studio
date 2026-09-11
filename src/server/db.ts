@@ -231,6 +231,172 @@ export function openDatabase(path: string) {
       INSERT INTO schema_migrations VALUES(8,unixepoch());
     `);
     });
+  if (version < 9)
+    transaction(db, () => {
+      db.exec(`
+      CREATE TABLE attribution_stores(id TEXT PRIMARY KEY,merchant_id TEXT NOT NULL,name TEXT NOT NULL,external_ref TEXT NOT NULL,created_at INTEGER NOT NULL,UNIQUE(merchant_id,external_ref));
+      CREATE TABLE attribution_sources(code TEXT PRIMARY KEY,store_id TEXT NOT NULL REFERENCES attribution_stores(id),room_id TEXT NOT NULL REFERENCES rooms(id),label TEXT NOT NULL,created_at INTEGER NOT NULL,disabled_at INTEGER);
+      CREATE INDEX attribution_sources_room ON attribution_sources(room_id,store_id);
+      CREATE TABLE attribution_visits(room_id TEXT NOT NULL,viewer_id TEXT NOT NULL,source_code TEXT NOT NULL REFERENCES attribution_sources(code),attributed_at INTEGER NOT NULL,watch_seconds_baseline INTEGER NOT NULL,
+        PRIMARY KEY(room_id,viewer_id),FOREIGN KEY(room_id,viewer_id) REFERENCES visits(room_id,viewer_id));
+      CREATE TABLE offline_batches(id TEXT PRIMARY KEY,merchant_id TEXT NOT NULL,store_id TEXT NOT NULL REFERENCES attribution_stores(id),idempotency_key TEXT NOT NULL,request_hash TEXT NOT NULL,source_name TEXT NOT NULL,actor_id TEXT NOT NULL,created_at INTEGER NOT NULL,receipt_json TEXT NOT NULL,UNIQUE(merchant_id,idempotency_key));
+      CREATE TABLE offline_records(id TEXT PRIMARY KEY,merchant_id TEXT NOT NULL,store_id TEXT NOT NULL REFERENCES attribution_stores(id),kind TEXT NOT NULL CHECK(kind IN ('visit','order','cost')),external_id TEXT NOT NULL,revision INTEGER NOT NULL,
+        source_code TEXT NOT NULL,linked_source_code TEXT REFERENCES attribution_sources(code),match_state TEXT NOT NULL,customer_ref TEXT NOT NULL,occurred_at INTEGER NOT NULL,amount_cents INTEGER NOT NULL CHECK(amount_cents>=0),voided INTEGER NOT NULL CHECK(voided IN (0,1)),note TEXT NOT NULL,actor_id TEXT NOT NULL,created_at INTEGER NOT NULL,batch_id TEXT NOT NULL REFERENCES offline_batches(id),
+        UNIQUE(merchant_id,store_id,kind,external_id,revision));
+      CREATE INDEX offline_records_source ON offline_records(linked_source_code);
+      CREATE INDEX offline_records_store ON offline_records(merchant_id,store_id,occurred_at);
+      INSERT INTO schema_migrations VALUES(9,unixepoch());
+    `);
+      for (const table of [
+        "attribution_visits",
+        "offline_batches",
+        "offline_records",
+      ])
+        db.exec(`
+      CREATE TRIGGER ${table}_immutable_update BEFORE UPDATE ON ${table} BEGIN SELECT RAISE(ABORT,'Attribution history is immutable'); END;
+      CREATE TRIGGER ${table}_immutable_delete BEFORE DELETE ON ${table} BEGIN SELECT RAISE(ABORT,'Attribution history is immutable'); END;
+    `);
+    });
+  if (version < 10)
+    transaction(db, () => {
+      db.exec(`
+        CREATE TABLE engagement_programs(room_id TEXT NOT NULL REFERENCES rooms(id),version INTEGER NOT NULL,enabled INTEGER NOT NULL CHECK(enabled IN(0,1)),points INTEGER NOT NULL CHECK(points BETWEEN 1 AND 10000),min_watch_seconds INTEGER NOT NULL CHECK(min_watch_seconds BETWEEN 0 AND 14400),daily_limit INTEGER NOT NULL CHECK(daily_limit BETWEEN 1 AND 100000),actor_id TEXT NOT NULL,created_at INTEGER NOT NULL,PRIMARY KEY(room_id,version));
+        CREATE TABLE engagement_checkins(id TEXT PRIMARY KEY,room_id TEXT NOT NULL REFERENCES rooms(id),viewer_id TEXT NOT NULL,day TEXT NOT NULL,program_version INTEGER NOT NULL,points INTEGER NOT NULL,created_at INTEGER NOT NULL,UNIQUE(room_id,viewer_id,day));
+        CREATE TABLE engagement_points(id TEXT PRIMARY KEY,merchant_id TEXT NOT NULL,viewer_id TEXT NOT NULL,delta INTEGER NOT NULL CHECK(delta!=0),reason TEXT NOT NULL,reference_id TEXT NOT NULL,created_at INTEGER NOT NULL,UNIQUE(reason,reference_id));
+        CREATE INDEX engagement_points_balance ON engagement_points(merchant_id,viewer_id);
+        CREATE TABLE engagement_gifts(id TEXT PRIMARY KEY,merchant_id TEXT NOT NULL,title TEXT NOT NULL,description TEXT NOT NULL,points INTEGER NOT NULL CHECK(points>0),stock INTEGER NOT NULL CHECK(stock>=0),enabled INTEGER NOT NULL CHECK(enabled IN(0,1)),version INTEGER NOT NULL,created_at INTEGER NOT NULL);
+        CREATE TABLE engagement_gift_history(id TEXT PRIMARY KEY,gift_id TEXT NOT NULL REFERENCES engagement_gifts(id),version INTEGER NOT NULL,snapshot_json TEXT NOT NULL,actor_id TEXT NOT NULL,created_at INTEGER NOT NULL,UNIQUE(gift_id,version));
+        CREATE TABLE engagement_redemptions(id TEXT PRIMARY KEY,merchant_id TEXT NOT NULL,viewer_id TEXT NOT NULL,gift_id TEXT NOT NULL REFERENCES engagement_gifts(id),title TEXT NOT NULL,points INTEGER NOT NULL,code TEXT NOT NULL UNIQUE,state TEXT NOT NULL CHECK(state IN('reserved','fulfilled','cancelled')),idempotency_key TEXT NOT NULL,created_at INTEGER NOT NULL,UNIQUE(merchant_id,viewer_id,idempotency_key));
+        CREATE TABLE engagement_events(id TEXT PRIMARY KEY,redemption_id TEXT NOT NULL REFERENCES engagement_redemptions(id),state TEXT NOT NULL,actor_id TEXT NOT NULL,note TEXT NOT NULL,created_at INTEGER NOT NULL,UNIQUE(redemption_id,state));
+        CREATE INDEX engagement_redemptions_owner ON engagement_redemptions(merchant_id,viewer_id,created_at);
+      `);
+      for (const table of [
+        "engagement_programs",
+        "engagement_checkins",
+        "engagement_points",
+        "engagement_gift_history",
+        "engagement_events",
+      ]) {
+        db.exec(
+          `CREATE TRIGGER ${table}_immutable_update BEFORE UPDATE ON ${table} BEGIN SELECT RAISE(ABORT,'immutable'); END; CREATE TRIGGER ${table}_immutable_delete BEFORE DELETE ON ${table} BEGIN SELECT RAISE(ABORT,'immutable'); END;`,
+        );
+      }
+      db.prepare("INSERT INTO schema_migrations VALUES(?,?)").run(
+        10,
+        Date.now(),
+      );
+    });
+  if (version < 11)
+    transaction(db, () => {
+      db.exec(`CREATE TABLE content_profile_revocations(merchant_id TEXT NOT NULL,profile_id TEXT NOT NULL,reason TEXT NOT NULL,actor_id TEXT NOT NULL,revoked_at INTEGER NOT NULL,PRIMARY KEY(merchant_id,profile_id));
+      CREATE TRIGGER content_profile_revocations_immutable_update BEFORE UPDATE ON content_profile_revocations BEGIN SELECT RAISE(ABORT,'immutable'); END;
+      CREATE TRIGGER content_profile_revocations_immutable_delete BEFORE DELETE ON content_profile_revocations BEGIN SELECT RAISE(ABORT,'immutable'); END;
+      CREATE TABLE content_authorization_checks(merchant_id TEXT NOT NULL,profile_id TEXT NOT NULL,verified_at INTEGER NOT NULL,PRIMARY KEY(merchant_id,profile_id));`);
+      db.prepare("INSERT INTO schema_migrations VALUES(?,?)").run(
+        11,
+        Date.now(),
+      );
+    });
+  if (version < 12)
+    transaction(db, () => {
+      db.exec(`
+        CREATE TABLE complaints(id TEXT PRIMARY KEY,room_id TEXT NOT NULL REFERENCES rooms(id),merchant_id TEXT NOT NULL,viewer_id TEXT NOT NULL,category TEXT NOT NULL,body TEXT NOT NULL,idempotency_key TEXT NOT NULL,created_at INTEGER NOT NULL,UNIQUE(viewer_id,idempotency_key));
+        CREATE INDEX complaints_owner ON complaints(merchant_id,room_id,id);
+        CREATE INDEX complaints_viewer ON complaints(viewer_id,room_id,id);
+        CREATE TABLE complaint_events(complaint_id TEXT NOT NULL REFERENCES complaints(id),version INTEGER NOT NULL,state TEXT NOT NULL CHECK(state IN('received','reviewing','resolved')),reply TEXT NOT NULL,actor_id TEXT NOT NULL,created_at INTEGER NOT NULL,PRIMARY KEY(complaint_id,version));
+      `);
+      for (const table of ["complaints", "complaint_events"])
+        db.exec(
+          `CREATE TRIGGER ${table}_immutable_update BEFORE UPDATE ON ${table} BEGIN SELECT RAISE(ABORT,'immutable'); END; CREATE TRIGGER ${table}_immutable_delete BEFORE DELETE ON ${table} BEGIN SELECT RAISE(ABORT,'immutable'); END;`,
+        );
+      db.prepare("INSERT INTO schema_migrations VALUES(?,?)").run(
+        12,
+        Date.now(),
+      );
+    });
+  if (version < 13)
+    transaction(db, () => {
+      db.exec(`CREATE TABLE disclosure_versions(merchant_id TEXT NOT NULL,version INTEGER NOT NULL,data_json TEXT NOT NULL,evidence_reference TEXT NOT NULL,author_id TEXT NOT NULL,created_at INTEGER NOT NULL,entity_type TEXT NOT NULL CHECK(entity_type='enterprise'),PRIMARY KEY(merchant_id,version));
+      CREATE TABLE disclosure_events(id INTEGER PRIMARY KEY AUTOINCREMENT,merchant_id TEXT NOT NULL,version INTEGER NOT NULL,action TEXT NOT NULL CHECK(action IN('publish','withdraw')),actor_id TEXT NOT NULL,note TEXT NOT NULL,created_at INTEGER NOT NULL,FOREIGN KEY(merchant_id,version) REFERENCES disclosure_versions(merchant_id,version));
+      CREATE INDEX disclosure_events_owner ON disclosure_events(merchant_id,id);`);
+      for (const table of ["disclosure_versions", "disclosure_events"])
+        db.exec(
+          `CREATE TRIGGER ${table}_immutable_update BEFORE UPDATE ON ${table} BEGIN SELECT RAISE(ABORT,'immutable'); END; CREATE TRIGGER ${table}_immutable_delete BEFORE DELETE ON ${table} BEGIN SELECT RAISE(ABORT,'immutable'); END;`,
+        );
+      db.prepare("INSERT INTO schema_migrations VALUES(?,?)").run(
+        13,
+        Date.now(),
+      );
+    });
+  if (version < 14)
+    transaction(db, () => {
+      db.exec(`CREATE TABLE live_admissions(id INTEGER PRIMARY KEY AUTOINCREMENT,room_id TEXT NOT NULL REFERENCES rooms(id),merchant_id TEXT NOT NULL,actor_id TEXT NOT NULL,basis_json TEXT NOT NULL,created_at INTEGER NOT NULL);
+      CREATE INDEX live_admissions_room ON live_admissions(room_id,id);
+      CREATE TRIGGER live_admissions_immutable_update BEFORE UPDATE ON live_admissions BEGIN SELECT RAISE(ABORT,'immutable'); END;
+      CREATE TRIGGER live_admissions_immutable_delete BEFORE DELETE ON live_admissions BEGIN SELECT RAISE(ABORT,'immutable'); END;`);
+      db.prepare("INSERT INTO schema_migrations VALUES(?,?)").run(
+        14,
+        Date.now(),
+      );
+    });
+  if (version < 15)
+    transaction(db, () => {
+      db.exec(`CREATE TABLE moderation_actions(id INTEGER PRIMARY KEY AUTOINCREMENT,room_id TEXT NOT NULL REFERENCES rooms(id),merchant_id TEXT NOT NULL,actor_id TEXT NOT NULL,kind TEXT NOT NULL CHECK(kind IN('note','stop','release')),note TEXT NOT NULL,evidence_reference TEXT NOT NULL,hold_id INTEGER REFERENCES moderation_actions(id),idempotency_key TEXT NOT NULL,created_at INTEGER NOT NULL,UNIQUE(merchant_id,idempotency_key));
+      CREATE INDEX moderation_actions_room ON moderation_actions(room_id,id);
+      CREATE TABLE moderation_results(id INTEGER PRIMARY KEY AUTOINCREMENT,action_id INTEGER NOT NULL REFERENCES moderation_actions(id),disconnected INTEGER NOT NULL CHECK(disconnected IN(0,1)),message TEXT NOT NULL,actor_id TEXT NOT NULL,created_at INTEGER NOT NULL);`);
+      for (const table of ["moderation_actions", "moderation_results"])
+        db.exec(
+          `CREATE TRIGGER ${table}_immutable_update BEFORE UPDATE ON ${table} BEGIN SELECT RAISE(ABORT,'immutable'); END; CREATE TRIGGER ${table}_immutable_delete BEFORE DELETE ON ${table} BEGIN SELECT RAISE(ABORT,'immutable'); END;`,
+        );
+      db.prepare("INSERT INTO schema_migrations VALUES(?,?)").run(
+        15,
+        Date.now(),
+      );
+    });
+  if (version < 16)
+    transaction(db, () => {
+      db.exec(`CREATE TABLE recordings(id TEXT PRIMARY KEY,merchant_id TEXT NOT NULL,room_id TEXT NOT NULL REFERENCES rooms(id),relative_path TEXT NOT NULL UNIQUE,started_at INTEGER NOT NULL,completed_at INTEGER NOT NULL,duration_seconds REAL NOT NULL,bytes INTEGER NOT NULL,sha256 TEXT NOT NULL,registered_at INTEGER NOT NULL);
+      CREATE INDEX recordings_room ON recordings(room_id,id);
+      CREATE TABLE recording_ingest_errors(receipt TEXT PRIMARY KEY,merchant_id TEXT,message TEXT NOT NULL,updated_at INTEGER NOT NULL);
+      CREATE TRIGGER recordings_immutable_update BEFORE UPDATE ON recordings BEGIN SELECT RAISE(ABORT,'immutable'); END;
+      CREATE TRIGGER recordings_immutable_delete BEFORE DELETE ON recordings BEGIN SELECT RAISE(ABORT,'immutable'); END;`);
+      db.prepare("INSERT INTO schema_migrations VALUES(?,?)").run(
+        16,
+        Date.now(),
+      );
+    });
+  if (version < 17)
+    transaction(db, () => {
+      db.exec(
+        "CREATE TABLE home_preferences(merchant_id TEXT NOT NULL,actor_id TEXT NOT NULL,layout_json TEXT NOT NULL,version INTEGER NOT NULL,updated_at INTEGER NOT NULL,PRIMARY KEY(merchant_id,actor_id))",
+      );
+      db.prepare("INSERT INTO schema_migrations VALUES(?,?)").run(
+        17,
+        Date.now(),
+      );
+    });
+  if (version < 18)
+    transaction(db, () => {
+      db.exec(`CREATE TABLE team_access(actor_id TEXT PRIMARY KEY,merchant_id TEXT NOT NULL,disabled INTEGER NOT NULL CHECK(disabled IN(0,1)),version INTEGER NOT NULL);
+    CREATE TABLE team_access_events(id INTEGER PRIMARY KEY AUTOINCREMENT,merchant_id TEXT NOT NULL,target_actor_id TEXT NOT NULL,actor_id TEXT NOT NULL,disabled INTEGER NOT NULL,reason TEXT NOT NULL,version INTEGER NOT NULL,created_at INTEGER NOT NULL);
+    CREATE TRIGGER team_access_events_no_update BEFORE UPDATE ON team_access_events BEGIN SELECT RAISE(ABORT,'immutable'); END;
+    CREATE TRIGGER team_access_events_no_delete BEFORE DELETE ON team_access_events BEGIN SELECT RAISE(ABORT,'immutable'); END;`);
+      db.prepare("INSERT INTO schema_migrations VALUES(?,?)").run(
+        18,
+        Date.now(),
+      );
+    });
+  if (version < 19)
+    transaction(db, () => {
+      db.exec(`ALTER TABLE team_access ADD COLUMN role_override TEXT CHECK(role_override IN ('editor','reviewer','presenter','analyst'));
+      ALTER TABLE team_access ADD COLUMN base_role TEXT;
+      ALTER TABLE team_access_events ADD COLUMN from_role TEXT;
+      ALTER TABLE team_access_events ADD COLUMN to_role TEXT;`);
+      db.prepare("INSERT INTO schema_migrations VALUES(?,?)").run(
+        19,
+        Date.now(),
+      );
+    });
   return db;
 }
 export type DB = ReturnType<typeof openDatabase>;

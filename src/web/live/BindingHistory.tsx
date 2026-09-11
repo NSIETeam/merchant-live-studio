@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { BindingHistoryEntry } from "../../shared/content-diff.js";
-import "../review/review-history.css";
 import { api } from "../shared/api.js";
+import "../review/review-history.css";
 
 export function BindingHistory({ roomId }: { roomId: string }) {
   const [open, setOpen] = useState(false),

@@ -23,7 +23,7 @@ export function createContentSystem(
     clock,
     bridge,
   );
-  review = createReview(db, content, clock);
+  review = createReview(db, content, clock, bridge);
   const live = createBindings(db, () => content, clock);
   return { knowledge, marketing, content, review, live };
 }
@@ -53,3 +53,6 @@ export function getRoomContentBinding(
     independent,
   );
 }
+
+export function createContentAuthorizationSync(db: DB, bridge: AgentBridge, clock: () => number = Date.now) { return createContentSystem(db, clock, bridge).review.syncAuthorization; }
+export function contentAuthorizationIssue(db: DB, tenant: string, course: string, version: number, now = Date.now()) { return createContentSystem(db, () => now).review.authorizationIssue(tenant, course, version, now); }

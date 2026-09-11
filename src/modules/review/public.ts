@@ -1,3 +1,6 @@
+import { contentAuthorizationIssue, createContentAuthorizationSync, recordProfileRevocation } from "./content-authorization.js";
+import type { AgentProfile } from "../../shared/agent.js";
+import type { AgentBridge } from "../../platform/adapters/public.js";
 import type { Hono } from "hono";
 import type {
   ConfirmationRow,
@@ -15,8 +18,10 @@ export function createReview(
   db: DB,
   content: ContentPort,
   clock: () => number = Date.now,
+  bridge?: AgentBridge,
 ) {
   const review: ReviewPort = {
+    authorizationIssue: (tenant, course, version, now = clock()) => contentAuthorizationIssue(db, tenant, course, version, now, content),
     readScriptReview: (id, version) =>
       readScriptReview(db, id, version, content),
     readConfirmation: (id, version) =>
@@ -30,6 +35,8 @@ export function createReview(
   };
   return {
     ...review,
+    syncAuthorization: bridge ? createContentAuthorizationSync(db, bridge, clock, content) : async (_tenant: string) => {},
+    recordProfileRevocation: (tenant: string, profile: AgentProfile) => recordProfileRevocation(db, tenant, profile),
     attach(app: Hono<{ Variables: { merchantId: string; viewerId: string } }>) {
       attachScriptSuggestions(
         app,
@@ -44,3 +51,6 @@ export function createReview(
     },
   };
 }
+
+export { attachDisclosure, disclosureState } from "./disclosure.js";
+export { attachComplaints } from "./complaints.js";

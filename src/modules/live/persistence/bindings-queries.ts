@@ -53,3 +53,7 @@ export function insertContentBindingHistory(db: DB, ...values: SQLValue[]) {
     )
     .run(...values);
 }
+
+export function preparationCounts(db: DB, tenant: string) {
+ return { rooms: Number(db.prepare("SELECT count(*) AS n FROM rooms WHERE merchant_id=?").get(tenant)!.n), bindings: Number(db.prepare("SELECT count(*) AS n FROM content_room_bindings b JOIN rooms r ON r.id=b.room_id WHERE r.merchant_id=?").get(tenant)!.n) };
+}

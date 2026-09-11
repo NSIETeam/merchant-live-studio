@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { ReviewQueueItem, ScriptVersion } from "../../shared/content.js";
-import { api } from "../shared/api.js";
 import { ScriptReviewPanel } from "./ScriptReviewPanel.js";
+import { api } from "../shared/api.js";
 const policy = () => {};
 
 export function ReviewQueue() {

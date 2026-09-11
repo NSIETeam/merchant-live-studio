@@ -379,3 +379,122 @@ test("rehearsal drafts never replace the live card and replay/feedback preserve 
     await f.close();
   }
 });
+
+test("live gateway accepts and persists authorized presenter dossiers and rejects missing consent", async () => {
+  const f = fixture();
+  try {
+    const cookie = (await f.request("/auth/demo", "POST", {})).cookie;
+    const presenter = {
+      displayName: "合成主播",
+      roleDescription: "测试讲解员",
+      speakingStyle: "温和短句",
+      pace: "slow",
+      authorizationReference: "合成验收授权记录",
+      authorizationConfirmed: true,
+    };
+    const body = {
+      ...DEFAULT_PROMPT_CONTENT,
+      name: "主播方案",
+      kind: "brand",
+      presenter,
+    };
+    assert.equal(
+      (
+        await f.request(
+          "/merchant/agent/profiles",
+          "POST",
+          {
+            ...body,
+            presenter: { ...presenter, authorizationConfirmed: false },
+          },
+          cookie,
+        )
+      ).status,
+      400,
+    );
+    const created = await f.request(
+      "/merchant/agent/profiles",
+      "POST",
+      body,
+      cookie,
+    );
+    assert.equal(created.status, 201);
+    assert.deepEqual(created.data.version.presenter, presenter);
+    const id = created.data.profile.id;
+    assert.equal(
+      (
+        await f.request(
+          "/merchant/agent/profiles/" + id + "/versions",
+          "POST",
+          {
+            ...DEFAULT_PROMPT_CONTENT,
+            presenter: { ...presenter, speakingStyle: "先问题再解释" },
+          },
+          cookie,
+        )
+      ).status,
+      201,
+    );
+    const history = await f.request(
+      "/merchant/agent/profiles/" + id + "/versions",
+      "GET",
+      undefined,
+      cookie,
+    );
+    assert.equal(history.data.versions.length, 2);
+    assert.deepEqual(history.data.versions[1].presenter, presenter);
+  } finally {
+    await f.close();
+  }
+});
+
+test("revocation through Live records the authenticated actor and preserves stale flags", async () => {
+  const f = fixture();
+  try {
+    const cookie = (await f.request("/auth/demo", "POST", {})).cookie;
+    const p = (
+      await f.request(
+        "/merchant/agent/profiles",
+        "POST",
+        { ...DEFAULT_PROMPT_CONTENT, name: "撤回试验", kind: "brand" },
+        cookie,
+      )
+    ).data.profile;
+    const job = (
+      await f.request(
+        "/merchant/rooms/demo-room/agent/runs",
+        "POST",
+        {
+          profileId: p.id,
+          mode: "rehearsal",
+          version: 1,
+          transcript: "参数介绍",
+          idempotencyKey: "completed-revoke",
+        },
+        cookie,
+      )
+    ).data.run;
+    await f.finish(job.id, cookie);
+    const result = await f.request(
+      "/merchant/agent/profiles/" + p.id + "/revoke",
+      "POST",
+      { reason: "本地授权撤回" },
+      cookie,
+    );
+    assert.equal(result.status, 200);
+    assert.equal(result.data.profile.revocation.actorId, "demo");
+    const old = (
+      await f.request(
+        "/merchant/agent/runs/" + job.id,
+        "GET",
+        undefined,
+        cookie,
+      )
+    ).data.run;
+    assert.equal(old.stale, true);
+    assert.match(old.staleReason, /授权/);
+    assert.equal(old.result, undefined);
+  } finally {
+    await f.close();
+  }
+});

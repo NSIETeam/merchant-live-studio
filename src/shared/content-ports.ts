@@ -68,6 +68,7 @@ export interface MarketingPort {
   planIds(merchant: string): string[];
 }
 export interface ContentPort {
+  generationSources(tenant: string, course?: string, version?: number): { version: number; profile: string }[];
   courseOwned(id: string, merchant: string): CourseRow;
   courseDto(row: CourseRow): ContentCourse;
   scriptVersion(id: string, version: number, merchant: string): ScriptVersion;
@@ -91,6 +92,7 @@ export interface ContentPort {
   }[];
 }
 export interface ReviewPort {
+  authorizationIssue(tenant: string, course: string, version: number, now?: number): string | undefined;
   readScriptReview(id: string, version: number): ScriptReviewRecord;
   readConfirmation(id: string, version: number): ConfirmationRow | undefined;
   checkScript(

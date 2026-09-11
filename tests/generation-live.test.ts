@@ -1,3 +1,7 @@
+import {
+  createContentAuthorizationSync,
+  contentAuthorizationIssue,
+} from "../src/composition/content.js";
 import { HTTPException } from "hono/http-exception";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -163,6 +167,7 @@ async function setup(configured = true) {
   return {
     db,
     agentDB,
+    call,
     request,
     writer,
     checker,
@@ -316,6 +321,353 @@ test("Live exposes waiting configuration without fabricated paragraphs and rejec
         .job.status,
       "cancelled",
     );
+  } finally {
+    await f.close();
+  }
+});
+
+test("completed long manuscripts cannot be newly imported after their expression authorization is revoked", async () => {
+  const f = await setup();
+  try {
+    const owner = (await f.call("/auth/demo", "POST", {})).cookie;
+    const p = (
+      await f.call(
+        "/merchant/agent/profiles",
+        "POST",
+        {
+          name: "合成授权方案",
+          kind: "brand",
+          systemPrompt: "事实优先",
+          styleGuide: "短句",
+          audience: "验收人员",
+          examples: [],
+        },
+        owner,
+      )
+    ).data.profile;
+    const id = (
+      await f.request(f.base + "/generation", "POST", {
+        profileId: p.id,
+        promptVersion: 1,
+        targetCharacters: 500,
+        chapterCount: 2,
+        idempotencyKey: "revoked-long-import",
+      })
+    ).data.job.id;
+    await f.complete(id);
+    assert.equal(
+      (
+        await f.call(
+          "/merchant/agent/profiles/" + p.id + "/revoke",
+          "POST",
+          { reason: "合成测试撤回" },
+          owner,
+        )
+      ).status,
+      200,
+    );
+    assert.equal(
+      (await f.request(f.base + "/generation/" + id)).data.job
+        .authorizationRevoked,
+      true,
+    );
+    assert.equal(
+      (await f.request(f.base + "/generation/" + id + "/import", "POST", {}))
+        .status,
+      409,
+    );
+    assert.equal(
+      f.db
+        .prepare("SELECT count(*) AS n FROM content_generation_imports")
+        .get()!.n,
+      0,
+    );
+  } finally {
+    await f.close();
+  }
+});
+
+test("revocation invalidates imported reviewed bindings and descendant script versions without erasing history", async () => {
+  const f = await setup();
+  try {
+    const owner = (await f.call("/auth/demo", "POST", {})).cookie;
+    const p = (
+      await f.call(
+        "/merchant/agent/profiles",
+        "POST",
+        {
+          name: "已导入授权测试",
+          kind: "brand",
+          systemPrompt: "事实优先",
+          styleGuide: "短句",
+          audience: "验收",
+          examples: [],
+        },
+        owner,
+      )
+    ).data.profile;
+    const id = (
+      await f.request(f.base + "/generation", "POST", {
+        profileId: p.id,
+        promptVersion: 1,
+        targetCharacters: 500,
+        chapterCount: 2,
+        idempotencyKey: "bound-revocation",
+      })
+    ).data.job.id;
+    await f.complete(id);
+    assert.equal(
+      (await f.request(f.base + "/generation/" + id + "/import", "POST", {}))
+        .status,
+      201,
+    );
+    const detail = (await f.request(f.base)).data,
+      script = detail.versions[0],
+      courseId = detail.course.id;
+    assert.equal(script.stale, false);
+    assert.equal(
+      (
+        await f.request(f.base + "/scripts/1/submit", "POST", {
+          note: "已核对合成资料",
+        })
+      ).status,
+      200,
+    );
+    assert.equal(
+      (
+        await f.request(
+          f.base + "/scripts/1/review",
+          "POST",
+          {
+            note: "合成依据与表达核对通过",
+            decision: "approved",
+            acknowledged: true,
+          },
+          f.checker,
+        )
+      ).status,
+      200,
+    );
+    assert.equal(
+      (
+        await f.request(
+          "/rooms/demo-room/binding",
+          "POST",
+          { courseId, scriptVersion: 1 },
+          owner,
+        )
+      ).status,
+      201,
+    );
+    assert.equal(
+      (
+        await f.request(f.base + "/scripts", "POST", {
+          baseVersion: 1,
+          productVersion: 1,
+          changeNote: "对已生成稿作人工修订",
+          paragraphs: script.paragraphs,
+        })
+      ).status,
+      201,
+    );
+    assert.equal(
+      (await f.request("/rooms/demo-room/binding")).data.binding.stale,
+      false,
+    );
+    assert.equal(
+      (
+        await f.call(
+          "/merchant/agent/profiles/" + p.id + "/revoke",
+          "POST",
+          { reason: "主播授权撤回" },
+          owner,
+        )
+      ).status,
+      200,
+    );
+    const stale = (await f.request(f.base)).data.versions;
+    assert.ok(stale.every((s: any) => s.stale));
+    assert.ok(
+      stale.every((s: any) => s.authorizationIssue.includes("授权已撤回")),
+    );
+    const bound = (await f.request("/rooms/demo-room/binding")).data.binding;
+    assert.equal(bound.stale, true);
+    assert.ok(bound.script.authorizationIssue.includes("授权已撤回"));
+    assert.equal(
+      (
+        await f.request(
+          "/rooms/demo-room/binding",
+          "POST",
+          { courseId, scriptVersion: 1 },
+          owner,
+        )
+      ).status,
+      409,
+    );
+    assert.equal(
+      (
+        await f.request(f.base + "/scripts/2/submit", "POST", {
+          note: "不能通过修订清洗来源",
+        })
+      ).status,
+      409,
+    );
+    assert.equal(
+      f.db.prepare("SELECT count(*) AS n FROM content_script_versions").get()!
+        .n,
+      2,
+    );
+    assert.equal(
+      f.db.prepare("SELECT count(*) AS n FROM content_review_decisions").get()!
+        .n,
+      1,
+    );
+    assert.throws(() => f.db.exec("DELETE FROM content_profile_revocations"));
+  } finally {
+    await f.close();
+  }
+});
+
+test("authorization refresh deduplicates checks and fails closed for generated sources without disabling live controls", async () => {
+  const f = await setup();
+  try {
+    const id = (await f.create()).data.job.id;
+    await f.complete(id);
+    await f.request(f.base + "/generation/" + id + "/import", "POST", {});
+    const detail = (await f.request(f.base)).data;
+    assert.equal(detail.versions[0].stale, false);
+    let now = Date.now(),
+      calls = 0,
+      available = true;
+    const profiles = [
+      {
+        id: "standard",
+        name: "通用",
+        kind: "standard",
+        publishedVersion: 1,
+        latestVersion: 1,
+        createdAt: now,
+      },
+    ];
+    const bridge: AgentBridge = {
+      async request<T>() {
+        calls++;
+        if (!available) throw new Error("synthetic outage");
+        return { profiles } as T;
+      },
+      async status() {
+        throw new Error("unused");
+      },
+    };
+    const sync = createContentAuthorizationSync(f.db, bridge, () => now);
+    await Promise.all(Array.from({ length: 5 }, () => sync("demo")));
+    assert.equal(calls, 1);
+    assert.equal(
+      contentAuthorizationIssue(f.db, "demo", detail.course.id, 1, now),
+      undefined,
+    );
+    now += 6000;
+    available = false;
+    await sync("demo");
+    assert.match(
+      contentAuthorizationIssue(f.db, "demo", detail.course.id, 1, now) || "",
+      /暂未确认/,
+    );
+    assert.equal(
+      contentAuthorizationIssue(f.db, "foreign", detail.course.id, 1, now),
+      undefined,
+    );
+    const owner = (await f.call("/auth/demo", "POST", {})).cookie;
+    assert.equal(
+      (
+        await f.call(
+          "/merchant/rooms/demo-room",
+          "PATCH",
+          { status: "live" },
+          owner,
+        )
+      ).status,
+      200,
+    );
+    now += 2000;
+    available = true;
+    await sync("demo");
+    assert.equal(
+      contentAuthorizationIssue(f.db, "demo", detail.course.id, 1, now),
+      undefined,
+    );
+    assert.match(
+      contentAuthorizationIssue(
+        f.db,
+        "demo",
+        detail.course.id,
+        1,
+        now + 10001,
+      ) || "",
+      /暂未确认/,
+    );
+  } finally {
+    await f.close();
+  }
+});
+
+test("authorization revocation only affects the imported version and its descendants, not earlier manual drafts", async () => {
+  const f = await setup();
+  try {
+    const owner = (await f.call("/auth/demo", "POST", {})).cookie;
+    await f.request(f.base + "/scripts", "POST", {
+      baseVersion: 0,
+      productVersion: 1,
+      changeNote: "独立手写稿",
+      paragraphs: [
+        {
+          id: "manual",
+          kind: "transition",
+          text: "先查看测试资料。",
+          factIds: [],
+        },
+      ],
+    });
+    const p = (
+      await f.call(
+        "/merchant/agent/profiles",
+        "POST",
+        {
+          name: "来源边界测试",
+          kind: "brand",
+          systemPrompt: "事实优先",
+          styleGuide: "短句",
+          audience: "验收",
+          examples: [],
+        },
+        owner,
+      )
+    ).data.profile;
+    const id = (
+      await f.request(f.base + "/generation", "POST", {
+        profileId: p.id,
+        promptVersion: 1,
+        targetCharacters: 500,
+        chapterCount: 2,
+        idempotencyKey: "manual-before-import",
+      })
+    ).data.job.id;
+    await f.complete(id);
+    assert.equal(
+      (await f.request(f.base + "/generation/" + id + "/import", "POST", {}))
+        .data.scriptVersion,
+      2,
+    );
+    await f.call(
+      "/merchant/agent/profiles/" + p.id + "/revoke",
+      "POST",
+      { reason: "来源范围验收" },
+      owner,
+    );
+    const versions = (await f.request(f.base)).data.versions;
+    assert.equal(versions[0].stale, true);
+    assert.equal(versions[1].stale, false);
+    assert.equal(versions[1].authorizationIssue, undefined);
   } finally {
     await f.close();
   }

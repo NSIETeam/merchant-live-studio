@@ -1,3 +1,4 @@
+moq: false
 # Local development only; add HTTP publish auth before exposing ingest.
 logLevel: info
 rtmp: true

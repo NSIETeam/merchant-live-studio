@@ -1,14 +1,10 @@
-import { Gift, MessageCircle } from "lucide-react";
-import React, { useCallback, useEffect, useState } from "react";
-import type {
-  Campaign,
-  LedgerEntry,
-  Question,
-  Room,
-} from "../../shared/types.js";
-import { api, money } from "../shared/api.js";
 import { Notice } from "../shared/Notice.js";
+import React, { useCallback, useEffect, useState } from "react";
+import { Activity, ArrowUpRight, Check, ChevronDown, Copy, Gift, Link, MessageCircle, Radio, RefreshCw, Settings, Users, Video, X } from "lucide-react";
+import type { Analytics, Campaign, Claim, Question, Room, StreamConfig, StreamState } from "../../shared/types.js";
+import { api, duration, money } from "../shared/api.js";
 import { useClock } from "../shared/useClock.js";
+import { LedgerPanel } from "../payments/LedgerPanel.js";
 export function Questions({
   roomId,
   onChoose,
@@ -73,7 +69,6 @@ export function Rewards({
   onError: (m: string) => void;
 }) {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]),
-    [entries, setEntries] = useState<LedgerEntry[]>([]),
     [total, setTotal] = useState("100"),
     [count, setCount] = useState(20),
     [watch, setWatch] = useState(10),
@@ -83,15 +78,11 @@ export function Rewards({
   const [clockOffset, setClockOffset] = useState(0);
   const now = useClock() + clockOffset;
   const refresh = useCallback(async () => {
-    const [c, l] = await Promise.all([
-      api<{ campaigns: Campaign[]; serverTime: number }>(
-        `/merchant/rooms/${room.id}/campaigns`,
-      ),
-      api<{ entries: LedgerEntry[] }>(`/merchant/rooms/${room.id}/ledger`),
-    ]);
+    const c = await api<{ campaigns: Campaign[]; serverTime: number }>(
+      `/merchant/rooms/${room.id}/campaigns`,
+    );
     setCampaigns(c.campaigns);
     setClockOffset(c.serverTime - Date.now());
-    setEntries(l.entries);
   }, [room.id]);
   useEffect(() => {
     let active = true;
@@ -128,13 +119,7 @@ export function Rewards({
       setBusy(false);
     }
   }
-  const labels: Record<string, string> = {
-    simulation_budget: "演示预算",
-    campaign_reserved: "活动预留",
-    claim_reserved: "领取预留",
-    simulation_settled: "演示处理",
-    simulation_budget_returned: "演示退回",
-  };
+
   return (
     <>
       <div className="simulation-banner">
@@ -280,41 +265,7 @@ export function Rewards({
           )}
         </section>
       </div>
-      <section className="card ledger">
-        <div className="section-title">
-          <h2>演示账本</h2>
-          <span className="muted">最近 200 笔 · 金额以整数分记账</span>
-        </div>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>时间</th>
-                <th>记录编号</th>
-                <th>资金流向（演示）</th>
-                <th>金额</th>
-              </tr>
-            </thead>
-            <tbody>
-              {entries.map((e) => (
-                <tr key={e.id}>
-                  <td>{new Date(e.createdAt).toLocaleTimeString("zh-CN")}</td>
-                  <td>{e.id.slice(0, 8)}</td>
-                  <td>
-                    {labels[e.debit]} → {labels[e.credit]}
-                  </td>
-                  <td>{money(e.amountCents)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {!entries.length && (
-            <p className="empty-copy">
-              创建活动后显示预算预留、领取与处理记录。
-            </p>
-          )}
-        </div>
-      </section>
+      <LedgerPanel key={room.id} roomId={room.id} />
     </>
   );
 }

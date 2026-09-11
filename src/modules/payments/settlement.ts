@@ -8,6 +8,7 @@ import {
   insertLedger2,
   insertPayoutJobs,
   listLedger,
+  findLedgerCursor,
   listPayoutJobs,
   updatePayoutJobsById,
 } from "./persistence/settlement-queries.js";
@@ -89,11 +90,12 @@ export function createPayments(
     attach(app: App) {
       app.get("/api/merchant/rooms/:id/ledger", (c) => {
         owned(c.req.param("id"), c.get("merchantId"));
-        const entries = listLedger(
-          db,
-          JSON.stringify(engagement.campaignIds(c.req.param("id"))),
-        );
-        return c.json({ entries, mode: "simulation", limit: 200 });
+        const campaigns=JSON.stringify(engagement.campaignIds(c.req.param("id"))),before=c.req.query("before");
+        const cursor=before ? findLedgerCursor(db,campaigns,before) : undefined;
+        if(before!==undefined && !cursor)return c.json({error:"无效的账本分页位置"},400);
+        const rows=listLedger(db,campaigns,Number(cursor?.created_at ?? Number.MAX_SAFE_INTEGER),String(cursor?.id ?? "~"));
+        const entries=rows.slice(0,200);
+        return c.json({entries,mode:"simulation",limit:200,nextBefore:rows.length>200 ? entries[199].id:null});
       });
       app.post("/api/payments/wechat/notify", (c) =>
         c.json(

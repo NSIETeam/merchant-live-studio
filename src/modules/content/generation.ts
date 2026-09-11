@@ -120,6 +120,10 @@ export function attachContentGeneration(
           {},
         ),
       );
+    if (job.authorizationRevoked)
+      throw new HTTPException(409, {
+        message: "主播表达方案授权已撤回，不能导入此稿件。",
+      });
     if (
       job.status !== "completed" ||
       job.chapters.length !== job.input.chapterCount

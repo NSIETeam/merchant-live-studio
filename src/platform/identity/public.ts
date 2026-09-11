@@ -7,3 +7,5 @@ export {
 } from "./permissions.js";
 
 export { createIdentity } from "./http.js";
+
+export { attachHome } from "./home.js";

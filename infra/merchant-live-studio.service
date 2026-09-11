@@ -9,6 +9,7 @@ User=live-studio
 Group=live-studio
 WorkingDirectory=/opt/merchant-live-studio/current
 EnvironmentFile=/etc/merchant-live-studio/studio.env
+EnvironmentFile=-/etc/merchant-live-studio/recordings.env
 ExecStart=/opt/merchant-live-studio/runtime/node/bin/node dist/server/server/index.js
 Restart=on-failure
 RestartSec=3
