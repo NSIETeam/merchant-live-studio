@@ -1,3 +1,4 @@
+import type { DB } from "./db.js";
 import type { Config } from "./config.js";
 import type { MemberRole, MerchantIdentity } from "../shared/membership.js";
 declare module "hono" {
@@ -19,12 +20,24 @@ export function requiresIndependentReview(config: Config, merchantId: string) {
 export function merchantIdentity(
   config: Config,
   actorId: string,
+  db?: DB,
 ): MerchantIdentity {
   const member = config.merchantMemberships?.[actorId];
+  const access =
+    member && db
+      ? db
+          .prepare(
+            "SELECT role_override FROM team_access WHERE actor_id=? AND merchant_id=? AND base_role=?",
+          )
+          .get(actorId, member.merchantId, member.role)
+      : undefined;
   return {
     actorId,
     merchantId: member?.merchantId ?? actorId,
-    memberRole: member?.role ?? "owner",
+    memberRole:
+      (access?.role_override as MemberRole | undefined) ??
+      member?.role ??
+      "owner",
     requiresIndependentReview: requiresIndependentReview(
       config,
       member?.merchantId ?? actorId,

@@ -386,6 +386,17 @@ export function openDatabase(path: string) {
         Date.now(),
       );
     });
+  if (version < 19)
+    transaction(db, () => {
+      db.exec(`ALTER TABLE team_access ADD COLUMN role_override TEXT CHECK(role_override IN ('editor','reviewer','presenter','analyst'));
+      ALTER TABLE team_access ADD COLUMN base_role TEXT;
+      ALTER TABLE team_access_events ADD COLUMN from_role TEXT;
+      ALTER TABLE team_access_events ADD COLUMN to_role TEXT;`);
+      db.prepare("INSERT INTO schema_migrations VALUES(?,?)").run(
+        19,
+        Date.now(),
+      );
+    });
   return db;
 }
 export type DB = ReturnType<typeof openDatabase>;

@@ -260,7 +260,11 @@ export function createApp(
   app.get("/api/auth/me", (c) =>
     c.json({
       ...(readSession(c, config, "merchant", db)
-        ? merchantIdentity(config, readSession(c, config, "merchant", db)!.id)
+        ? merchantIdentity(
+            config,
+            readSession(c, config, "merchant", db)!.id,
+            db,
+          )
         : { merchantId: null }),
       demoMode: config.demoMode,
     }),
@@ -284,7 +288,7 @@ export function createApp(
     )
       throw new HTTPException(401, { message: "商家编号或访问密钥错误" });
     issueSession(c, config, "merchant", input.merchantId, db);
-    return c.json(merchantIdentity(config, input.merchantId));
+    return c.json(merchantIdentity(config, input.merchantId, db));
   });
   app.post("/api/auth/logout", (c) => {
     const session = readSession(c, config, "merchant", db);
@@ -309,7 +313,7 @@ export function createApp(
     const session = readSession(c, config, "merchant", db);
     if (!session)
       throw new HTTPException(401, { message: "请先登录商家工作台" });
-    const identity = merchantIdentity(config, session.id);
+    const identity = merchantIdentity(config, session.id, db);
     c.set("merchantId", identity.merchantId);
     c.set("actorId", identity.actorId);
     c.set("memberRole", identity.memberRole);

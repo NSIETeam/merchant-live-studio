@@ -1,3 +1,4 @@
+import { merchantIdentity } from "./permissions.js";
 import type { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
@@ -20,7 +21,7 @@ export function attachTeam(
             .get(actorId);
           return {
             actorId,
-            role: m.role,
+            role: merchantIdentity(config, actorId, db).memberRole,
             disabled: Boolean(row?.disabled),
             version: Number(row?.version || 0),
           };
@@ -36,7 +37,7 @@ export function attachTeam(
       .parse(c.req.query("before") || Number.MAX_SAFE_INTEGER);
     const rows = db
       .prepare(
-        "SELECT id,target_actor_id AS targetActorId,actor_id AS actorId,disabled,reason,version,created_at AS createdAt FROM team_access_events WHERE merchant_id=? AND id<? ORDER BY id DESC LIMIT 51",
+        "SELECT id,target_actor_id AS targetActorId,actor_id AS actorId,disabled,reason,version,created_at AS createdAt,from_role AS fromRole,to_role AS toRole FROM team_access_events WHERE merchant_id=? AND id<? ORDER BY id DESC LIMIT 51",
       )
       .all(c.get("merchantId"), before);
     c.header("Cache-Control", "no-store");
@@ -57,11 +58,14 @@ export function attachTeam(
     const input = z
       .object({
         disabled: z.boolean(),
+        role: z.enum(["editor", "reviewer", "presenter", "analyst"]).optional(),
         version: z.number().int().min(0),
         reason: z.string().trim().min(5).max(1000),
       })
       .strict()
       .parse(await c.req.json());
+    const previousRole = merchantIdentity(config, actorId, db).memberRole;
+    const nextRole = input.role ?? previousRole;
     transaction(db, () => {
       const row = db
         .prepare("SELECT version FROM team_access WHERE actor_id=?")
@@ -79,7 +83,10 @@ export function attachTeam(
         input.version + 1,
       );
       db.prepare(
-        "INSERT INTO team_access_events(merchant_id,target_actor_id,actor_id,disabled,reason,version,created_at) VALUES(?,?,?,?,?,?,?)",
+        "UPDATE team_access SET role_override=?,base_role=? WHERE actor_id=?",
+      ).run(nextRole, member.role, actorId);
+      db.prepare(
+        "INSERT INTO team_access_events(merchant_id,target_actor_id,actor_id,disabled,reason,version,created_at,from_role,to_role) VALUES(?,?,?,?,?,?,?,?,?)",
       ).run(
         member.merchantId,
         actorId,
@@ -88,10 +95,13 @@ export function attachTeam(
         input.reason,
         input.version + 1,
         Date.now(),
+        previousRole,
+        nextRole,
       );
     });
     return c.json({
       actorId,
+      role: nextRole,
       disabled: input.disabled,
       version: input.version + 1,
     });

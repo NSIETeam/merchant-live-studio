@@ -15,6 +15,8 @@ type AccessEvent = {
   reason: string;
   version: number;
   createdAt: number;
+  fromRole: MemberRole | null;
+  toRole: MemberRole | null;
 };
 type History = { items: AccessEvent[]; nextBefore: number | null };
 export function TeamPanel() {
@@ -67,7 +69,7 @@ export function TeamPanel() {
       {open && (
         <>
           <p>
-            停用立即阻止登录并使现有会话失效。恢复后须重新登录。新增成员与角色调整仍通过服务器配置。
+            停用或变更角色后，原会话立即失效，成员须重新登录。新增账号仍通过服务器配置。
           </p>
           <label>
             本次变更原因
@@ -75,7 +77,7 @@ export function TeamPanel() {
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               maxLength={1000}
-              placeholder="至少 5 个字，记录停用或恢复的原因"
+              placeholder="至少 5 个字，记录本次成员变更原因"
             />
           </label>
           {!members.length && <p>没有配置其他团队成员。</p>}
@@ -85,6 +87,29 @@ export function TeamPanel() {
                 {m.actorId} · {memberRoleNames[m.role]} ·{" "}
                 {m.disabled ? "已停用" : "可用"}
               </strong>
+              <RoleEditor
+                key={m.version}
+                member={m}
+                disabled={busy || reason.trim().length < 5}
+                onSave={(role) =>
+                  void act(async () => {
+                    await api(
+                      `/merchant/team/${encodeURIComponent(m.actorId)}`,
+                      "PUT",
+                      {
+                        role,
+                        disabled: m.disabled,
+                        version: m.version,
+                        reason,
+                      },
+                    );
+                    await refresh();
+                    if (showHistory) await loadHistory();
+                    setReason("");
+                    setMessage("成员角色已更新，原会话已失效。");
+                  })
+                }
+              />
               <button
                 className="secondary"
                 disabled={busy || reason.trim().length < 5}
@@ -130,7 +155,14 @@ export function TeamPanel() {
               {history.items.map((item) => (
                 <article className="team-event" key={item.id}>
                   <strong>
-                    {item.targetActorId} · {item.disabled ? "停用" : "恢复"}
+                    {item.targetActorId} ·{" "}
+                    {item.fromRole &&
+                    item.toRole &&
+                    item.fromRole !== item.toRole
+                      ? `${memberRoleNames[item.fromRole]} → ${memberRoleNames[item.toRole]}`
+                      : item.disabled
+                        ? "停用"
+                        : "恢复"}
                   </strong>
                   <p>{item.reason}</p>
                   <small>
@@ -154,5 +186,43 @@ export function TeamPanel() {
       )}
       {message && <p role="status">{message}</p>}
     </section>
+  );
+}
+
+function RoleEditor({
+  member,
+  disabled,
+  onSave,
+}: {
+  member: Member;
+  disabled: boolean;
+  onSave: (role: MemberRole) => void;
+}) {
+  const [role, setRole] = useState(member.role);
+  return (
+    <div className="team-role-editor">
+      <label>
+        角色 · {member.actorId}
+        <select
+          value={role}
+          onChange={(e) => setRole(e.target.value as MemberRole)}
+        >
+          {(["editor", "reviewer", "presenter", "analyst"] as const).map(
+            (id) => (
+              <option key={id} value={id}>
+                {memberRoleNames[id]}
+              </option>
+            ),
+          )}
+        </select>
+      </label>
+      <button
+        className="secondary"
+        disabled={disabled || role === member.role}
+        onClick={() => onSave(role)}
+      >
+        保存角色
+      </button>
+    </div>
   );
 }

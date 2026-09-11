@@ -714,3 +714,17 @@
   flex: 0 0 auto;
   accent-color: #334155;
 }
+.team-role-editor {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 12px 0;
+}
+.team-role-editor label {
+  flex: 1;
+  min-width: 140px;
+}
+.team-role-editor button {
+  min-height: 44px;
+}

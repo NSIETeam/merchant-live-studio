@@ -760,7 +760,7 @@ test("Content migration preserves legacy data and product, course, finalization 
         restored.db
           .prepare("SELECT max(version) AS v FROM schema_migrations")
           .get()!.v,
-        18,
+        19,
       );
       assert.equal(
         restored.db.prepare("SELECT count(*) AS n FROM facts").get()!.n,
