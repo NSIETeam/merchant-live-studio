@@ -128,7 +128,14 @@ export function createApp(
     const current = room(r.id);
     if (current.status !== "live" || current.stream_secret !== r.stream_secret)
       throw new HTTPException(403);
-    const check = admissionCheck(db, config, r.id, r.merchant_id, reachable);
+    const check = admissionCheck(
+      db,
+      config,
+      r.id,
+      r.merchant_id,
+      reachable,
+      clock(),
+    );
     if (!check.ready)
       throw new HTTPException(403, {
         message: "开播资料或流媒体控制已失效，请返回工作台核对",
@@ -371,7 +378,9 @@ export function createApp(
   app.get("/api/merchant/rooms/:id/admission", async (c) => {
     const r = owned(c.req.param("id"), c.get("merchantId"));
     const reachable = await controlForAdmission(r);
-    return c.json(admissionCheck(db, config, r.id, r.merchant_id, reachable));
+    return c.json(
+      admissionCheck(db, config, r.id, r.merchant_id, reachable, clock()),
+    );
   });
   app.get("/api/merchant/rooms/:id/admissions", (c) => {
     const r = owned(c.req.param("id"), c.get("merchantId"));
@@ -426,6 +435,7 @@ export function createApp(
           r.id,
           r.merchant_id,
           controlReachable,
+          clock(),
         );
         if (!check.ready)
           throw new HTTPException(409, {

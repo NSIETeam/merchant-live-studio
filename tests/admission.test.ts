@@ -122,6 +122,7 @@ test("admission blocks missing or revoked basis, records successful starts, and 
         data: {
           operator: business,
           seller: business,
+          validThrough: "2099-12-31",
           complaintContact: "测试售后服务联系",
         },
         evidenceReference: "合成测试证据位置",

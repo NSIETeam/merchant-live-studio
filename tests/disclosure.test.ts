@@ -1,5 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import {
+  disclosureDeadline,
+  disclosureInDate,
+} from "../src/shared/disclosure.js";
 import { openDatabase } from "../src/server/db.js";
 import { createApp, seedDemo } from "../src/server/app.js";
 import { loadConfig } from "../src/server/config.js";
@@ -64,6 +68,7 @@ test("public disclosure requires independent review, isolates drafts and revokes
       data: {
         operator: business,
         seller: business,
+        validThrough: "2099-12-31",
         complaintContact: "测试售后服务联系方式",
       },
       evidenceReference: "private-evidence-only",
@@ -150,7 +155,33 @@ test("public disclosure requires independent review, isolates drafts and revokes
       (await call(base, "GET", undefined, reviewer)).data.events.length,
       3,
     );
+    const expired = {
+      ...draft,
+      previousVersion: 2,
+      data: { ...draft.data, validThrough: "2000-01-01" },
+    };
+    assert.equal((await call(base, "POST", expired, owner)).status, 201);
+    assert.equal(
+      (await call(base + "/3/review", "POST", approval, reviewer)).status,
+      409,
+    );
   } finally {
     db.close();
   }
+});
+
+test("disclosure dates reject missing and invalid dates and expire at Beijing midnight", () => {
+  for (const value of [undefined, "", "2026-02-29", "2026-13-01", "2026-9-1"])
+    assert.equal(disclosureDeadline(value), null);
+  assert.equal(disclosureInDate({}), false);
+  assert.notEqual(disclosureDeadline("2028-02-29"), null);
+  const boundary = Date.parse("2026-09-11T16:00:00Z");
+  assert.equal(
+    disclosureInDate({ validThrough: "2026-09-11" }, boundary - 1),
+    true,
+  );
+  assert.equal(
+    disclosureInDate({ validThrough: "2026-09-11" }, boundary),
+    false,
+  );
 });

@@ -1,7 +1,7 @@
 import type { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
-import { disclosureSchema } from "../shared/disclosure.js";
+import { disclosureSchema, disclosureInDate } from "../shared/disclosure.js";
 import { transaction, type DB } from "./db.js";
 export function attachDisclosure(
   app: Hono<{ Variables: { merchantId: string; viewerId: string } }>,
@@ -94,6 +94,10 @@ export function attachDisclosure(
         if (input.action === "publish") {
           if (!draft || draft.version !== version)
             throw new HTTPException(409, { message: "只能复核发布最新版本" });
+          if (!disclosureInDate(JSON.parse(String(draft.data_json)), clock()))
+            throw new HTTPException(409, {
+              message: "资料已过期或缺少复核截止日期，请保存新版本后重新复核",
+            });
           if (draft.authorId === c.get("actorId"))
             throw new HTTPException(403, {
               message: "请由另一账号核对依据后发布",

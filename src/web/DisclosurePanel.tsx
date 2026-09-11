@@ -38,6 +38,7 @@ function Details({ data }: { data: Disclosure }) {
       ))}
       <h3>投诉与售后联系</h3>
       <p>{data.complaintContact}</p>
+      <p>资料复核截止：{data.validThrough || "尚未补录"}（北京时间）</p>
     </>
   );
 }
@@ -106,6 +107,7 @@ export function MerchantDisclosure({
       operator: empty(),
       seller: empty(),
       complaintContact: "",
+      validThrough: "",
     }),
     [evidence, setEvidence] = useState(""),
     [note, setNote] = useState(""),
@@ -220,6 +222,20 @@ export function MerchantDisclosure({
                   ))}
                 </fieldset>
               ))}
+              <label>
+                本批资料复核截止日期（北京时间）
+                <input
+                  type="date"
+                  required
+                  value={data.validThrough || ""}
+                  onChange={(e) =>
+                    setData({ ...data, validThrough: e.target.value })
+                  }
+                />
+                <small>
+                  按本批依据中最早到期或需复核的日期填写，并由另一账号核对；系统不会自动核验证照。
+                </small>
+              </label>
               <label>
                 投诉与售后联系
                 <input

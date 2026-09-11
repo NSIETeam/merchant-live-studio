@@ -1,3 +1,4 @@
+import { disclosureInDate } from "../shared/disclosure.js";
 import { activeModerationHold } from "./moderation.js";
 import type { DB } from "./db.js";
 import type { Config } from "./config.js";
@@ -9,12 +10,24 @@ export function admissionCheck(
   roomId: string,
   merchantId: string,
   controlReachable: boolean,
+  now = Date.now(),
 ): AdmissionCheck {
   const disclosure = db
     .prepare(
       "SELECT version,action FROM disclosure_events WHERE merchant_id=? ORDER BY id DESC LIMIT 1",
     )
     .get(merchantId);
+  const publishedData =
+    disclosure?.action === "publish"
+      ? db
+          .prepare(
+            "SELECT data_json FROM disclosure_versions WHERE merchant_id=? AND version=?",
+          )
+          .get(merchantId, disclosure.version)
+      : undefined;
+  const disclosureValid =
+    !!publishedData &&
+    disclosureInDate(JSON.parse(String(publishedData.data_json)), now);
   const binding = getRoomContentBinding(db, roomId, merchantId, true);
   const configured =
     config.streamProvider === "mediamtx" &&
@@ -25,10 +38,12 @@ export function admissionCheck(
     {
       code: "disclosure",
       label: "经营者公示",
-      passed: disclosure?.action === "publish",
+      passed: disclosure?.action === "publish" && disclosureValid,
       detail:
         disclosure?.action === "publish"
-          ? "已有独立复核的公示资料"
+          ? disclosureValid
+            ? "已有独立复核且在复核期限内的公示资料"
+            : "公示资料已过期或缺少复核截止日期，请重新提交复核"
           : "请先填写企业资料并由另一账号复核公示",
     },
     {
