@@ -41,6 +41,32 @@ test("personal home persists by actor and tenant, rejects stale devices and unau
       await (await call("/merchant/home", "GET", undefined, a)).json(),
       { modules: ["shortcuts", "rooms"], shortcuts: ["analytics"], version: 0 },
     );
+    db.prepare(
+      "INSERT INTO rooms(id,merchant_id,title,product_name,stream_secret,created_at) VALUES(?,?,?,?,?,?)",
+    ).run("room-one", "one", "test", "test", "test", 1);
+    assert.equal(
+      (await call("/merchant/home/progress", "GET", undefined, a)).status,
+      403,
+    );
+    assert.deepEqual(
+      await (await call("/merchant/home/progress", "GET", undefined, b)).json(),
+      { products: 0, drafts: 0, rooms: 1, bindings: 0 },
+    );
+    assert.deepEqual(
+      await (await call("/merchant/home/progress", "GET", undefined, c)).json(),
+      { products: 0, drafts: 0, rooms: 0, bindings: 0 },
+    );
+    assert.equal(
+      (
+        await call(
+          "/merchant/home",
+          "PUT",
+          { modules: ["setup"], shortcuts: [], version: 0 },
+          a,
+        )
+      ).status,
+      403,
+    );
     const layout = {
       modules: ["analytics", "rooms"],
       shortcuts: [],

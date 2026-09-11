@@ -12,6 +12,7 @@ export type Destination = z.infer<typeof destinationSchema>;
 export const homeModuleSchema = z.enum([
   "shortcuts",
   "rooms",
+  "setup",
   ...destinationSchema.options,
 ]);
 export type HomeModule = z.infer<typeof homeModuleSchema>;
@@ -30,7 +31,7 @@ export const homeLayoutSchema = z
   .object({
     modules: z
       .array(homeModuleSchema)
-      .max(8)
+      .max(9)
       .refine((ids) => new Set(ids).size === ids.length, "模块不可重复"),
     shortcuts: z
       .array(destinationSchema)

@@ -23,22 +23,55 @@ export function attachHome(
     const allowed = homeDestinations(c.get("memberRole"));
     const layout = row
       ? homeLayoutSchema.parse(JSON.parse(String(row.layout_json)))
-      : { modules: ["shortcuts", "rooms"] as const, shortcuts: allowed };
+      : {
+          modules:
+            c.get("memberRole") === "analyst"
+              ? (["shortcuts", "rooms"] as const)
+              : (["shortcuts", "rooms", "setup"] as const),
+          shortcuts: allowed,
+        };
     c.header("Cache-Control", "no-store");
     return c.json({
       modules: layout.modules.filter(
-        (id) => id === "shortcuts" || id === "rooms" || allowed.includes(id),
+        (id) =>
+          id === "shortcuts" ||
+          id === "rooms" ||
+          (id === "setup"
+            ? c.get("memberRole") !== "analyst"
+            : allowed.includes(id)),
       ),
       shortcuts: layout.shortcuts.filter((id) => allowed.includes(id)),
       version: Number(row?.version || 0),
     } satisfies HomePreferences);
+  });
+  app.get("/api/merchant/home/progress", (c) => {
+    const merchant = c.get("merchantId");
+    const count = (sql: string) => Number(db.prepare(sql).get(merchant)!.n);
+    c.header("Cache-Control", "no-store");
+    return c.json({
+      products: count(
+        "SELECT count(*) AS n FROM content_products WHERE merchant_id=?",
+      ),
+      drafts: count(
+        "SELECT count(*) AS n FROM content_courses c JOIN content_plans p ON p.id=c.plan_id JOIN content_products x ON x.id=p.product_id WHERE x.merchant_id=? AND c.latest_script_version>0",
+      ),
+      rooms: count("SELECT count(*) AS n FROM rooms WHERE merchant_id=?"),
+      bindings: count(
+        "SELECT count(*) AS n FROM content_room_bindings b JOIN rooms r ON r.id=b.room_id WHERE r.merchant_id=?",
+      ),
+    });
   });
   app.put("/api/merchant/home", async (c) => {
     const input = inputSchema.parse(await c.req.json());
     const allowed = homeDestinations(c.get("memberRole"));
     if (
       input.modules.some(
-        (id) => id !== "shortcuts" && id !== "rooms" && !allowed.includes(id),
+        (id) =>
+          id !== "shortcuts" &&
+          id !== "rooms" &&
+          (id === "setup"
+            ? c.get("memberRole") === "analyst"
+            : !allowed.includes(id)),
       ) ||
       input.shortcuts.some((id) => !allowed.includes(id))
     )

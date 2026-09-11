@@ -1,3 +1,4 @@
+import { SetupGuide } from "./SetupGuide.js";
 import React, { useEffect, useState } from "react";
 import { ArrowRight, ArrowUp, ArrowDown, Plus, Settings2 } from "lucide-react";
 import type { Room } from "../shared/types";
@@ -10,6 +11,7 @@ import type {
 } from "../shared/home.js";
 export type { Destination } from "../shared/home.js";
 const labels: Record<Module, string> = {
+  setup: "首次开播指引",
   shortcuts: "常用功能",
   rooms: "我的直播间",
   content: "商品与课程",
@@ -43,8 +45,17 @@ export function PersonalHome({
   onRoom: (id: string) => void;
 }) {
   const key = `kaopu:home:v1:${encodeURIComponent(merchantId)}:${encodeURIComponent(actorId)}`;
-  const available: Module[] = ["shortcuts", "rooms", ...allowed];
-  const defaults: Module[] = ["shortcuts", "rooms"];
+  const available: Module[] = [
+    "shortcuts",
+    "rooms",
+    ...(allowed.includes("content") ? ["setup" as const] : []),
+    ...allowed,
+  ];
+  const defaults: Module[] = [
+    "shortcuts",
+    "rooms",
+    ...(allowed.includes("content") ? ["setup" as const] : []),
+  ];
   const [preferences, setPreferences] = useState<HomePreferences>({
     modules: defaults,
     shortcuts: allowed,
@@ -249,7 +260,9 @@ export function PersonalHome({
                 </div>
               )}
             </header>
-            {id === "shortcuts" ? (
+            {id === "setup" ? (
+              <SetupGuide onOpen={onOpen} />
+            ) : id === "shortcuts" ? (
               <div className="home-links">
                 {shortcuts.map((target) => (
                   <button key={target} onClick={() => onOpen(target)}>
