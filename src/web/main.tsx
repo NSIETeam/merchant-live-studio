@@ -731,21 +731,21 @@ function Workspace({
                       </div>
                     </aside>
                   </div>
+                  <ModerationPanel
+                    key={selected.id + "-moderation"}
+                    onChanged={async () => {
+                      await refreshRooms();
+                      setAdmissionRevision((value) => value + 1);
+                    }}
+                    roomId={selected.id}
+                    actorId={actorId}
+                    editable={["owner", "reviewer"].includes(memberRole)}
+                  />
                   <details className="live-management">
-                    <summary>开播检查与现场处置</summary>
+                    <summary>开播准备检查</summary>
                     <AdmissionPanel
                       key={selected.id + selected.status + admissionRevision}
                       roomId={selected.id}
-                    />
-                    <ModerationPanel
-                      key={selected.id + "-moderation"}
-                      onChanged={async () => {
-                        await refreshRooms();
-                        setAdmissionRevision((value) => value + 1);
-                      }}
-                      roomId={selected.id}
-                      actorId={actorId}
-                      editable={["owner", "reviewer"].includes(memberRole)}
                     />
                   </details>
                   <details className="live-management">

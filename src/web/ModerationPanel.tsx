@@ -37,7 +37,10 @@ export function ModerationPanel({
     const poll = async () => {
       try {
         const value = await api<ModerationState>(base);
-        if (alive) setState(value);
+        if (alive) {
+          setState(value);
+          setError("");
+        }
       } catch (e) {
         if (alive) setError((e as Error).message);
       }
@@ -70,11 +73,14 @@ export function ModerationPanel({
       hold.result?.disconnected === 1 &&
       hold.actorId !== actorId;
   return (
-    <section className="card">
+    <section
+      className={`card live-moderation ${hold ? "has-hold" : ""}`}
+      aria-label="现场处置状态"
+    >
       <h2>现场处置</h2>
       {error && <p role="alert">{error}</p>}
       {hold ? (
-        <div role="status">
+        <div role="alert">
           <strong>本直播间已暂停，重新开播已锁定</strong>
           <p>{hold.note}</p>
           <p>
@@ -100,130 +106,135 @@ export function ModerationPanel({
       ) : (
         <p>暂无待解除的暂停记录。发现异常可记录并暂停直播。</p>
       )}
-      {editable && (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            void act(async () => {
-              await api(base, "POST", {
-                kind,
-                note,
-                evidenceReference: evidence,
-                idempotencyKey: key,
-                ...(kind === "release" ? { holdId: hold?.id } : {}),
+      <details className="moderation-tools">
+        <summary>记录问题与查看处置历史</summary>
+        {editable && (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void act(async () => {
+                await api(base, "POST", {
+                  kind,
+                  note,
+                  evidenceReference: evidence,
+                  idempotencyKey: key,
+                  ...(kind === "release" ? { holdId: hold?.id } : {}),
+                });
+                setNote("");
+                setEvidence("");
+                setKey(crypto.randomUUID());
+                setKind("note");
               });
-              setNote("");
-              setEvidence("");
-              setKey(crypto.randomUUID());
-              setKind("note");
-            });
+            }}
+          >
+            <label>
+              处置方式
+              <select
+                value={kind}
+                onChange={(e) => {
+                  setKind(e.target.value as typeof kind);
+                  setKey(crypto.randomUUID());
+                }}
+              >
+                {Object.entries(moderationLabels).map(([v, title]) => (
+                  <option key={v} value={v}>
+                    {title}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              问题、现场更正或复核说明
+              <textarea
+                required
+                minLength={5}
+                maxLength={2000}
+                value={note}
+                onChange={(e) => {
+                  setNote(e.target.value);
+                  setKey(crypto.randomUUID());
+                }}
+              />
+            </label>
+            <label>
+              内部证据位置（选填）
+              <input
+                maxLength={1000}
+                value={evidence}
+                onChange={(e) => {
+                  setEvidence(e.target.value);
+                  setKey(crypto.randomUUID());
+                }}
+              />
+            </label>
+            {kind === "stop" && (
+              <p>
+                提交后立即结束本场、更新推流密钥并尝试断流。另一账号复核解除前不能重新开播。
+              </p>
+            )}
+            {kind === "release" && (
+              <p>
+                须先确认断流成功，再由另一审核或管理员账号复核。解除仅恢复开播资格，不会自动开播。
+              </p>
+            )}
+            <button
+              className={kind === "stop" ? "danger" : ""}
+              disabled={
+                busy ||
+                note.trim().length < 5 ||
+                (kind === "stop" && Boolean(hold)) ||
+                (kind === "release" && !releaseAllowed)
+              }
+            >
+              {busy ? "处理中…" : moderationLabels[kind]}
+            </button>
+          </form>
+        )}
+        <button
+          onClick={() => {
+            setExpanded(!expanded);
+            if (!expanded) void act(async () => {});
           }}
         >
-          <label>
-            处置方式
-            <select
-              value={kind}
-              onChange={(e) => {
-                setKind(e.target.value as typeof kind);
-                setKey(crypto.randomUUID());
-              }}
-            >
-              {Object.entries(moderationLabels).map(([v, title]) => (
-                <option key={v} value={v}>
-                  {title}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            问题、现场更正或复核说明
-            <textarea
-              required
-              minLength={5}
-              maxLength={2000}
-              value={note}
-              onChange={(e) => {
-                setNote(e.target.value);
-                setKey(crypto.randomUUID());
-              }}
-            />
-          </label>
-          <label>
-            内部证据位置（选填）
-            <input
-              maxLength={1000}
-              value={evidence}
-              onChange={(e) => {
-                setEvidence(e.target.value);
-                setKey(crypto.randomUUID());
-              }}
-            />
-          </label>
-          {kind === "stop" && (
-            <p>
-              提交后立即结束本场、更新推流密钥并尝试断流。另一账号复核解除前不能重新开播。
-            </p>
-          )}
-          {kind === "release" && (
-            <p>
-              须先确认断流成功，再由另一审核或管理员账号复核。解除仅恢复开播资格，不会自动开播。
-            </p>
-          )}
-          <button
-            className={kind === "stop" ? "danger" : ""}
-            disabled={
-              busy ||
-              note.trim().length < 5 ||
-              (kind === "stop" && Boolean(hold)) ||
-              (kind === "release" && !releaseAllowed)
-            }
-          >
-            {busy ? "处理中…" : moderationLabels[kind]}
-          </button>
-        </form>
-      )}
-      <button
-        onClick={() => {
-          setExpanded(!expanded);
-          if (!expanded) void act(async () => {});
-        }}
-      >
-        查看处置记录
-      </button>
-      {expanded && (
-        <>
-          {history.map((item) => (
-            <article key={item.id}>
-              <strong>
-                {moderationLabels[item.kind]} · {item.actorId}
-              </strong>
-              <p>
-                {new Date(item.createdAt).toLocaleString()} · {item.note}
-              </p>
-              {item.evidenceReference && <p>依据：{item.evidenceReference}</p>}
-              {item.result && <p>断流结果：{item.result.message}</p>}
-            </article>
-          ))}
-          {before && (
-            <button
-              disabled={busy}
-              onClick={async () => {
-                try {
-                  const next = await api<ModerationState>(
-                    base + `?before=${before}`,
-                  );
-                  setHistory((old) => [...old, ...next.items]);
-                  setBefore(next.nextBefore);
-                } catch (e) {
-                  setError((e as Error).message);
-                }
-              }}
-            >
-              更早记录
-            </button>
-          )}
-        </>
-      )}
+          查看处置记录
+        </button>
+        {expanded && (
+          <>
+            {history.map((item) => (
+              <article key={item.id}>
+                <strong>
+                  {moderationLabels[item.kind]} · {item.actorId}
+                </strong>
+                <p>
+                  {new Date(item.createdAt).toLocaleString()} · {item.note}
+                </p>
+                {item.evidenceReference && (
+                  <p>依据：{item.evidenceReference}</p>
+                )}
+                {item.result && <p>断流结果：{item.result.message}</p>}
+              </article>
+            ))}
+            {before && (
+              <button
+                disabled={busy}
+                onClick={async () => {
+                  try {
+                    const next = await api<ModerationState>(
+                      base + `?before=${before}`,
+                    );
+                    setHistory((old) => [...old, ...next.items]);
+                    setBefore(next.nextBefore);
+                  } catch (e) {
+                    setError((e as Error).message);
+                  }
+                }}
+              >
+                更早记录
+              </button>
+            )}
+          </>
+        )}
+      </details>
     </section>
   );
 }

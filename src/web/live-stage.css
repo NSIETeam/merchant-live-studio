@@ -225,3 +225,27 @@
   margin: 8px 0 0;
   overflow-wrap: anywhere;
 }
+.workspace .live-moderation {
+  margin-top: 12px;
+}
+.workspace .live-moderation:not(.has-hold) > h2 {
+  display: none;
+}
+.workspace .live-moderation:not(.has-hold) > p:not([role="alert"]) {
+  margin: 0 0 6px;
+  color: var(--muted);
+}
+.workspace .live-moderation.has-hold {
+  border: 2px solid #b94838;
+  background: #fff6f3;
+}
+.workspace .moderation-tools > summary {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  font-weight: 600;
+}
+.workspace .moderation-tools form {
+  margin-top: 12px;
+}
