@@ -2,6 +2,10 @@
 
 验证日期：2026-09-11。Node.js 24.20.0 / macOS arm64。
 
+## GitHub CI 状态
+
+工作流已随源码推送，但首轮 [GitHub Actions 运行](https://github.com/NSIETeam/merchant-live-studio/actions/runs/34546436085) 没有启动任何测试步骤。GitHub 的任务注释为：账户近期付款失败，或需要提高支出额度，请检查 Billing & plans。此项是账户侧运行阻碍，不是已执行测试后发现的代码失败；没有修改账户计费设置。下述通过结果来自本地执行。账户恢复后可在 GitHub 重新运行该工作流。
+
 ## 已完成验证
 
 - `npm run check`：14 项 API/服务测试、TypeScript 检查、Vite/服务端构建，以及构建后真实 HTTP 服务测试。
