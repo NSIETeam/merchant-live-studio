@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   BookOpen,
   ChevronLeft,
@@ -25,6 +25,9 @@ export function BoundScriptPanel({
   const [index, setIndex] = useState(0);
   const [size, setSize] = useState(23);
   const [expanded, setExpanded] = useState(false);
+  const dialogRef = useRef<HTMLDialogElement | null>(null);
+  const toggleRef = useRef<HTMLButtonElement | null>(null);
+  const restoreFocus = useRef(false);
   useEffect(() => {
     let alive = true;
     setBinding(null);
@@ -58,20 +61,39 @@ export function BoundScriptPanel({
   useEffect(() => {
     setIndex(0);
   }, [binding?.courseId, binding?.scriptVersion]);
-  useEffect(() => {
-    if (!expanded) return;
-    const close = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setExpanded(false);
+  useLayoutEffect(() => {
+    if (!expanded) {
+      if (restoreFocus.current) toggleRef.current?.focus();
+      restoreFocus.current = false;
+      return;
+    }
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    restoreFocus.current = true;
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    dialog.showModal();
+    toggleRef.current?.focus();
+    return () => {
+      dialog.close();
+      document.body.style.overflow = overflow;
     };
-    document.addEventListener("keydown", close);
-    return () => document.removeEventListener("keydown", close);
   }, [expanded]);
   const script = binding?.script;
   const paragraphs = script?.paragraphs || [];
   const current = paragraphs[Math.min(index, paragraphs.length - 1)];
   const blocked = binding?.stale || !!error;
+  const Panel = expanded ? "dialog" : "section";
   return (
-    <section
+    <Panel
+      ref={(node) => {
+        dialogRef.current =
+          node?.tagName === "DIALOG" ? (node as HTMLDialogElement) : null;
+      }}
+      onCancel={(event) => {
+        event.preventDefault();
+        setExpanded(false);
+      }}
       className={`card bound-script ${expanded ? "bound-expanded" : ""}`}
       aria-label="本场定稿播讲"
     >
@@ -83,8 +105,9 @@ export function BoundScriptPanel({
           {binding && !blocked && (
             <span className="pill">讲稿 V{binding.scriptVersion}</span>
           )}
-          {binding && (
+          {(binding || expanded) && (
             <button
+              ref={toggleRef}
               className="icon-button"
               aria-label={expanded ? "退出专注播讲" : "专注播讲"}
               onClick={() => setExpanded(!expanded)}
@@ -221,6 +244,6 @@ export function BoundScriptPanel({
         前往商品与课程 <ChevronRight size={14} />
       </button>
       <BindingHistory key={roomId} roomId={roomId} />
-    </section>
+    </Panel>
   );
 }

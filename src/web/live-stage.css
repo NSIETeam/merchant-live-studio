@@ -295,3 +295,16 @@
 .workspace.live-workspace .bound-expanded {
   overflow: auto;
 }
+
+.workspace.live-workspace dialog.bound-expanded {
+  margin: 0;
+  width: auto;
+  height: auto;
+  max-width: none;
+  color: inherit;
+  box-shadow: none;
+  overscroll-behavior: contain;
+}
+.workspace.live-workspace dialog.bound-expanded::backdrop {
+  background: #16181bcf;
+}
