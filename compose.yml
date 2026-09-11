@@ -1,0 +1,54 @@
+services:
+  api:
+    build: .
+    ports:
+      - "127.0.0.1:8787:8787"
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      HOST: 0.0.0.0
+      PORT: 8787
+      APP_ORIGIN: ${APP_ORIGIN:-http://127.0.0.1:8787}
+      DATABASE_PATH: /app/data/studio.sqlite
+      DEMO_MODE: ${DEMO_MODE:-true}
+      SESSION_SECRET: ${SESSION_SECRET:-}
+      MERCHANT_CREDENTIALS: ${MERCHANT_CREDENTIALS:-}
+      PAYMENT_PROVIDER: simulation
+      STREAM_PROVIDER: ${STREAM_PROVIDER:-mediamtx}
+      STREAM_RTMP_BASE: ${STREAM_RTMP_BASE:-rtmp://localhost:1935/live}
+      STREAM_HLS_BASE: ${STREAM_HLS_BASE:-http://localhost:8888/live}
+      STREAM_AUTH_SECRET: ${STREAM_AUTH_SECRET:-}
+    volumes:
+      - studio-data:/app/data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8787/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+  mediamtx:
+    image: bluenviron/mediamtx:1.21.0
+    profiles: [mediamtx]
+    ports:
+      - "127.0.0.1:1935:1935"
+      - "127.0.0.1:8888:8888"
+    volumes:
+      - ./infra/mediamtx.yml:/mediamtx.yml:ro
+    restart: unless-stopped
+  srs:
+    image: ossrs/srs:6.0.191
+    profiles: [srs]
+    ports:
+      - "127.0.0.1:1935:1935"
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./infra/srs.conf:/usr/local/srs/conf/studio.conf:ro
+    command: ["./objs/srs", "-c", "conf/studio.conf"]
+    restart: unless-stopped
+volumes:
+  studio-data:

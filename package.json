@@ -1,0 +1,41 @@
+{
+  "name": "merchant-live-studio",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.10.0 <25"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n api,web 'npm:dev:api' 'npm:dev:web'",
+    "dev:api": "tsx watch --env-file-if-exists=.env src/server/index.ts",
+    "dev:web": "vite --host 127.0.0.1",
+    "typecheck": "tsc --noEmit",
+    "build": "npm run typecheck && vite build && tsc -p tsconfig.server.json",
+    "start": "node --env-file-if-exists=.env dist/server/server/index.js",
+    "test": "tsx --test tests/*.test.ts",
+    "check": "npm run test && npm run build && npm run smoke",
+    "smoke": "node tests/http-smoke.mjs",
+    "format": "prettier --write src tests docs *.json *.ts *.html *.yml README.md .github/workflows/*.yml infra/*.yml"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.19.0",
+    "hls.js": "^1.6.0",
+    "hono": "^4.9.0",
+    "lucide-react": "^0.577.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^5.1.0",
+    "concurrently": "^9.2.0",
+    "prettier": "^3.9.6",
+    "tsx": "^4.21.0",
+    "typescript": "~5.9.3",
+    "vite": "^7.3.0"
+  }
+}
