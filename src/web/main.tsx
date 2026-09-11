@@ -9,7 +9,7 @@ import { ModerationPanel } from "./ModerationPanel.js";
 import { AdmissionPanel } from "./AdmissionPanel.js";
 import { MerchantDisclosure } from "./DisclosurePanel.js";
 import { ComplaintsPanel } from "./ComplaintsPanel.js";
-import { MerchantEngagement } from "./EngagementPanel.js";
+import { ActivityWorkspace } from "./ActivityWorkspace.js";
 import { AttributionPanel } from "./AttributionPanel.js";
 import { Audience } from "./Audience.js";
 import { memberRoleNames, type MemberRole } from "../shared/membership.js";
@@ -787,20 +787,16 @@ function Workspace({
                 />
               )}
               {tab === "rewards" && (
-                <>
-                  {(memberRole === "owner" || memberRole === "analyst") && (
-                    <MerchantEngagement
-                      key={selected.id}
-                      roomId={selected.id}
-                      editable={memberRole === "owner"}
-                    />
-                  )}
-                  <Rewards
-                    key={selected.id}
-                    room={selected}
-                    onError={setError}
-                  />
-                </>
+                <ActivityWorkspace
+                  key={selected.id}
+                  roomId={selected.id}
+                  editable={memberRole === "owner"}
+                  showEngagement={
+                    memberRole === "owner" || memberRole === "analyst"
+                  }
+                >
+                  <Rewards room={selected} onError={setError} />
+                </ActivityWorkspace>
               )}
               {tab === "analytics" && (
                 <>

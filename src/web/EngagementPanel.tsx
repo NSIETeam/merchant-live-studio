@@ -200,11 +200,20 @@ export function ViewerEngagement({
 export function MerchantEngagement({
   roomId,
   editable,
+  view = "checkin",
+  hidden = false,
+  panelId,
+  labelledBy,
 }: {
   roomId: string;
   editable: boolean;
+  view?: "checkin" | "gifts";
+  hidden?: boolean;
+  panelId?: string;
+  labelledBy?: string;
 }) {
   const base = "/merchant/engagement";
+  const [showEditor, setShowEditor] = useState(false);
   const [program, setProgram] = useState<EngagementProgram | null>(null),
     [gifts, setGifts] = useState<EngagementGift[]>([]),
     [redemptions, setRedemptions] = useState<Redemption[]>([]),
@@ -264,198 +273,243 @@ export function MerchantEngagement({
     }
   }
   return (
-    <section className="card engagement-panel">
-      <h2>签到、积分与礼品</h2>
+    <section
+      className="card engagement-panel"
+      role="tabpanel"
+      tabIndex={0}
+      id={panelId}
+      aria-labelledby={labelledBy}
+      hidden={hidden}
+    >
+      <h2>{view === "checkin" ? "签到与积分" : "礼品与核销"}</h2>
       <p>
         积分与现金红包独立记账，礼品需人工交付核销。匿名会话不能识别同一个人换浏览器领取；上线真实活动前需接入正式身份与防刷策略。
       </p>
       {error && <p role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
-      <p>当前直播间今日签到：{checkins} 次（上海时间）</p>
-      {editable ? (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            void act(async () => {
-              await api(base + "/rooms/" + roomId, "POST", {
-                previousVersion: program?.version || 0,
-                enabled,
-                points,
-                minWatchSeconds: watch,
-                dailyLimit: limit,
-              });
-              setNotice("签到规则已保存，已经发放的积分保持原值。");
-            });
-          }}
-        >
-          <label>
-            <input
-              type="checkbox"
-              checked={enabled}
-              disabled={busy}
-              onChange={(e) => setEnabled(e.target.checked)}
-            />
-            开放签到
-          </label>
-          <label>
-            每次签到积分
-            <input
-              type="number"
-              min={1}
-              max={10000}
-              required
-              value={points}
-              disabled={busy}
-              onChange={(e) => setPoints(Number(e.target.value))}
-            />
-          </label>
-          <label>
-            本场累计观看要求（秒）
-            <input
-              type="number"
-              min={0}
-              max={14400}
-              required
-              value={watch}
-              disabled={busy}
-              onChange={(e) => setWatch(Number(e.target.value))}
-            />
-          </label>
-          <label>
-            每日签到名额
-            <input
-              type="number"
-              min={1}
-              max={100000}
-              required
-              value={limit}
-              disabled={busy}
-              onChange={(e) => setLimit(Number(e.target.value))}
-            />
-          </label>
-          <button disabled={busy}>保存签到规则</button>
-        </form>
-      ) : (
-        <p>
-          当前规则：{program?.enabled ? "开放" : "关闭"} ·{" "}
-          {program?.points || 0} 积分 · {program?.minWatchSeconds || 0} 秒
-        </p>
-      )}
-      <details>
-        <summary>礼品与库存</summary>
-        {gifts.map((g) => (
-          <p key={g.id}>
-            {g.title} · {g.points} 积分 · 可用库存 {g.stock} ·{" "}
-            {g.enabled ? "上架" : "下架"}{" "}
-            {editable && (
-              <button disabled={busy} onClick={() => setEditing(g)}>
-                编辑
-              </button>
-            )}
-          </p>
-        ))}
-        {editable && (
-          <>
-            <button disabled={busy} onClick={() => setEditing(null)}>
-              新建礼品
-            </button>
-            <GiftEditor
-              key={editing?.id + ":" + editing?.version + ":" + editing?.stock}
-              gift={editing}
-              disabled={busy}
-              save={(x) =>
-                void act(async () => {
-                  if (editing)
-                    await api(base + "/gifts/" + editing.id, "PATCH", {
-                      ...x,
-                      previousVersion: editing.version,
-                      previousStock: editing.stock,
-                    });
-                  else await api(base + "/gifts", "POST", x);
-                  setEditing(null);
-                  setNotice("礼品资料已保存。");
-                })
-              }
-            />
-          </>
-        )}
-      </details>
-      <h3>礼品领取记录</h3>
-      {redemptions.map((r) => (
-        <div key={r.id}>
-          <p>
-            {r.title} · {r.points} 积分 · {redemptionNames[r.state]} ·{" "}
-            {new Date(r.createdAt).toLocaleString()}
-          </p>
-          <p>兑换编号：{r.id}</p>
-          {editable && r.state === "reserved" && (
-            <Fulfillment
-              key={r.id}
-              disabled={busy}
-              onFinish={(state, code, note) =>
-                void act(async () => {
-                  await api(
-                    base + "/redemptions/" + r.id + "/" + state,
-                    "POST",
-                    state === "fulfill" ? { code, note } : { note },
-                  );
-                  setNotice(
-                    state === "fulfill"
-                      ? "领取已核销。"
-                      : "已取消并返还积分、恢复库存。",
-                  );
-                })
-              }
-            />
-          )}
-          <button
-            disabled={busy}
-            onClick={() =>
+      <div hidden={view !== "checkin"}>
+        <p>当前直播间今日签到：{checkins} 次（上海时间）</p>
+        {editable ? (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
               void act(async () => {
-                setEvents(
-                  (
-                    await api<{ events: typeof events }>(
-                      base + "/redemptions/" + r.id + "/history",
-                    )
-                  ).events,
-                );
-              })
-            }
+                await api(base + "/rooms/" + roomId, "POST", {
+                  previousVersion: program?.version || 0,
+                  enabled,
+                  points,
+                  minWatchSeconds: watch,
+                  dailyLimit: limit,
+                });
+                setNotice("签到规则已保存，已经发放的积分保持原值。");
+              });
+            }}
           >
-            处理历史
-          </button>
-        </div>
-      ))}
-      {next && (
-        <button
-          disabled={busy}
-          onClick={() => {
-            setBusy(true);
-            void api<{ redemptions: Redemption[]; nextBefore: number | null }>(
-              base + "/redemptions?before=" + next,
-            )
-              .then((r) => {
-                setRedemptions((old) => [...old, ...r.redemptions]);
-                setNext(r.nextBefore);
-              })
-              .catch((e) => setError(e.message))
-              .finally(() => setBusy(false));
-          }}
-        >
-          加载更多
-        </button>
-      )}
-      {events.length > 0 && (
+            <label>
+              <input
+                type="checkbox"
+                checked={enabled}
+                disabled={busy}
+                onChange={(e) => setEnabled(e.target.checked)}
+              />
+              开放签到
+            </label>
+            <label>
+              每次签到积分
+              <input
+                type="number"
+                min={1}
+                max={10000}
+                required
+                value={points}
+                disabled={busy}
+                onChange={(e) => setPoints(Number(e.target.value))}
+              />
+            </label>
+            <label>
+              本场累计观看要求（秒）
+              <input
+                type="number"
+                min={0}
+                max={14400}
+                required
+                value={watch}
+                disabled={busy}
+                onChange={(e) => setWatch(Number(e.target.value))}
+              />
+            </label>
+            <label>
+              每日签到名额
+              <input
+                type="number"
+                min={1}
+                max={100000}
+                required
+                value={limit}
+                disabled={busy}
+                onChange={(e) => setLimit(Number(e.target.value))}
+              />
+            </label>
+            <button disabled={busy}>保存签到规则</button>
+          </form>
+        ) : (
+          <p>
+            当前规则：{program?.enabled ? "开放" : "关闭"} ·{" "}
+            {program?.points || 0} 积分 · {program?.minWatchSeconds || 0} 秒
+          </p>
+        )}
+      </div>
+      <div hidden={view !== "gifts"}>
         <details open>
-          <summary>处理历史</summary>
-          {events.map((e, i) => (
-            <p key={i}>
-              {redemptionNames[e.state]} · {e.actorId} · {e.note} ·{" "}
-              {new Date(e.createdAt).toLocaleString()}
+          <summary>礼品与库存</summary>
+          {gifts.map((g) => (
+            <p key={g.id}>
+              {g.title} · {g.points} 积分 · 可用库存 {g.stock} ·{" "}
+              {g.enabled ? "上架" : "下架"}{" "}
+              {editable && (
+                <button
+                  disabled={busy}
+                  onClick={() => {
+                    setEditing(g);
+                    setShowEditor(true);
+                  }}
+                >
+                  编辑
+                </button>
+              )}
             </p>
           ))}
+          {editable && (
+            <>
+              <button
+                disabled={busy}
+                onClick={() => {
+                  setEditing(null);
+                  setShowEditor(true);
+                }}
+              >
+                新建礼品
+              </button>
+              {showEditor && (
+                <>
+                  <button
+                    disabled={busy}
+                    onClick={() => {
+                      setShowEditor(false);
+                      setEditing(null);
+                    }}
+                  >
+                    取消编辑
+                  </button>
+                  <GiftEditor
+                    key={
+                      editing?.id +
+                      ":" +
+                      editing?.version +
+                      ":" +
+                      editing?.stock
+                    }
+                    gift={editing}
+                    disabled={busy}
+                    save={(x) =>
+                      void act(async () => {
+                        if (editing)
+                          await api(base + "/gifts/" + editing.id, "PATCH", {
+                            ...x,
+                            previousVersion: editing.version,
+                            previousStock: editing.stock,
+                          });
+                        else await api(base + "/gifts", "POST", x);
+                        setEditing(null);
+                        setShowEditor(false);
+                        setNotice("礼品资料已保存。");
+                      })
+                    }
+                  />
+                </>
+              )}
+            </>
+          )}
         </details>
-      )}
+        <h3>礼品领取记录</h3>
+        {!redemptions.length && <p className="muted">暂无领取记录。</p>}
+        {redemptions.map((r) => (
+          <div key={r.id}>
+            <p>
+              {r.title} · {r.points} 积分 · {redemptionNames[r.state]} ·{" "}
+              {new Date(r.createdAt).toLocaleString()}
+            </p>
+            <p>兑换编号：{r.id}</p>
+            {editable && r.state === "reserved" && (
+              <Fulfillment
+                key={r.id}
+                disabled={busy}
+                onFinish={(state, code, note) =>
+                  void act(async () => {
+                    await api(
+                      base + "/redemptions/" + r.id + "/" + state,
+                      "POST",
+                      state === "fulfill" ? { code, note } : { note },
+                    );
+                    setNotice(
+                      state === "fulfill"
+                        ? "领取已核销。"
+                        : "已取消并返还积分、恢复库存。",
+                    );
+                  })
+                }
+              />
+            )}
+            <button
+              disabled={busy}
+              onClick={() =>
+                void act(async () => {
+                  setEvents(
+                    (
+                      await api<{ events: typeof events }>(
+                        base + "/redemptions/" + r.id + "/history",
+                      )
+                    ).events,
+                  );
+                })
+              }
+            >
+              处理历史
+            </button>
+          </div>
+        ))}
+        {next && (
+          <button
+            disabled={busy}
+            onClick={() => {
+              setBusy(true);
+              void api<{
+                redemptions: Redemption[];
+                nextBefore: number | null;
+              }>(base + "/redemptions?before=" + next)
+                .then((r) => {
+                  setRedemptions((old) => [...old, ...r.redemptions]);
+                  setNext(r.nextBefore);
+                })
+                .catch((e) => setError(e.message))
+                .finally(() => setBusy(false));
+            }}
+          >
+            加载更多
+          </button>
+        )}
+        {events.length > 0 && (
+          <details open>
+            <summary>处理历史</summary>
+            {events.map((e, i) => (
+              <p key={i}>
+                {redemptionNames[e.state]} · {e.actorId} · {e.note} ·{" "}
+                {new Date(e.createdAt).toLocaleString()}
+              </p>
+            ))}
+          </details>
+        )}
+      </div>
       <button disabled={busy} onClick={() => void act(async () => {})}>
         刷新活动数据
       </button>

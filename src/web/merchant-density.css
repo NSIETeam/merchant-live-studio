@@ -647,3 +647,70 @@
 .workspace .team-event p {
   margin: 6px 0;
 }
+
+.activity-workspace [hidden] {
+  display: none !important;
+}
+.activity-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+}
+.activity-tabs button {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 5px;
+}
+.activity-tabs button[aria-selected="true"] {
+  background: #e9ebef;
+  color: #25272b;
+  font-weight: 600;
+}
+.activity-workspace .engagement-panel > p {
+  margin-bottom: 12px;
+}
+.activity-workspace .engagement-panel form {
+  max-width: 640px;
+}
+.activity-workspace .engagement-panel details {
+  margin: 14px 0;
+}
+.activity-workspace .engagement-panel button {
+  min-height: 44px;
+}
+@media (max-width: 700px) {
+  .activity-workspace input,
+  .activity-workspace select,
+  .activity-workspace textarea {
+    font-size: 16px;
+  }
+  .activity-tabs {
+    gap: 0;
+  }
+  .activity-tabs button {
+    padding: 8px 4px;
+    font-size: 12px;
+  }
+}
+.activity-workspace label:has(> input[type="checkbox"]) {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  min-height: 44px;
+  gap: 8px;
+}
+.activity-workspace input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  flex: 0 0 auto;
+  accent-color: #334155;
+}
