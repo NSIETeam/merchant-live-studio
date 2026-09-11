@@ -1,5 +1,6 @@
 import { ModerationResults } from "./ModerationResults.js";
-import { useEffect, useState } from "react";
+import { pollResource } from "../shared/poll-resource.js";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../shared/api.js";
 import {
   moderationLabels,
@@ -26,6 +27,7 @@ export function ModerationPanel({
     [expanded, setExpanded] = useState(false),
     [history, setHistory] = useState<ModerationState["items"]>([]),
     [before, setBefore] = useState<number | null>(null);
+  const polling = useRef<ReturnType<typeof pollResource> | null>(null);
   const base = `/merchant/rooms/${roomId}/moderation`;
   async function refresh() {
     const value = await api<ModerationState>(base);
@@ -34,27 +36,20 @@ export function ModerationPanel({
     setBefore(value.nextBefore);
   }
   useEffect(() => {
-    let alive = true;
-    const poll = async () => {
-      try {
-        const value = await api<ModerationState>(base);
-        if (alive) {
-          setState(value);
-          setError("");
-        }
-      } catch (e) {
-        if (alive) setError((e as Error).message);
-      }
-    };
-    void poll();
-    const timer = setInterval(() => void poll(), 5000);
-    return () => {
-      alive = false;
-      clearInterval(timer);
-    };
+    const task = pollResource<ModerationState>({
+      read: signal => api<ModerationState>(base, "GET", undefined, { signal }),
+      onValue: value => { setState(value); setError(""); },
+      onError: e => { setState(null); setError(e.message); },
+      intervalMs: 5000,
+      timeoutMs: 8000,
+      timeoutMessage: "现场处置状态核对超时，请检查网络后重试。",
+    });
+    polling.current = task;
+    return () => { task.stop(); polling.current = null; };
   }, [base]);
   async function act(fn: () => Promise<void>) {
     if (busy) return;
+    polling.current?.pause();
     setBusy(true);
     setError("");
     try {
@@ -65,6 +60,7 @@ export function ModerationPanel({
       setError((e as Error).message);
     } finally {
       setBusy(false);
+      polling.current?.refresh();
     }
   }
   const hold = state?.hold,
@@ -105,7 +101,7 @@ export function ModerationPanel({
           )}
         </div>
       ) : (
-        <p>暂无待解除的暂停记录。发现异常可记录并暂停直播。</p>
+        <p>{state ? "暂无待解除的暂停记录。发现异常可记录并暂停直播。" : "尚未确认现场处置状态，正在重新核对。"}</p>
       )}
       <details className="moderation-tools">
         <summary>记录问题与查看处置历史</summary>
