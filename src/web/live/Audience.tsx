@@ -18,6 +18,7 @@ import {
   X,
 } from "lucide-react";
 import type { Campaign, Claim, Room } from "../../shared/types.js";
+import type { ChannelCapabilities } from "../../shared/channels.js";
 import { api, duration, money } from "../shared/api.js";
 import { Player } from "./Player.js";
 import "./audience.css";
@@ -29,6 +30,12 @@ type RoomData = {
   requirePlayback: boolean;
 };
 type Heartbeat = { watchSeconds: number; counting: boolean };
+type ViewerIdentity = {
+  identity: "anonymous" | "wechat";
+  channel: "web" | "wechat";
+  verified: boolean;
+  canReceiveRealMoney: boolean;
+};
 type Panel =
   "questions" | "rewards" | "information" | "complaints" | "disclosure";
 const panelNames: Record<Panel, string> = {
@@ -85,6 +92,11 @@ function AudienceRoom({ id }: { id: string }) {
   const [interactive, setInteractive] = useState(false);
   const [authAttempt, setAuthAttempt] = useState(0);
   const [authConnecting, setAuthConnecting] = useState(false);
+  const [viewerIdentity, setViewerIdentity] = useState<ViewerIdentity | null>(
+    null,
+  );
+  const [wechatAvailable, setWechatAvailable] = useState(false);
+  const [wechatConnecting, setWechatConnecting] = useState(false);
   const [offset, setOffset] = useState(0);
   const [panel, setPanel] = useState<Panel | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -108,9 +120,10 @@ function AudienceRoom({ id }: { id: string }) {
     setInteractionError("");
     setAuthConnecting(true);
     setInteractive(false);
-    api("/auth/viewer", "POST", {})
-      .then(() => {
+    api<ViewerIdentity>("/auth/viewer", "POST", {})
+      .then((identity) => {
         if (active) {
+          setViewerIdentity(identity);
           setReady(true);
           pulse.current();
         }
@@ -126,6 +139,44 @@ function AudienceRoom({ id }: { id: string }) {
       active = false;
     };
   }, [authAttempt]);
+
+  useEffect(() => {
+    let active = true;
+    api<{ channels: ChannelCapabilities[] }>("/channels")
+      .then(({ channels }) => {
+        if (active)
+          setWechatAvailable(
+            channels.some(
+              (channel) =>
+                channel.channel === "wechat" &&
+                channel.viewerEntry === "available" &&
+                channel.verifiedIdentity,
+            ),
+          );
+      })
+      .catch(() => {
+        if (active) setWechatAvailable(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const connectWechat = async () => {
+    setWechatConnecting(true);
+    setInteractionError("");
+    try {
+      const result = await api<{
+        configured: true;
+        authorizationUrl: string;
+        expiresAt: number;
+      }>(`/channels/wechat/authorize?roomId=${encodeURIComponent(id)}`);
+      window.location.assign(result.authorizationUrl);
+    } catch (nextError) {
+      setInteractionError((nextError as Error).message);
+      setWechatConnecting(false);
+    }
+  };
 
   const refresh = useCallback(async () => {
     const next = await api<RoomData>(`/public/rooms/${id}`);
@@ -689,7 +740,27 @@ function AudienceRoom({ id }: { id: string }) {
                         </span>
                       </dd>
                     </div>
+                    <div>
+                      <dt>互动身份</dt>
+                      <dd>
+                        {viewerIdentity?.verified
+                          ? "微信身份已验证"
+                          : "匿名浏览器会话"}
+                      </dd>
+                    </div>
                   </dl>
+                  {wechatAvailable && !viewerIdentity?.verified && (
+                    <button
+                      className="audience-action audience-secondary"
+                      type="button"
+                      disabled={wechatConnecting}
+                      onClick={() => void connectWechat()}
+                    >
+                      {wechatConnecting
+                        ? "正在前往微信验证…"
+                        : "使用微信验证身份"}
+                    </button>
+                  )}
                   <p className="audience-help">
                     视频正常播放且页面处于前台时累计观看时长。暂停、切换页面或等待信号时不累计；活动资格以服务器记录为准。
                   </p>
@@ -697,7 +768,9 @@ function AudienceRoom({ id }: { id: string }) {
                     如没有声音，请在视频控制栏打开声音。横屏或使用视频的全屏按钮，可以看得更大。
                   </p>
                   <p className="audience-help">
-                    本页使用匿名浏览器身份记录互动，仅用于演示，不能用于真实提现。
+                    {viewerIdentity?.verified
+                      ? "本页已使用微信身份记录互动。身份验证不等于收款授权，当前仍不能用于真实提现。"
+                      : "本页使用匿名浏览器身份记录互动，仅用于演示，不能用于真实提现。"}
                   </p>
                 </>
               )}

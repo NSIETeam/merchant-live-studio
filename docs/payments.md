@@ -6,7 +6,7 @@
 
 运行环境为 Node.js 24.10+、SQLite；`.env` 必须使用 `PAYMENT_PROVIDER=simulation`。任何其他值都会使服务启动失败。`/api/health` 返回 `payments: "simulation"`。
 
-目前没有微信登录、商户资金充值、真实转账或用户提现。匿名观看会话返回 `canReceiveRealMoney: false`；演示领取只能产生 `reserved` 和 `simulated` 状态，不能产生“已到账”。
+微信公众号 OAuth 观众身份接口已实现但默认关闭，尚未使用获授权公众号、备案域名和微信客户端实测。即使 OAuth 成功，系统也只建立不透明的稳定观看身份，不保存 access token，不把登录当作付款或收款授权，并继续返回 `canReceiveRealMoney: false`。目前没有商户资金充值、真实转账或用户提现；演示领取只能产生 `reserved` 和 `simulated` 状态，不能产生“已到账”。
 
 商家与观众接口如下，写接口要求 JSON；商家接口使用商家会话，观众接口使用观众会话：
 
@@ -30,7 +30,7 @@
 
 ## 已预留的代码接口
 
-`src/server/services/payments.ts` 定义：
+`src/modules/payments/provider.ts` 定义：
 
 ```ts
 interface PaymentProvider {

@@ -37,6 +37,12 @@ export interface Config {
   retentionPolicy: RetentionPolicyData | null;
   requestConcurrencyMax: number;
   audienceConcurrencyMax: number;
+  wechatOAuth: {
+    appId: string;
+    appSecret: string;
+    identitySecret: string;
+    redirectUri: string;
+  } | null;
 }
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const production = env.NODE_ENV === "production";
@@ -98,6 +104,46 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const appOrigin = z.url().parse(env.APP_ORIGIN || "http://127.0.0.1:5173");
   if (production && !appOrigin.startsWith("https://"))
     throw new Error("Production APP_ORIGIN must use HTTPS");
+  const basePath = z
+    .string()
+    .regex(/^\/(?:[a-zA-Z0-9_-]+\/)*$/)
+    .parse(env.APP_BASE_PATH || "/");
+  const wechatOAuthEnabled = z
+    .enum(["true", "false"])
+    .parse(env.WECHAT_OAUTH_ENABLED || "false");
+  let wechatOAuth: Config["wechatOAuth"] = null;
+  if (wechatOAuthEnabled === "true") {
+    const appId = z
+      .string()
+      .regex(/^wx[a-zA-Z0-9]{16}$/)
+      .parse(env.WECHAT_APP_ID || "");
+    const appSecret = z
+      .string()
+      .min(32)
+      .max(128)
+      .parse(env.WECHAT_APP_SECRET || "");
+    const identitySecret = z
+      .string()
+      .min(32)
+      .max(128)
+      .parse(env.WECHAT_IDENTITY_SECRET || "");
+    const redirectUri = z
+      .url()
+      .max(1000)
+      .parse(env.WECHAT_OAUTH_REDIRECT_URI || "");
+    const parsedRedirect = new URL(redirectUri);
+    if (
+      parsedRedirect.origin !== new URL(appOrigin).origin ||
+      parsedRedirect.pathname !== `${basePath}api/channels/wechat/callback` ||
+      parsedRedirect.search ||
+      parsedRedirect.hash ||
+      (production && parsedRedirect.protocol !== "https:")
+    )
+      throw new Error(
+        "WECHAT_OAUTH_REDIRECT_URI must be the current HTTPS application callback",
+      );
+    wechatOAuth = { appId, appSecret, identitySecret, redirectUri };
+  }
   const policyUrl = z
     .url()
     .max(1000)
@@ -238,7 +284,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     speechDispatchConcurrency,
     mediaControlUrl: env.MEDIA_CONTROL_URL || "",
     mediaControlToken: env.MEDIA_CONTROL_TOKEN || "",
-    basePath: env.APP_BASE_PATH || "/",
+    basePath,
     requirePlayback:
       (env.REQUIRE_PLAYBACK ?? (production ? "true" : "false")) === "true",
     trustedProxyIps: (env.TRUSTED_PROXY_IPS || "")
@@ -251,5 +297,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     retentionPolicy,
     requestConcurrencyMax,
     audienceConcurrencyMax,
+    wechatOAuth,
   };
 }

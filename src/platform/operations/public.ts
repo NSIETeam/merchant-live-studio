@@ -1,6 +1,6 @@
 import type { Hono } from "hono";
 import { type Config } from "../../platform/infrastructure/public.js";
-import { channelCapabilities } from "../../shared/channels.js";
+import { configuredChannelCapabilities } from "../../shared/channels.js";
 import type { DB } from "../../shared/persistence.js";
 import { findDatabase } from "./persistence/public-queries.js";
 export { attachCapacityGuard } from "./capacity.js";
@@ -33,7 +33,11 @@ export function attachOperations(
       capacity: capacity?.snapshot() ?? null,
     });
   });
-  app.get("/api/channels", (c) => c.json({ channels: channelCapabilities }));
+  app.get("/api/channels", (c) =>
+    c.json({
+      channels: configuredChannelCapabilities(Boolean(config.wechatOAuth)),
+    }),
+  );
   app.get("/api/platform/compliance", (c) => {
     c.header("Cache-Control", "no-store");
     return c.json({

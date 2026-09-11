@@ -49,3 +49,14 @@ export const channelCapabilities: ChannelCapabilities[] = [
     realPayment: false,
   },
 ];
+export function configuredChannelCapabilities(wechatIdentity: boolean) {
+  return channelCapabilities.map((capability) =>
+    capability.channel === "wechat" && wechatIdentity
+      ? {
+          ...capability,
+          viewerEntry: "available" as const,
+          verifiedIdentity: true,
+        }
+      : capability,
+  );
+}

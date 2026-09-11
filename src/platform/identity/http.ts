@@ -14,6 +14,10 @@ import { HTTPException } from "hono/http-exception";
 import { secureHeaders } from "hono/secure-headers";
 import { isIP } from "node:net";
 import { z, ZodError } from "zod";
+import {
+  HttpWeChatOAuthAdapter,
+  type WeChatOAuthPort,
+} from "../../platform/adapters/public.js";
 import { type Config } from "../../platform/infrastructure/public.js";
 import type { DB } from "../../shared/persistence.js";
 import { equalSecret, issueSession, readSession } from "./auth.js";
@@ -26,11 +30,13 @@ import {
   deleteRevokedSessionsByExpiresAt,
   insertRevokedSessions,
 } from "./persistence/http-queries.js";
+import { attachWeChatIdentity } from "./wechat.js";
 type App = Hono<{ Variables: { merchantId: string; viewerId: string } }>;
 export function createIdentity(
   db: DB,
   config: Config,
   clock: () => number = Date.now,
+  wechat: WeChatOAuthPort = new HttpWeChatOAuthAdapter(config),
 ) {
   const accounts = createAccountStore(db);
   for (const id of Object.keys(config.merchantCredentials)) {
@@ -163,6 +169,7 @@ export function createIdentity(
         );
         return c.json({ error: "服务暂时不可用" }, 500);
       });
+      attachWeChatIdentity(app, config, wechat, clock);
       app.use("/api/merchant/*", async (c, next) => {
         const session = readSession(c, config, "merchant", db);
         if (!session)
@@ -250,7 +257,9 @@ export function createIdentity(
           issueSession(c, config, "viewer");
         return c.json({
           viewerId: session.id,
-          identity: "anonymous",
+          identity: session.id.startsWith("wechat_") ? "wechat" : "anonymous",
+          channel: session.id.startsWith("wechat_") ? "wechat" : "web",
+          verified: session.id.startsWith("wechat_"),
           canReceiveRealMoney: false,
         });
       });
