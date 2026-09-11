@@ -62,7 +62,8 @@ test("admission blocks missing or revoked basis, records successful starts, and 
       reviewer: { merchantId: "demo", role: "reviewer" },
     }),
   });
-  const app = createApp(db, config);
+  let now = Date.now();
+  const app = createApp(db, config, () => now);
   async function call(
     path: string,
     method = "GET",
@@ -258,6 +259,30 @@ test("admission blocks missing or revoked basis, records successful starts, and 
         query: `token=${secret}`,
       });
     assert.equal((await hook()).status, 204);
+    const realNow = now;
+    const deadline = Date.parse("2099-12-31T16:00:00Z");
+    now = deadline - 1;
+    assert.equal((await hook()).status, 204);
+    now = deadline;
+    const expired = (await call(room + "/admission", "GET", undefined, owner))
+      .data;
+    assert.equal(expired.ready, false);
+    assert.equal(
+      expired.checks.find((item: any) => item.code === "disclosure").passed,
+      false,
+    );
+    assert.equal((await hook()).status, 403);
+    assert.equal((await start()).status, 409);
+    const visible = (await call("/public/rooms/demo-room/disclosure")).data;
+    assert.equal(visible.disclosure.version, 1);
+    now = realNow;
+    assert.equal((await hook()).status, 204);
+    // Expiry during the media-control await must also reject the new publisher.
+    race = () => {
+      now = deadline;
+    };
+    assert.equal((await hook()).status, 403);
+    now = realNow;
     race = () =>
       db.prepare("UPDATE rooms SET status='ended' WHERE id='demo-room'").run();
     assert.equal((await hook()).status, 403);
