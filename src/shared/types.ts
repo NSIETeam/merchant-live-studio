@@ -80,7 +80,10 @@ export interface CopilotResult {
   suggestion: string;
   factIds: string[];
   evidence: string[];
-  alerts: { level: "high" | "review"; phrase: string; reason: string }[];
+  alerts: import("./agent.js").AgentAlert[];
   nextCue: string;
   needsReview: boolean;
+  policyVersion?: string;
+  policyPack?: import("./agent.js").AgentResult["policyPack"];
+  claimDecisions?: import("./agent.js").ClaimDecision[];
 }

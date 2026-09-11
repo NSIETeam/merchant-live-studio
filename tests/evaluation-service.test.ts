@@ -772,6 +772,7 @@ test("Real local Agent results are evaluated honestly and evidence-free abstenti
             mustCiteEvidence: false,
             abstained: true,
             alertCategories: ["claim"],
+            decisionTypes: ["medical_efficacy"],
             forbiddenPhrases: ["治好"],
           },
         },
@@ -801,6 +802,13 @@ test("Real local Agent results are evaluated honestly and evidence-free abstenti
       assert.equal(item.run.result.modelConfigured, false);
       assert.equal(item.run.result.provider, "grounded-rules");
       assert.match(item.checks[0].detail, /未调用真实模型/);
+      if (id === second.id)
+        assert.ok(
+          item.checks.some(
+            (check: { name: string; passed: boolean }) =>
+              check.name === "主张识别：medical_efficacy" && check.passed,
+          ),
+        );
     }
   } finally {
     await f.dispose();

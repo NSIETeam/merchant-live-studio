@@ -157,6 +157,62 @@ test("第一 and 无出其右 both trigger semantic claim review rather than syn
     );
   assert.ok(!/第一|无出其右|治疗/.test(result.suggestion));
   assert.equal(result.stages.at(-1)?.status, "blocked");
+  assert.equal(result.policyVersion, "cn-live-claims-2026.1");
+  assert.equal(result.policyPack, "general");
+  assert.ok(
+    result.claimDecisions?.some(
+      (decision) =>
+        decision.type === "superiority" &&
+        decision.disposition === "block" &&
+        decision.evidenceNeeded.includes("统计口径"),
+    ),
+  );
+});
+
+test("structured review separates an ordinal from product superiority and catches euphemism substitution", async () => {
+  const value = input();
+  value.context.transcript = "第一步先看标签。不能说第一，就改成无出其右。";
+  const result = await runAgent(value);
+  assert.ok(
+    result.claimDecisions?.some(
+      (decision) =>
+        decision.type === "contextual_ordinal" &&
+        decision.disposition === "context" &&
+        decision.statement.includes("第一步"),
+    ),
+  );
+  assert.ok(
+    result.claimDecisions?.some(
+      (decision) =>
+        decision.type === "superiority" &&
+        decision.phrase === "无出其右" &&
+        decision.disposition === "block",
+    ),
+  );
+});
+
+test("food and nutrition claims select the sensitive policy pack and return actionable evidence requirements", async () => {
+  const value = input();
+  value.context.category = "营养食品";
+  value.context.transcript =
+    "这款能治疗失眠，百分之百有效，仅剩3件，马上涨价。";
+  const result = await runAgent(value);
+  assert.equal(result.policyPack, "food-nutrition");
+  for (const type of ["medical_efficacy", "guarantee", "price_scarcity"])
+    assert.ok(
+      result.claimDecisions?.some(
+        (decision) =>
+          decision.type === type &&
+          decision.disposition === "block" &&
+          decision.suggestedAction.length > 10,
+      ),
+      `missing structured ${type} decision`,
+    );
+  assert.ok(
+    result.claimDecisions
+      ?.find((decision) => decision.type === "medical_efficacy")
+      ?.explanation.includes("普通食品"),
+  );
 });
 
 test("warm brand style never fabricates the presenter's memories or universal taste impressions", async () => {
@@ -316,6 +372,14 @@ test("remote model uses only trusted transport config and a fixed system policy,
     assert.equal(body.messages[1].role, "user");
     const data = JSON.parse(body.messages[1].content);
     assert.ok(data.promptData.systemPrompt.includes("CUSTOM_OVERRIDE"));
+    assert.equal(data.localPolicy.version, "cn-live-claims-2026.1");
+    assert.equal(data.localPolicy.pack, "general");
+    assert.ok(
+      data.localPolicy.decisions.some(
+        (decision: { type: string }) =>
+          decision.type === "instruction_override",
+      ),
+    );
     assert.deepEqual(data.promptData.presenter, {
       speakingStyle: "自然短句",
       pace: "slow",

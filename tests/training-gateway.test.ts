@@ -61,8 +61,13 @@ async function fixture(clock: () => number = Date.now) {
 const sample: EvaluationCase = {
   id: "facts",
   title: "已核对事实",
-  transcript: "介绍产品资料",
-  expect: { mustCiteEvidence: true, alertCategories: [], forbiddenPhrases: [] },
+  transcript: "第一步先介绍产品资料",
+  expect: {
+    mustCiteEvidence: true,
+    alertCategories: ["claim"],
+    decisionTypes: ["contextual_ordinal"],
+    forbiddenPhrases: [],
+  },
 };
 test("evaluation replay freezes away live countdowns but still rejects changed approved product facts", async () => {
   let now = Date.now();
@@ -204,6 +209,14 @@ test("material review and authorized style import connect to paired evaluation w
         (i) =>
           i.run.mode === "rehearsal" &&
           i.run.result?.provider === "grounded-rules",
+      ),
+    );
+    assert.ok(
+      report.items.every((item) =>
+        item.checks.some(
+          (check) =>
+            check.name === "主张识别：contextual_ordinal" && check.passed,
+        ),
       ),
     );
     assert.equal(

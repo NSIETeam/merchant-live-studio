@@ -2,6 +2,7 @@ import type {
   AgentAlert,
   AgentFact,
   AgentRun,
+  ClaimDecisionType,
   PromptVersion,
 } from "./agent.js";
 
@@ -56,6 +57,7 @@ export interface EvaluationCase {
     mustCiteEvidence: boolean;
     abstained?: boolean;
     alertCategories: NonNullable<AgentAlert["category"]>[];
+    decisionTypes?: ClaimDecisionType[];
     forbiddenPhrases: string[];
   };
 }

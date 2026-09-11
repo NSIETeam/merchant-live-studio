@@ -86,6 +86,23 @@ export function AgentLiveCard({
       ) : run?.result ? (
         <>
           <p>{run.result.suggestion}</p>
+          {!!run.result.claimDecisions?.length && (
+            <p className="fine-print" role="status">
+              语义复核：
+              {
+                run.result.claimDecisions.filter(
+                  (decision) => decision.disposition === "block",
+                ).length
+              }{" "}
+              项建议暂停，
+              {
+                run.result.claimDecisions.filter(
+                  (decision) => decision.disposition !== "block",
+                ).length
+              }{" "}
+              项需结合语境。打开工作台查看依据要求和处理方向。
+            </p>
+          )}
           <p className="fine-print">
             最近{run.mode === "rehearsal" ? "试演" : "建议"} · 版本{" "}
             {run.promptVersion} ·{" "}
