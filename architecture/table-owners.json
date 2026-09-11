@@ -69,6 +69,7 @@
     "speech_segments": "live",
     "speech_segment_analyses": "live",
     "speech_analysis_jobs": "live",
+    "speech_relay_status": "live",
     "recording_retention_holds": "live",
     "recording_retention_hold_events": "live",
     "recording_deletion_requests": "live",

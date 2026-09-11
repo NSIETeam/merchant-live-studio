@@ -26,6 +26,13 @@ export interface ShareEntryAdapter {
     publicWatchUrl: string;
   }): Promise<{ url: string; expiresAt?: number }>;
 }
+export interface WeChatShareSignature {
+  appId: string;
+  timestamp: number;
+  nonceStr: string;
+  signature: string;
+  jsApiList: ["updateAppMessageShareData", "updateTimelineShareData"];
+}
 export const channelCapabilities: ChannelCapabilities[] = [
   {
     channel: "web",
@@ -49,13 +56,19 @@ export const channelCapabilities: ChannelCapabilities[] = [
     realPayment: false,
   },
 ];
-export function configuredChannelCapabilities(wechatIdentity: boolean) {
+export function configuredChannelCapabilities(
+  wechatIdentity: boolean,
+  wechatSignedSharing = false,
+) {
   return channelCapabilities.map((capability) =>
-    capability.channel === "wechat" && wechatIdentity
+    capability.channel === "wechat"
       ? {
           ...capability,
-          viewerEntry: "available" as const,
-          verifiedIdentity: true,
+          viewerEntry: wechatIdentity
+            ? ("available" as const)
+            : ("not-configured" as const),
+          verifiedIdentity: wechatIdentity,
+          signedSharing: wechatSignedSharing,
         }
       : capability,
   );

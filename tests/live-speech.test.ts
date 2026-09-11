@@ -321,6 +321,116 @@ test("speech ingestion ignores interim text, rejects invalid state, and isolates
   }
 });
 
+test("speech relay status reports the current run, expires stale readiness, and rejects late runs", async () => {
+  const f = fixture();
+  try {
+    const merchant = await f.login();
+    await f.live(merchant);
+    const path = "/streams/speech/relay-status";
+    const auth = { authorization: `Bearer ${secret}` };
+    const report = (
+      body: unknown,
+      headers: Record<string, string> = auth,
+    ) =>
+      f.request(path, "POST", body, "", headers);
+    const status = () =>
+      f.request(
+        "/merchant/rooms/demo-room/speech/status",
+        "GET",
+        undefined,
+        merchant,
+      );
+
+    assert.equal((await status()).data.relay.state, "waiting");
+    assert.equal(
+      (
+        await report(
+          {
+            roomId: "demo-room",
+            runId: "relay-one",
+            state: "starting",
+            code: "waiting_audio",
+          },
+          {},
+        )
+      ).status,
+      401,
+    );
+    assert.equal(
+      (
+        await report({
+          roomId: "demo-room",
+          runId: "relay-one",
+          state: "ready",
+          code: "source_failed",
+        })
+      ).status,
+      400,
+    );
+    assert.equal(
+      (
+        await report({
+          roomId: "demo-room",
+          runId: "relay-one",
+          state: "starting",
+          code: "waiting_audio",
+        })
+      ).status,
+      202,
+    );
+    assert.equal(
+      (
+        await report({
+          roomId: "demo-room",
+          runId: "relay-one",
+          state: "ready",
+          code: "flowing",
+        })
+      ).data.accepted,
+      true,
+    );
+    const ready = (await status()).data.relay;
+    assert.equal(ready.state, "ready");
+    assert.equal(ready.code, "flowing");
+    assert.equal(typeof ready.updatedAt, "number");
+    f.advance(30001);
+    assert.equal((await status()).data.relay.state, "stale");
+
+    await report({
+      roomId: "demo-room",
+      runId: "relay-two",
+      state: "starting",
+      code: "waiting_audio",
+    });
+    assert.equal(
+      (
+        await report({
+          roomId: "demo-room",
+          runId: "relay-one",
+          state: "degraded",
+          code: "delivery_failed",
+        })
+      ).data.accepted,
+      false,
+    );
+    assert.equal((await status()).data.relay.state, "starting");
+    assert.equal(
+      (
+        await report({
+          roomId: "demo-room",
+          runId: "relay-two",
+          state: "stopped",
+          code: "source_stopped",
+        })
+      ).data.accepted,
+      true,
+    );
+    assert.equal((await status()).data.relay.state, "stopped");
+  } finally {
+    await f.close();
+  }
+});
+
 test("live Agent receives a bounded current-session transcript window across ASR segment boundaries", async () => {
   const f = fixture();
   try {
@@ -526,14 +636,14 @@ test("v21 speech segments migrate into the durable dispatch queue and survive re
     );
     await first.studio.close();
     first.db.exec(
-      "DROP TABLE recording_deletion_events; DROP TABLE recording_deletion_requests; DROP TABLE recording_retention_hold_events; DROP TABLE recording_retention_holds; DROP TABLE speech_analysis_jobs; DELETE FROM schema_migrations WHERE version>=22",
+      "DROP TABLE speech_relay_status; DROP TABLE recording_deletion_events; DROP TABLE recording_deletion_requests; DROP TABLE recording_retention_hold_events; DROP TABLE recording_retention_holds; DROP TABLE speech_analysis_jobs; DELETE FROM schema_migrations WHERE version>=22",
     );
     first.db.close();
 
     const migrated = openDatabase(path);
     assert.equal(
       migrated.prepare("SELECT max(version) v FROM schema_migrations").get()!.v,
-      23,
+      24,
     );
     assert.equal(
       migrated.prepare("SELECT state FROM speech_analysis_jobs").get()!.state,

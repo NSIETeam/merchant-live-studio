@@ -15,6 +15,7 @@ import {
   claimSpeechAnalysisJob,
   completeSpeechAnalysisJob,
   findLatestSpeechSegment,
+  findSpeechRelayStatus,
   findSpeechAnalysis,
   findSpeechSegmentByEvent,
   insertSpeechAnalysis,
@@ -24,6 +25,8 @@ import {
   listRecentSpeechSegments,
   resetRunningSpeechAnalysisJobs,
   retrySpeechAnalysisJob,
+  startSpeechRelayStatus,
+  updateSpeechRelayStatus,
 } from "./persistence/speech-queries.js";
 
 type App = Hono<{ Variables: { merchantId: string; viewerId: string } }>;
@@ -42,6 +45,18 @@ type SpeechRow = {
   agent_run_id?: string | null;
   analysis_attempts?: number | null;
   analysis_last_error?: string | null;
+};
+type RelayRow = {
+  live_started_at: number;
+  run_id: string;
+  state: "starting" | "ready" | "degraded" | "stopped";
+  code:
+    | "waiting_audio"
+    | "flowing"
+    | "delivery_failed"
+    | "source_stopped"
+    | "source_failed";
+  updated_at: number;
 };
 
 const segmentSchema = z
@@ -66,6 +81,30 @@ const segmentSchema = z
     message: "endedOffsetMs must be greater than or equal to startedOffsetMs",
     path: ["endedOffsetMs"],
   });
+
+const relayStatusSchema = z
+  .object({
+    roomId: z.string().min(1).max(128),
+    runId: z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/),
+    state: z.enum(["starting", "ready", "degraded", "stopped"]),
+    code: z.enum([
+      "waiting_audio",
+      "flowing",
+      "delivery_failed",
+      "source_stopped",
+      "source_failed",
+    ]),
+  })
+  .strict()
+  .refine(
+    (input) =>
+      (input.state === "starting" && input.code === "waiting_audio") ||
+      (input.state === "ready" && input.code === "flowing") ||
+      (input.state === "stopped" && input.code === "source_stopped") ||
+      (input.state === "degraded" &&
+        ["delivery_failed", "source_failed"].includes(input.code)),
+    { message: "relay state and code do not match" },
+  );
 
 const idempotencyKey = (roomId: string, startedAt: number, eventId: string) =>
   `speech:${createHash("sha256")
@@ -275,14 +314,77 @@ export function attachSpeechIngestion(
     );
   });
 
+  app.post("/api/streams/speech/relay-status", async (c) => {
+    if (config.speechProvider !== "webhook")
+      throw new HTTPException(503, { message: "实时语音接入尚未配置" });
+    const authorization = c.req.header("authorization") || "";
+    if (
+      !authorization.startsWith("Bearer ") ||
+      !equalSecret(
+        authorization.slice("Bearer ".length),
+        config.speechIngestSecret,
+      )
+    )
+      throw new HTTPException(401, { message: "语音供应方鉴权失败" });
+    if (!c.req.header("content-type")?.startsWith("application/json"))
+      throw new HTTPException(415, { message: "需要 application/json 请求" });
+    const input = relayStatusSchema.parse(await c.req.json());
+    const room = live.room(input.roomId);
+    if (
+      room.live_started_at <= 0 ||
+      (input.state === "starting" && room.status !== "live")
+    )
+      throw new HTTPException(409, { message: "直播间当前未开播" });
+    const now = clock();
+    if (input.state === "starting") {
+      startSpeechRelayStatus(
+        db,
+        room.id,
+        room.live_started_at,
+        input.runId,
+        input.state,
+        input.code,
+        now,
+      );
+      return c.json({ accepted: true }, 202);
+    }
+    const updated = updateSpeechRelayStatus(
+      db,
+      input.state,
+      input.code,
+      now,
+      room.id,
+      room.live_started_at,
+      input.runId,
+    );
+    return c.json({ accepted: Number(updated.changes) === 1 });
+  });
+
   app.get("/api/merchant/rooms/:id/speech/status", (c) => {
     const room = live.owned(c.req.param("id"), c.get("merchantId"));
     const latest = findLatestSpeechSegment(db, room.id) as
       SpeechRow | undefined;
+    const relay = findSpeechRelayStatus(db, room.id) as RelayRow | undefined;
+    const relayCurrent = relay?.live_started_at === room.live_started_at;
+    const relayState =
+      config.speechProvider !== "webhook"
+        ? "unconfigured"
+        : !relayCurrent
+          ? "waiting"
+          : ["starting", "ready"].includes(relay.state) &&
+              clock() - relay.updated_at > 30000
+            ? "stale"
+            : relay.state;
     return c.json({
       provider: config.speechProvider,
       configured: config.speechProvider === "webhook",
       agentProfileConfigured: Boolean(config.speechAgentProfileId),
+      relay: {
+        state: relayState,
+        ...(relayCurrent
+          ? { code: relay.code, updatedAt: relay.updated_at }
+          : {}),
+      },
       latest: latest
         ? {
             id: latest.id,

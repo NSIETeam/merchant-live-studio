@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { z } from "zod";
 import type { Membership } from "../../shared/membership.js";
 import type {
@@ -43,11 +44,26 @@ export interface Config {
     identitySecret: string;
     redirectUri: string;
   } | null;
+  wechatJsSdkEnabled: boolean;
+  releaseRevision: string | null;
+}
+export function readReleaseRevision(path = "REVISION") {
+  let revision = "";
+  try {
+    revision = readFileSync(path, "utf8").trim();
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw new Error("REVISION file cannot be read");
+  }
+  if (!/^[a-f0-9]{40}$/i.test(revision))
+    throw new Error("REVISION must contain a complete Git commit SHA");
+  return revision.toLowerCase();
 }
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const production = env.NODE_ENV === "production";
   const demoMode =
     (env.DEMO_MODE ?? (production ? "false" : "true")) === "true";
+  const releaseRevision = readReleaseRevision();
   const sessionSecret =
     env.SESSION_SECRET || (production ? "" : randomBytes(32).toString("hex"));
   if (sessionSecret.length < 32)
@@ -111,6 +127,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const wechatOAuthEnabled = z
     .enum(["true", "false"])
     .parse(env.WECHAT_OAUTH_ENABLED || "false");
+  const wechatJsSdkEnabled =
+    z.enum(["true", "false"]).parse(env.WECHAT_JS_SDK_ENABLED || "false") ===
+    "true";
+  if (wechatJsSdkEnabled && wechatOAuthEnabled !== "true")
+    throw new Error(
+      "WECHAT_JS_SDK_ENABLED requires the complete WeChat OAuth configuration",
+    );
   let wechatOAuth: Config["wechatOAuth"] = null;
   if (wechatOAuthEnabled === "true") {
     const appId = z
@@ -298,5 +321,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     requestConcurrencyMax,
     audienceConcurrencyMax,
     wechatOAuth,
+    wechatJsSdkEnabled,
+    releaseRevision,
   };
 }

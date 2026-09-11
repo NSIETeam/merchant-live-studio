@@ -17,6 +17,7 @@ export interface CapacitySnapshot {
 function isAudienceRequest(path: string) {
   return (
     path === "/api/auth/viewer" ||
+    path.startsWith("/api/channels/wechat/") ||
     path.startsWith("/api/public/") ||
     path.startsWith("/api/viewer/")
   );

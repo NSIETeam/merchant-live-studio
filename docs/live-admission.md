@@ -15,6 +15,8 @@
 接口：
 
 - GET /api/merchant/rooms/:id/admission：检查项、缺项原因及是否强制。
+- GET /api/merchant/rooms/:id/admission-report：重新执行同一检查并下载带生成时间、房间摘要、依据版本和限制说明的 JSON；不包含密钥、正文、观众或资金记录，不能作为行政许可结论。
+- GET /api/merchant/rooms/:id/compliance-review-package：下载当前已发布的平台与商家公示、留存政策、商品事实及出处、独立审核定稿正文和技术准入结果；正文附 SHA-256，其他租户和观众不可读取。详见[逐直播间提审材料包](compliance-review-package.md)。
 - PATCH /api/merchant/rooms/:id：原有状态接口，强制模式缺项返回 409。
 - GET /api/merchant/rooms/:id/admissions：开播记录，含公示版本、课程与稿件版本、操作账号、时间；默认 50 条，使用 nextBefore 继续。
 

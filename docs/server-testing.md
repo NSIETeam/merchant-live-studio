@@ -14,6 +14,8 @@
 VITE_BASE_PATH=/studio/ npm run build
 ```
 
+发布包还必须在应用根目录包含 `REVISION`，内容为本次目标的完整 40 位 Git SHA。服务启动后读取 `/studio/api/health`，确认 `revision` 与目标完全一致；文件缺失只适用于本地开发，格式错误会拒绝启动。GitHub Actions 已在构建归档时写入 `GITHUB_SHA`。
+
 服务器环境文件仅由 root/专用服务用户读取：
 
 ```dotenv
@@ -92,3 +94,15 @@ Agent没有公网反向代理或端口开放；浏览器仍从同源 `/api/merch
 部署验收应通过 HTTPS 保存超过 32 KiB 的中文测试稿，完成检查、定稿和绑定；重启后确认记录仍在。停止 Agent 时，内容读取、人工编辑与直播应继续可用。观众端验证竖屏/横屏实际视频、折叠面板、暂停和隐藏不累计、满足条件后模拟领取及提问送达。测试完成后停止测试编码器并结束测试房间。
 
 工作台默认“商品与课程”，可查看“直播现场”“表达与提示词”“品牌与评测”“互动活动”“数据复盘”。Logo 候选位于 `/studio/brand/index.html`。生产服务继续使用未配置模型的明确状态与模拟支付；不要把示例课时的计划分钟数理解成已生成的完整时长课程。
+
+## 实时语音中继
+
+下一候选发布包包含独立 `dist/server/composition/speech-relay.js`，但自动部署不会擅自安装 ASR 模型、写入密钥或修改 MediaMTX hook。准备真实联调时：
+
+1. 在回环地址部署并验证 OpenAI 音频转写兼容服务，或配置受控 HTTPS 服务；明确模型名称、中文语言和实际费用。
+2. 将 `infra/speech-relay.env.example` 复制到 `/etc/merchant-live-studio/speech-relay.env`，以 0600 权限填写 ASR 参数，并使 `SPEECH_INGEST_SECRET` 与 Live 私有配置完全一致。
+3. 把 `infra/mediamtx-speech-relay.yml.example` 合并进实际 `pathDefaults`，先用当前 MediaMTX 二进制校验配置，再重启媒体服务。不要在正在直播时热改或重启。
+4. 使用清楚标记的测试音开播，核对现场先显示中继启动、成功片段持续刷新为链路正常、最近转写与 Agent 风险卡更新；停止推流后显示停止且临时目录清理。另以受控方式停止 ASR，确认现场显示转写/回送异常而视频继续播放。
+5. 记录端到端延迟、连续失败、漏字/错字、CPU/内存和并发房间数。每个活动房间会启动一个 Node 中继和一个 FFmpeg 子进程，现有媒体服务的 128 MiB 上限不能直接当作多房间容量结论；需测量后单独调整并保留控制通道余量。
+
+未完成以上步骤时，`SPEECH_PROVIDER=webhook` 只表示 Live 能接收可信最终分段，不代表服务器已经监听或识别主播声音。

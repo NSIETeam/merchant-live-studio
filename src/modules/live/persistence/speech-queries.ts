@@ -95,3 +95,33 @@ export function retrySpeechAnalysisJob(db: DB, ...values: SQLValue[]) {
     )
     .run(...values);
 }
+
+export function startSpeechRelayStatus(db: DB, ...values: SQLValue[]) {
+  return db
+    .prepare(
+      `INSERT INTO speech_relay_status(room_id,live_started_at,run_id,state,code,updated_at)
+       VALUES(?,?,?,?,?,?)
+       ON CONFLICT(room_id) DO UPDATE SET
+         live_started_at=excluded.live_started_at,
+         run_id=excluded.run_id,
+         state=excluded.state,
+         code=excluded.code,
+         updated_at=excluded.updated_at`,
+    )
+    .run(...values);
+}
+
+export function updateSpeechRelayStatus(db: DB, ...values: SQLValue[]) {
+  return db
+    .prepare(
+      `UPDATE speech_relay_status SET state=?,code=?,updated_at=?
+       WHERE room_id=? AND live_started_at=? AND run_id=?`,
+    )
+    .run(...values);
+}
+
+export function findSpeechRelayStatus(db: DB, ...values: SQLValue[]) {
+  return db
+    .prepare("SELECT * FROM speech_relay_status WHERE room_id=?")
+    .get(...values);
+}

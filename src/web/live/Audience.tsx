@@ -21,6 +21,7 @@ import type { Campaign, Claim, Room } from "../../shared/types.js";
 import type { ChannelCapabilities } from "../../shared/channels.js";
 import { api, duration, money } from "../shared/api.js";
 import { Player } from "./Player.js";
+import { WeChatShareStatus } from "./WeChatShareStatus.js";
 import "./audience.css";
 
 type RoomData = {
@@ -96,10 +97,12 @@ function AudienceRoom({ id }: { id: string }) {
     null,
   );
   const [wechatAvailable, setWechatAvailable] = useState(false);
+  const [wechatShareAvailable, setWechatShareAvailable] = useState(false);
   const [wechatConnecting, setWechatConnecting] = useState(false);
   const [offset, setOffset] = useState(0);
   const [panel, setPanel] = useState<Panel | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const inWechat = /MicroMessenger/i.test(navigator.userAgent);
   const now = useClock() + offset;
   const playing = useRef(false);
   const mounted = useRef(false);
@@ -144,18 +147,22 @@ function AudienceRoom({ id }: { id: string }) {
     let active = true;
     api<{ channels: ChannelCapabilities[] }>("/channels")
       .then(({ channels }) => {
-        if (active)
-          setWechatAvailable(
-            channels.some(
-              (channel) =>
-                channel.channel === "wechat" &&
-                channel.viewerEntry === "available" &&
-                channel.verifiedIdentity,
-            ),
+        if (active) {
+          const wechat = channels.find(
+            (channel) => channel.channel === "wechat",
           );
+          setWechatAvailable(
+            wechat?.viewerEntry === "available" &&
+              wechat.verifiedIdentity === true,
+          );
+          setWechatShareAvailable(wechat?.signedSharing === true);
+        }
       })
       .catch(() => {
-        if (active) setWechatAvailable(false);
+        if (active) {
+          setWechatAvailable(false);
+          setWechatShareAvailable(false);
+        }
       });
     return () => {
       active = false;
@@ -749,7 +756,7 @@ function AudienceRoom({ id }: { id: string }) {
                       </dd>
                     </div>
                   </dl>
-                  {wechatAvailable && !viewerIdentity?.verified && (
+                  {wechatAvailable && !viewerIdentity?.verified && inWechat && (
                     <button
                       className="audience-action audience-secondary"
                       type="button"
@@ -761,12 +768,22 @@ function AudienceRoom({ id }: { id: string }) {
                         : "使用微信验证身份"}
                     </button>
                   )}
+                  {wechatAvailable &&
+                    !viewerIdentity?.verified &&
+                    !inWechat && (
+                      <Notice>请在微信内打开本直播间后验证微信身份。</Notice>
+                    )}
                   <p className="audience-help">
                     视频正常播放且页面处于前台时累计观看时长。暂停、切换页面或等待信号时不累计；活动资格以服务器记录为准。
                   </p>
                   <p className="audience-help">
                     如没有声音，请在视频控制栏打开声音。横屏或使用视频的全屏按钮，可以看得更大。
                   </p>
+                  <WeChatShareStatus
+                    roomId={id}
+                    title={data?.room.title || "观众直播间"}
+                    configured={wechatShareAvailable}
+                  />
                   <p className="audience-help">
                     {viewerIdentity?.verified
                       ? "本页已使用微信身份记录互动。身份验证不等于收款授权，当前仍不能用于真实提现。"

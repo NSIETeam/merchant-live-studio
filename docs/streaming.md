@@ -110,7 +110,7 @@ HLS base 对应 `https://YOUR_SERVER/studio/media/live`，代理把 `/studio/med
 
 同源 HTTPS 分发避免浏览器混合内容问题；如果独立跨域分发，应配置实际网页 origin 的 CORS。不要公开 Control API、发布回调或部署凭据。服务器实际安装、端口暴露、原站健康和回滚结果统一记录在[服务器测试说明](server-testing.md)。
 
-远程公网、长播重连、浏览器暂停/隐藏、OBS 硬件、手机和微信内播放须按实际环境继续验收。微信支付和远程模型尚未接入；ASR 只有最终分段 webhook 边界，尚未连接真实供应方。流媒体通过不代表这些能力已完成。
+远程公网、长播重连、浏览器暂停/隐藏、OBS 硬件、手机和微信内播放须按实际环境继续验收。微信支付和远程模型尚未接入。实时语音已有最终分段 webhook；本地后续候选增加独立媒体语音中继，由 MediaMTX `runOnOnline` 启动 FFmpeg、切分 16 kHz 单声道 PCM WAV、调用 OpenAI 音频转写兼容服务，再回送既有 webhook。配置与边界见[语音中继](speech-relay.md)。尚未配置真实 ASR，因此流媒体通过仍不能代替语音识别验收。
 
 ## 浏览器播放兼容性
 

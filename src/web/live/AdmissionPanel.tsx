@@ -46,7 +46,23 @@ export function AdmissionPanel({ roomId }: { roomId: string }) {
           </p>
         </>
       )}
-      <button onClick={() => void refresh()}>重新检查开播准备</button>
+      <div className="row">
+        <button onClick={() => void refresh()}>重新检查开播准备</button>
+        <a
+          className="secondary"
+          href={`${import.meta.env.BASE_URL}api/merchant/rooms/${roomId}/admission-report`}
+          download
+        >
+          下载开播准备报告
+        </a>
+        <a
+          className="secondary"
+          href={`${import.meta.env.BASE_URL}api/merchant/rooms/${roomId}/compliance-review-package`}
+          download
+        >
+          下载提审材料包
+        </a>
+      </div>
     </section>
   );
 }

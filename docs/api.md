@@ -10,7 +10,7 @@
 
 | 认证   | 方法 / 路径                                                         | 说明                                                          |
 | ------ | ------------------------------------------------------------------- | ------------------------------------------------------------- |
-| 公开   | `GET /health`                                                       | 数据库健康、演示/支付/提词/流媒体配置及播放要求               |
+| 公开   | `GET /health`                                                       | 数据库健康、完整发布 SHA、运行能力与容量状态                  |
 | 公开   | `GET /auth/me`                                                      | 当前有效商家会话与 demo 开关                                  |
 | 公开   | `POST /auth/demo`                                                   | 本地演示登录，生产禁用                                        |
 | 公开   | `POST /auth/merchant`                                               | `{merchantId,token}`，签发含 sid 与凭据版本的商家 Cookie      |
@@ -18,8 +18,11 @@
 | 公开   | `GET /channels`                                                     | 按服务器真实配置报告网页、微信与合作方能力                    |
 | 公开   | `GET /channels/wechat/authorize?roomId=...`                         | 已配置时签发短时 state 并返回公众号静默授权地址               |
 | 微信   | `GET /channels/wechat/callback?code=...&state=...`                  | 校验一次性 state、服务端换码并回到原观众页                    |
+| 公开   | `GET /channels/wechat/share-signature?roomId=...&url=...`           | 已配置时签署本站对应微信直播分享 URL                          |
 | 会话   | `POST /auth/logout`                                                 | 持久撤销当前商家 sid，并清 Cookie；重复调用安全               |
 | 商家   | `GET /merchant/rooms`                                               | 仅当前商家的房间                                              |
+| 商家   | `GET /merchant/rooms/:id/admission-report`                          | 下载当前开播技术准备检查与依据版本 JSON                       |
+| 商家   | `GET /merchant/rooms/:id/compliance-review-package`                 | 下载平台、商家、商品证据、独立定稿及准入的提审材料包          |
 | 商家   | `POST /merchant/rooms`                                              | `{title,productName}`                                         |
 | 商家   | `PATCH /merchant/rooms/:id`                                         | `{status:"draft"/"live"/"ended"}`；结束时附断流结果           |
 | 商家   | `GET /merchant/rooms/:id/stream`                                    | provider、RTMP server、完整 streamKey、HLS URL、authEnabled   |
@@ -36,7 +39,7 @@
 | 商家   | `GET /merchant/rooms/:id/ledger`                                    | 最近 200 笔账本                                               |
 | 商家   | `GET /merchant/rooms/:id/analytics`                                 | 房间累计访问、停留、问题与领取分析                            |
 | 商家   | `GET /merchant/rooms/:id/questions`                                 | 按文本精确聚合的前 20 类问题                                  |
-| 商家   | `GET /merchant/rooms/:id/speech/status`                             | 语音供应方、最近最终分段及 Agent 入队状态                     |
+| 商家   | `GET /merchant/rooms/:id/speech/status`                             | 语音供应方、中继运行、最近最终分段及 Agent 入队状态            |
 | 商家   | `GET /merchant/rooms/:id/recordings`                                | 已登记录像片段、校验信息和删除状态                            |
 | 商家   | `GET /merchant/recordings/:id/download`                             | 再次校验后下载；已复核删除返回 410                            |
 | 商家   | `GET /merchant/recordings/:id/retention`                            | 保存期限、争议、保留及删除复核历史                            |
@@ -52,9 +55,12 @@
 | 引擎   | `POST /streams/mediamtx/auth?secret=...`                            | 引擎原生发布/观看鉴权载荷                                     |
 | 引擎   | `POST /streams/srs/publish?secret=...`                              | SRS on_publish 回调                                           |
 | 语音方 | `POST /streams/speech/segments`                                     | Bearer 鉴权的最终转写分段 webhook；幂等接入                   |
+| 语音方 | `POST /streams/speech/relay-status`                                 | Bearer 鉴权的本场中继启动、流转、降级与停止状态                |
 | 未实现 | `POST /payments/wechat/notify`                                      | 固定 501，不更新状态                                          |
 
 ## 会话与限流
+
+发布包根目录存在 `REVISION` 时，健康接口的 `revision` 返回其中经过格式校验的完整 Git SHA；本地开发包没有该文件时返回 null。发布文件存在但不是完整 40 位十六进制提交号时服务拒绝启动，避免把模糊版本当作线上证据。
 
 商家会话有独立 `sid`，注销后重放原 Cookie 仍返回 401；同商家的其他有效登录不受影响。凭据删除或轮换使旧凭据版本失效，部署环境配置需重启后生效。Cookie 为 HttpOnly / SameSite=Strict，生产为 Secure，Path 为 `APP_BASE_PATH`。
 
@@ -141,7 +147,7 @@ MediaMTX 支持 RTMP/RTMPS 踢连接后再次查询。未配置、协议不支�
 
 非最终分段返回 `accepted:false` 且不保存。最终分段只在房间正在直播时保存；同一场次的相同事件重复请求返回原记录，相同事件 ID 携带不同正文或时间范围返回 409。接口在同一事务内写入 Live 数据库并建立持久待处理任务，随后立即返回，不等待 Agent 推理。后台按 `SPEECH_DISPATCH_CONCURRENCY` 有界处理，取同一场次最近 8 段组成不超过 4000 字的上下文，再按服务端固定的 `SPEECH_AGENT_PROFILE_ID` 创建 `live` Agent 任务。Agent 未配置、超时或限流不会回滚转写，任务会退避重试；进程重启恢复中断任务，Agent 幂等键阻止重复运行。
 
-商家通过 `GET /api/merchant/rooms/:id/speech/status` 查看配置、最近分段和入队状态。转写属于非公开直播记录，观众房间接口不返回正文或 Agent 运行标识。此边界不采集浏览器麦克风；真实 ASR 服务的音频采集、签名协议和服务商效果需要独立接入与验收。
+中继用同一 Bearer 密钥调用 `POST /api/streams/speech/relay-status`，正文只接受房间、运行号以及固定的状态/原因枚举。`starting` 建立当前运行实例，其余状态只有运行号与当前场次都一致才会更新，避免已退出的旧进程覆盖新进程。商家通过 `GET /api/merchant/rooms/:id/speech/status` 查看配置、中继运行、最近分段和入队状态；运行中超过 30 秒没有片段状态更新时显示超时。转写属于非公开直播记录，观众房间接口不返回正文、中继状态或 Agent 运行标识。此边界不采集浏览器麦克风；真实 ASR 服务效果仍需独立接入与验收。
 
 ## 录像保留与删除复核
 
@@ -165,7 +171,9 @@ MediaMTX 支持 RTMP/RTMPS 踢连接后再次查询。未配置、协议不支�
 | `POST /merchant/agent/runs/:id/feedback`                      | rating 为 useful/needs_work，note 为复盘意见；返回结果也复核事实撤回与过期状态                                                                     |
 | `GET /merchant/rooms/:id/agent/latest`                        | 只读取最近的 live 任务；rehearsal 草稿不会覆盖直播卡，Agent 离线返回 available=false                                                               |
 
-公开 `GET /api/channels` 不要求商家会话，按当前配置报告渠道能力：网页入口始终可用；公众号 OAuth 完整配置后微信观众身份可用；签名分享和真实支付继续为 false。授权 state 同时使用服务端签名、10 分钟期限、Lax HttpOnly cookie 和一次性 nonce，错配、过期或重放均拒绝。换码固定访问微信 HTTPS 地址，8 秒超时且响应上限为 8 KiB。稳定 viewerId 由独立的 `WECHAT_IDENTITY_SECRET` 派生，该密钥轮换会改变后续身份关联，不能与普通会话密钥一起随意轮换。
+公开 `GET /api/channels` 不要求商家会话，按当前配置报告渠道能力：网页入口始终可用；公众号 OAuth 完整配置后微信观众身份可用；额外启用 `WECHAT_JS_SDK_ENABLED` 后签名分享可用；真实支付继续为 false。授权 state 同时使用服务端签名、10 分钟期限、Lax HttpOnly cookie 和一次性 nonce，错配、过期或重放均拒绝。换码固定访问微信 HTTPS 地址，8 秒超时且响应上限为 8 KiB。稳定 viewerId 由独立的 `WECHAT_IDENTITY_SECRET` 派生，该密钥轮换会改变后续身份关联，不能与普通会话密钥一起随意轮换。
+
+`GET /api/channels/wechat/share-signature?roomId=...&url=...` 只接受当前 origin、当前部署子路径且 roomId 精确匹配的观看地址。服务端从固定微信端点取得 access token 和 JSAPI ticket，按有效期留安全余量后在进程内缓存，返回 AppID、时间戳、随机串、SHA-1 签名和两项分享 API 名称；AppSecret、token 和 ticket 不进入响应。站外地址、其他路径、fragment 及内嵌凭据均拒绝，微信上游失败返回通用 502。观众页只有在微信客户端和动态渠道能力同时可用时加载官方 JS-SDK；配置失败不会阻断播放器、互动或普通链接复制。
 
 运行输入的商品、已审核事实与活动提示由网关从当前商家直播间提取。正文中附加 `context`、`facts`、`tenant`、模型地址或密钥会被拒绝。试演可指定草稿版本；`live` 任务入队时必须使用已发布版本。任务固定入队时的提示词与上下文快照，之后发布新版本不会改写历史任务。
 

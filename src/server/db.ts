@@ -518,6 +518,21 @@ export function openDatabase(path: string) {
         Date.now(),
       );
     });
+  if (version < 24)
+    transaction(db, () => {
+      db.exec(`CREATE TABLE speech_relay_status(
+        room_id TEXT PRIMARY KEY REFERENCES rooms(id),
+        live_started_at INTEGER NOT NULL,
+        run_id TEXT NOT NULL,
+        state TEXT NOT NULL CHECK(state IN('starting','ready','degraded','stopped')),
+        code TEXT NOT NULL CHECK(code IN('waiting_audio','flowing','delivery_failed','source_stopped','source_failed')),
+        updated_at INTEGER NOT NULL
+      );`);
+      db.prepare("INSERT INTO schema_migrations VALUES(?,?)").run(
+        24,
+        Date.now(),
+      );
+    });
   return db;
 }
 export type DB = ReturnType<typeof openDatabase>;

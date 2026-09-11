@@ -5,6 +5,7 @@ Wants=merchant-live-studio.service
 
 [Service]
 EnvironmentFile=-/etc/merchant-live-studio/recordings.env
+EnvironmentFile=-/etc/merchant-live-studio/speech-relay.env
 Type=simple
 User=live-studio
 Group=live-studio

@@ -178,6 +178,6 @@ Agent 持久化提示词版本、完整执行输入快照、结果和反馈。`c
 
 服务器上将 Agent 作为独立 systemd 服务运行，使用独立数据路径和受限用户，`AGENT_SERVICE_URL` 指向回环/私网。模板见 [merchant-live-agent.service](../infra/merchant-live-agent.service)，安装、端口与回滚以[服务器测试说明](server-testing.md)为准；不要因修改提示词而重新发布直播底座，也不要把 Agent 库和模型密钥加入静态资源。
 
-渠道通过 `src/shared/channels.ts` 的身份与分享 adapter 独立扩展，`GET /api/channels` 当前如实标记 web 入口可用、wechat/partner 未配置。微信身份、签名分享和支付不由 Agent 提示词代替，真实支付继续使用独立适配边界。
+渠道通过 `src/shared/channels.ts` 的身份与分享 adapter 独立扩展，`GET /api/channels` 根据服务器配置分别报告 web、微信身份与微信签名分享能力；partner 继续明确未配置。微信身份、签名分享和支付不由 Agent 提示词代替，真实支付继续使用独立适配边界。
 
 验证应分别覆盖版本与权限、排队与重启、事实和情感边界、未配置及失败回退、真实模型效果、直播浏览器体验和服务器部署。本版没有万人并发、自动调优、微调或微信真实资金能力声明。

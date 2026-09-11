@@ -7,6 +7,23 @@ type SpeechStatus = {
   provider: "disabled" | "webhook";
   configured: boolean;
   agentProfileConfigured: boolean;
+  relay?: {
+    state:
+      | "unconfigured"
+      | "waiting"
+      | "starting"
+      | "ready"
+      | "degraded"
+      | "stopped"
+      | "stale";
+    code?:
+      | "waiting_audio"
+      | "flowing"
+      | "delivery_failed"
+      | "source_stopped"
+      | "source_failed";
+    updatedAt?: number;
+  };
   latest: null | {
     text: string;
     receivedAt: number;
@@ -62,6 +79,25 @@ export function AgentLiveCard({
     };
   }, [roomId]);
   const run = state?.run;
+  const speechMessage =
+    speech === null
+      ? "正在确认接入状态"
+      : !speech.configured
+        ? "未配置供应方"
+        : speech.latest?.currentSession
+          ? `${new Date(speech.latest.receivedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })} 收到片段 · ${{ queued: "已交给 Agent", pending: "等待分析", retrying: "等待 Agent 重试", waiting_profile: "待选择表达方案" }[speech.latest.analysis.state]}`
+          : {
+              waiting: "转写接收接口已配置，等待媒体中继启动",
+              starting: "媒体中继已启动，等待首个音频片段",
+              ready: "媒体与转写链路正常，等待本场可识别语音",
+              degraded:
+                speech.relay?.code === "delivery_failed"
+                  ? "转写或回送异常，视频直播继续运行"
+                  : "媒体音频读取异常，视频直播继续运行",
+              stopped: "媒体中继已停止，当前没有语音分析",
+              stale: "媒体中继状态已超时，请检查转写服务",
+              unconfigured: "未配置供应方",
+            }[speech.relay?.state || "waiting"];
   return (
     <section className="card">
       <div className="section-title">
@@ -71,16 +107,7 @@ export function AgentLiveCard({
         </h2>
         <span className="muted">独立协作</span>
       </div>
-      <p className="fine-print">
-        实时语音：
-        {speech === null
-          ? "正在确认接入状态"
-          : !speech.configured
-            ? "未配置供应方"
-            : speech.latest?.currentSession
-              ? `${new Date(speech.latest.receivedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })} 收到片段 · ${{ queued: "已交给 Agent", pending: "等待分析", retrying: "等待 Agent 重试", waiting_profile: "待选择表达方案" }[speech.latest.analysis.state]}`
-              : "已连接，等待本场语音"}
-      </p>
+      <p className="fine-print">实时语音：{speechMessage}</p>
       {run?.stale ? (
         <p className="empty-copy">{run.staleReason}</p>
       ) : run?.result ? (

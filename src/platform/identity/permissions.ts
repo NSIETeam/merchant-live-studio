@@ -109,6 +109,8 @@ export function memberMayAccess(
         method === "POST" &&
         /^\/api\/merchant\/disclosure\/\d+\/review$/.test(path))
     );
+  if (/^\/api\/merchant\/rooms\/[^/]+\/compliance-review-package$/.test(path))
+    return ["editor", "reviewer"].includes(role) && method === "GET";
   if (path.startsWith("/api/merchant/complaints"))
     return (
       role === "reviewer" &&

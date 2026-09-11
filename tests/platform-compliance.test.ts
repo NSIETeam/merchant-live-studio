@@ -1,8 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { openDatabase } from "../src/server/db.js";
 import { createApp } from "../src/composition/studio.js";
-import { loadConfig } from "../src/platform/infrastructure/public.js";
+import {
+  loadConfig,
+  readReleaseRevision,
+} from "../src/platform/infrastructure/public.js";
 
 const valid = {
   operatorName: "合成测试平台运营企业",
@@ -39,6 +45,7 @@ test("platform compliance is public, explicit when missing, and strictly configu
     assert.ok(body.retention.enforcement.length >= 4);
     assert.equal(body.retention.sourceLinks.length, 3);
     const health = (await (await app.request("/api/health")).json()) as any;
+    assert.equal(health.revision, null);
     assert.equal(health.platformCompliance, false);
     assert.equal(health.retentionPolicy, false);
   } finally {
@@ -71,6 +78,10 @@ test("platform compliance is public, explicit when missing, and strictly configu
       ((await (await app.request("/api/health")).json()) as any)
         .retentionPolicy,
       true,
+    );
+    assert.equal(
+      ((await (await app.request("/api/health")).json()) as any).revision,
+      null,
     );
   } finally {
     db.close();
@@ -113,4 +124,18 @@ test("platform compliance is public, explicit when missing, and strictly configu
         DATA_RETENTION_POLICY: JSON.stringify(changed),
       }),
     );
+});
+
+test("release revision accepts one complete Git SHA and rejects ambiguous artifacts", () => {
+  const root = mkdtempSync(join(tmpdir(), "studio-revision-"));
+  try {
+    const file = join(root, "REVISION");
+    assert.equal(readReleaseRevision(file), null);
+    writeFileSync(file, `${"A".repeat(40)}\n`);
+    assert.equal(readReleaseRevision(file), "a".repeat(40));
+    writeFileSync(file, "short\n");
+    assert.throws(() => readReleaseRevision(file));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

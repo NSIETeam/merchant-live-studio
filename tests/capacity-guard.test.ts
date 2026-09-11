@@ -33,10 +33,15 @@ test("audience saturation fails fast while reserved control capacity stays usabl
     await held.waiting;
     return c.json({ ok: true });
   });
+  app.get("/api/channels/wechat/hold", async (c) => {
+    entered++;
+    await held.waiting;
+    return c.json({ ok: true });
+  });
   app.get("/api/merchant/control", (c) => c.json({ control: true }));
 
   const first = app.request("/api/public/hold");
-  const second = app.request("/api/public/hold");
+  const second = app.request("/api/channels/wechat/hold");
   while (entered < 2) await new Promise((resolve) => setImmediate(resolve));
 
   const rejected = await app.request("/api/public/hold");

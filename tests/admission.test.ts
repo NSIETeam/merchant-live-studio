@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { once } from "node:events";
+import { createHash } from "node:crypto";
 import { loadConfig } from "../src/platform/infrastructure/public.js";
 import { openDatabase } from "../src/server/db.js";
 import { createApp, seedDemo } from "../src/composition/studio.js";
@@ -106,9 +107,14 @@ test("admission blocks missing or revoked basis, records successful starts, and 
     REQUIRE_REVIEWED_LIVE: "true",
     STREAM_AUTH_SECRET: "local-callback-test",
     MEDIA_CONTROL_URL: `http://127.0.0.1:${port}`,
-    MERCHANT_CREDENTIALS: JSON.stringify({ reviewer: token, other: token }),
+    MERCHANT_CREDENTIALS: JSON.stringify({
+      reviewer: token,
+      presenter: token,
+      other: token,
+    }),
     MERCHANT_MEMBERSHIPS: JSON.stringify({
       reviewer: { merchantId: "demo", role: "reviewer" },
+      presenter: { merchantId: "demo", role: "presenter" },
     }),
     PLATFORM_COMPLIANCE: JSON.stringify(platformCompliance),
     DATA_RETENTION_POLICY: JSON.stringify(retentionPolicy),
@@ -140,6 +146,12 @@ test("admission blocks missing or revoked basis, records successful starts, and 
       reviewer = (
         await call("/auth/merchant", "POST", { merchantId: "reviewer", token })
       ).cookie,
+      presenter = (
+        await call("/auth/merchant", "POST", {
+          merchantId: "presenter",
+          token,
+        })
+      ).cookie,
       other = (
         await call("/auth/merchant", "POST", { merchantId: "other", token })
       ).cookie;
@@ -161,6 +173,79 @@ test("admission blocks missing or revoked basis, records successful starts, and 
     assert.equal(
       (await call(room + "/admission", "GET", undefined, other)).status,
       404,
+    );
+    const reportResponse = await app.request(`/api${room}/admission-report`, {
+      headers: { cookie: owner },
+    });
+    assert.equal(reportResponse.status, 200);
+    assert.equal(reportResponse.headers.get("cache-control"), "no-store");
+    assert.equal(
+      reportResponse.headers.get("content-disposition"),
+      'attachment; filename="studio-admission-demo-room.json"',
+    );
+    const report = (await reportResponse.json()) as any;
+    assert.equal(report.formatVersion, 1);
+    assert.equal(report.scope, "live-technical-readiness");
+    assert.deepEqual(report.room, {
+      id: "demo-room",
+      title: "秋日好物 · 品牌直播间",
+      productName: "日常随行杯",
+      status: "draft",
+    });
+    assert.equal(report.admission.ready, false);
+    assert.ok(report.limitations.length >= 3);
+    const reportText = JSON.stringify(report);
+    assert.equal(reportText.includes(config.sessionSecret), false);
+    assert.equal(reportText.includes("stream_secret"), false);
+    assert.equal(
+      (
+        await app.request(`/api${room}/admission-report`, {
+          headers: { cookie: other },
+        })
+      ).status,
+      404,
+    );
+    const incompletePackageResponse = await app.request(
+      `/api${room}/compliance-review-package`,
+      { headers: { cookie: owner } },
+    );
+    assert.equal(incompletePackageResponse.status, 200);
+    const incompletePackage = (await incompletePackageResponse.json()) as any;
+    assert.equal(incompletePackage.scope, "live-compliance-review-package");
+    assert.equal(incompletePackage.readiness.complete, false);
+    assert.equal(incompletePackage.merchantDisclosure, null);
+    assert.equal(incompletePackage.content, null);
+    assert.equal(
+      incompletePackage.platform.operatorName,
+      platformCompliance.operatorName,
+    );
+    assert.equal(
+      JSON.stringify(incompletePackage).includes(config.sessionSecret),
+      false,
+    );
+    assert.equal(
+      (
+        await app.request(`/api${room}/compliance-review-package`, {
+          headers: { cookie: other },
+        })
+      ).status,
+      404,
+    );
+    assert.equal(
+      (
+        await app.request(`/api${room}/compliance-review-package`, {
+          headers: { cookie: reviewer },
+        })
+      ).status,
+      200,
+    );
+    assert.equal(
+      (
+        await app.request(`/api${room}/compliance-review-package`, {
+          headers: { cookie: presenter },
+        })
+      ).status,
+      403,
     );
     const business = {
       name: "合成测试企业",
@@ -203,7 +288,14 @@ test("admission blocks missing or revoked basis, records successful starts, and 
           name: "合成测试资料",
           sku: "admission",
           category: "测试资料",
-          facts: [],
+          facts: [
+            {
+              id: "fact-capacity",
+              text: "容量为 500 mL",
+              evidence: "合成商品标签第 1 页",
+              approved: true,
+            },
+          ],
         },
         owner,
       )
@@ -244,6 +336,12 @@ test("admission blocks missing or revoked basis, records successful starts, and 
                 kind: "transition",
                 text: "欢迎来到本次测试课堂。",
                 factIds: [],
+              },
+              {
+                id: "p2",
+                kind: "fact",
+                text: "容量为 500 mL。",
+                factIds: ["fact-capacity"],
               },
             ],
             changeNote: "合成测试稿件",
@@ -290,6 +388,54 @@ test("admission blocks missing or revoked basis, records successful starts, and 
       ).status,
       201,
     );
+    const completePackageResponse = await app.request(
+      `/api${room}/compliance-review-package`,
+      { headers: { cookie: owner } },
+    );
+    assert.equal(completePackageResponse.status, 200);
+    assert.equal(
+      completePackageResponse.headers.get("cache-control"),
+      "no-store",
+    );
+    assert.equal(
+      completePackageResponse.headers.get("content-disposition"),
+      'attachment; filename="studio-review-package-demo-room.json"',
+    );
+    const completePackageBody = await completePackageResponse.text();
+    assert.equal(
+      completePackageResponse.headers.get("x-content-sha256"),
+      createHash("sha256").update(completePackageBody).digest("hex"),
+    );
+    const completePackage = JSON.parse(completePackageBody);
+    assert.equal(completePackage.readiness.complete, true);
+    assert.equal(completePackage.readiness.missing.length, 0);
+    assert.equal(completePackage.merchantDisclosure.version, 1);
+    assert.equal(
+      completePackage.merchantDisclosure.evidenceReference,
+      "合成测试证据位置",
+    );
+    assert.equal(completePackage.content.product.id, product.id);
+    assert.deepEqual(completePackage.content.product.facts, [
+      {
+        id: "fact-capacity",
+        text: "容量为 500 mL",
+        evidence: "合成商品标签第 1 页",
+        approved: true,
+      },
+    ]);
+    assert.equal(completePackage.content.script.version, 1);
+    assert.equal(
+      completePackage.content.script.independentReview.confirmedBy,
+      "reviewer",
+    );
+    assert.equal(
+      completePackage.content.script.paragraphs[0].text,
+      "欢迎来到本次测试课堂。",
+    );
+    const packageText = JSON.stringify(completePackage);
+    assert.equal(packageText.includes("stream_secret"), false);
+    assert.equal(packageText.includes(config.streamAuthSecret), false);
+    assert.equal(packageText.includes(token), false);
     control = "missing";
     assert.equal((await start()).status, 409);
     control = "error";

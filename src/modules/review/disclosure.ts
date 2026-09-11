@@ -1,5 +1,16 @@
-import { disclosureStateQuery1, disclosureStateQuery2 } from "./persistence/disclosure-state-queries.js";
-import { disclosureQuery1, disclosureQuery2, disclosureQuery3, disclosureQuery4, disclosureQuery5, disclosureQuery6, disclosureQuery7 } from "./persistence/disclosure-queries.js";
+import {
+  disclosureStateQuery1,
+  disclosureStateQuery2,
+} from "./persistence/disclosure-state-queries.js";
+import {
+  disclosureQuery1,
+  disclosureQuery2,
+  disclosureQuery3,
+  disclosureQuery4,
+  disclosureQuery5,
+  disclosureQuery6,
+  disclosureQuery7,
+} from "./persistence/disclosure-queries.js";
 import type { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
@@ -14,10 +25,8 @@ export function attachDisclosure(
   clock = Date.now,
 ) {
   const base = "/api/merchant/disclosure";
-  const latest = (merchant: string) =>
-    disclosureQuery1(db, merchant);
-  const event = (merchant: string) =>
-    disclosureQuery2(db, merchant);
+  const latest = (merchant: string) => disclosureQuery1(db, merchant);
+  const event = (merchant: string) => disclosureQuery2(db, merchant);
   const dto = (row: Record<string, any>) => ({
     version: row.version,
     data: JSON.parse(row.data_json),
@@ -51,7 +60,16 @@ export function attachDisclosure(
           throw new HTTPException(409, {
             message: "公示资料已更新，请刷新后保存",
           });
-        disclosureQuery4(db, merchant, input.previousVersion + 1, JSON.stringify(input.data), input.evidenceReference, c.get("actorId"), clock(), "enterprise");
+        disclosureQuery4(
+          db,
+          merchant,
+          input.previousVersion + 1,
+          JSON.stringify(input.data),
+          input.evidenceReference,
+          c.get("actorId"),
+          clock(),
+          "enterprise",
+        );
         return { latest: dto(latest(merchant)!) };
       }),
       201,
@@ -87,9 +105,7 @@ export function attachDisclosure(
             throw new HTTPException(403, {
               message: "请由另一账号核对依据后发布",
             });
-          if (
-            disclosureQuery5(db, merchant, version)
-          )
+          if (disclosureQuery5(db, merchant, version))
             throw new HTTPException(409, {
               message: "此版本已有发布记录；更正或重新发布请保存新版本",
             });
@@ -101,7 +117,15 @@ export function attachDisclosure(
           throw new HTTPException(409, {
             message: "公示状态已变化，请刷新后撤回",
           });
-        disclosureQuery6(db, merchant, version, input.action, c.get("actorId"), input.note, clock());
+        disclosureQuery6(
+          db,
+          merchant,
+          version,
+          input.action,
+          c.get("actorId"),
+          input.note,
+          clock(),
+        );
         return { publication: event(merchant) };
       }),
     );
@@ -124,8 +148,29 @@ export function attachDisclosure(
   });
 }
 
-export function disclosureState(db: DB, tenant:string, now:number) {
- const publication=disclosureStateQuery1(db, tenant);
- const data=publication?.action==='publish' ? disclosureStateQuery2(db, tenant, publication.version) : undefined;
- return {published:publication?.action==='publish',version:publication ? Number(publication.version):null,valid:!!data && disclosureInDate(JSON.parse(String(data.data_json)),now)};
+export function disclosureState(db: DB, tenant: string, now: number) {
+  const publication = disclosureStateQuery1(db, tenant);
+  const data =
+    publication?.action === "publish"
+      ? disclosureStateQuery2(db, tenant, publication.version)
+      : undefined;
+  const parsed = data ? JSON.parse(String(data.data_json)) : undefined;
+  return {
+    published: publication?.action === "publish",
+    version: publication ? Number(publication.version) : null,
+    valid: !!parsed && disclosureInDate(parsed, now),
+    ...(data && publication
+      ? {
+          data: parsed,
+          evidenceReference: String(data.evidenceReference),
+          authoredBy: String(data.authorId),
+          authoredAt: Number(data.createdAt),
+          publication: {
+            actorId: String(publication.actorId),
+            note: String(publication.note),
+            createdAt: Number(publication.createdAt),
+          },
+        }
+      : {}),
+  };
 }

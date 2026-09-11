@@ -3,7 +3,7 @@ import { createAdmissionChecker } from "./admission.js";
 import { attachModeration, activeModerationHold } from "./moderation.js";
 import type { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
-import { randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { z } from "zod";
 import { equalSecret } from "../../platform/identity/public.js";
 import {
@@ -11,6 +11,7 @@ import {
   type Config,
 } from "../../platform/infrastructure/public.js";
 import type { ContentBinding } from "../../shared/content.js";
+import type { Disclosure } from "../../shared/disclosure.js";
 import type {
   EngagementPort,
   RoomRow,
@@ -42,7 +43,16 @@ export function createLive(
   config: Config,
   ports: {
     binding: (id: string, merchant: string, independent?: boolean) => ContentBinding | null;
-    disclosure: (tenant:string, now:number) => {published:boolean;version:number|null;valid:boolean};
+    disclosure: (tenant:string, now:number) => {
+      published:boolean;
+      version:number|null;
+      valid:boolean;
+      data?:Disclosure;
+      evidenceReference?:string;
+      authoredBy?:string;
+      authoredAt?:number;
+      publication?:{actorId:string;note:string;createdAt:number};
+    };
     syncAuthorization: (tenant:string) => Promise<void>;
     engagement: () => EngagementPort;
     seedFacts: (room: string) => void;
@@ -146,6 +156,123 @@ app.get("/api/merchant/rooms/:id/admission", async (c) => {
     return c.json(
       admissionCheck( r.id, r.merchant_id, reachable, clock()),
     );
+  });
+app.get("/api/merchant/rooms/:id/admission-report", async (c) => {
+    const r = owned(c.req.param("id"), c.get("merchantId"));
+    const reachable = await controlForAdmission(r);
+    const generatedAt = clock();
+    const report = {
+      formatVersion: 1,
+      scope: "live-technical-readiness",
+      generatedAt,
+      room: {
+        id: r.id,
+        title: r.title,
+        productName: roomDto(r).productName,
+        status: r.status,
+      },
+      admission: admissionCheck(r.id, r.merchant_id, reachable, generatedAt),
+      limitations: [
+        "本报告记录软件在生成时点的开播准备检查，不是行政许可、平台审核结果或法律意见。",
+        "主体、资质、商品依据、人员身份、真实推流和直播现场仍需审核方查看原件并实际核验。",
+        "报告不包含密钥、完整讲稿、商品事实正文、观众资料或资金记录。",
+      ],
+    };
+    c.header("Content-Type", "application/json; charset=utf-8");
+    c.header("Content-Disposition", `attachment; filename="studio-admission-${r.id}.json"`);
+    c.header("Cache-Control", "no-store");
+    return c.body(JSON.stringify(report, null, 2));
+  });
+app.get("/api/merchant/rooms/:id/compliance-review-package", async (c) => {
+    const r = owned(c.req.param("id"), c.get("merchantId"));
+    const reachable = await controlForAdmission(r);
+    const generatedAt = clock();
+    const admission = admissionCheck(r.id, r.merchant_id, reachable, generatedAt);
+    const disclosure = ports.disclosure(r.merchant_id, generatedAt);
+    const binding = ports.binding(r.id, r.merchant_id, true);
+    const currentBinding = binding && !binding.stale ? binding : null;
+    const publishedDisclosure =
+      disclosure.published && disclosure.valid && disclosure.data
+        ? {
+            version: disclosure.version,
+            valid: true,
+            data: disclosure.data,
+            evidenceReference: disclosure.evidenceReference,
+            authoredBy: disclosure.authoredBy,
+            authoredAt: disclosure.authoredAt,
+            publication: disclosure.publication,
+          }
+        : null;
+    const report = {
+      formatVersion: 1,
+      scope: "live-compliance-review-package",
+      generatedAt,
+      readiness: {
+        complete: admission.ready,
+        missing: admission.checks
+          .filter((item) => !item.passed)
+          .map((item) => ({ code: item.code, label: item.label, detail: item.detail })),
+      },
+      room: {
+        id: r.id,
+        title: r.title,
+        productName: roomDto(r).productName,
+        status: r.status,
+        createdAt: r.created_at,
+      },
+      platform: config.platformCompliance,
+      retention: config.retentionPolicy,
+      merchantDisclosure: publishedDisclosure,
+      content: currentBinding
+        ? {
+            courseId: currentBinding.courseId,
+            courseTitle: currentBinding.courseTitle,
+            boundAt: currentBinding.boundAt,
+            product: {
+              id: currentBinding.productId,
+              name: currentBinding.productName,
+              sku: currentBinding.script.productSnapshot.sku,
+              category: currentBinding.category,
+              version: currentBinding.script.productSnapshot.version,
+              facts: currentBinding.script.productSnapshot.facts.map((fact) => ({
+                id: fact.id,
+                text: fact.text,
+                evidence: fact.evidence,
+                approved: fact.approved,
+              })),
+            },
+            script: {
+              version: currentBinding.scriptVersion,
+              createdAt: currentBinding.script.createdAt,
+              ruleVersion: currentBinding.script.check.ruleVersion,
+              check: {
+                checkedAt: currentBinding.script.check.checkedAt,
+                blockingCount: currentBinding.script.check.blockingCount,
+                summary: currentBinding.script.check.summary,
+                issues: currentBinding.script.check.issues,
+              },
+              independentReview: currentBinding.script.confirmation,
+              paragraphs: currentBinding.script.paragraphs,
+            },
+          }
+        : null,
+      admission,
+      limitations: [
+        "本材料包汇总生成时点的软件记录，不是行政许可、平台审核结论或法律意见。",
+        "证照、授权、商品依据和人员身份仍须审核方核对原件及适用范围。",
+        "技术准入通过不证明实际直播画面、主播口播和后续变更持续合规。",
+        "材料包不包含推流、登录、模型或支付密钥，也不包含观众、转写和资金记录。",
+      ],
+    };
+    const body = JSON.stringify(report, null, 2);
+    c.header("Content-Type", "application/json; charset=utf-8");
+    c.header(
+      "Content-Disposition",
+      `attachment; filename="studio-review-package-${r.id}.json"`,
+    );
+    c.header("Cache-Control", "no-store");
+    c.header("X-Content-SHA256", createHash("sha256").update(body).digest("hex"));
+    return c.body(body);
   });
 app.get("/api/merchant/rooms/:id/admissions", (c) => {
     const r = owned(c.req.param("id"), c.get("merchantId"));

@@ -20,6 +20,7 @@
     "format": "prettier --write src tests docs *.json *.ts *.html *.yml README.md .github/workflows/*.yml infra/*.yml",
     "dev:agent": "tsx watch --env-file-if-exists=.env src/agent/index.ts",
     "start:agent": "node --env-file-if-exists=.env dist/server/agent/index.js",
+    "start:speech-relay": "node --env-file-if-exists=infra/speech-relay.env dist/server/composition/speech-relay.js",
     "concurrency:smoke": "node scripts/concurrency-smoke.mjs",
     "capacity:probe": "node scripts/capacity-probe.mjs"
   },
