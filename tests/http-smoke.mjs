@@ -35,7 +35,7 @@ try {
   const home = await fetch(base);
   assert.equal(home.status, 200);
   const html = await home.text();
-  assert.match(html, /商家直播工作台/);
+  assert.match(html, /靠谱 · 内容与直播工作台/);
   const asset = html.match(/src="([^"]+\.js)"/)[1];
   assert.equal((await fetch(base + asset)).status, 200);
   assert.equal((await fetch(base + "/watch/demo-room")).status, 200);

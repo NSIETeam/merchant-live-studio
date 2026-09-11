@@ -125,7 +125,33 @@ function TrainingRoom({
 }) {
   const [section, setSection] = useState<
     "materials" | "examples" | "evaluations"
-  >("materials");
+  >("examples");
+  const [basis, setBasis] = useState<{
+    productName: string;
+    contentBound: boolean;
+    stale: boolean;
+  } | null>(null);
+  useEffect(() => {
+    let active = true;
+    const read = () =>
+      api<{ productName: string; contentBound: boolean; stale: boolean }>(
+        `${roomPath(roomId)}/agent/basis`,
+      )
+        .then((v) => {
+          if (active) setBasis(v);
+        })
+        .catch(() => {
+          if (active) setBasis(null);
+        });
+    void read();
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") void read();
+    }, 10000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [roomId]);
   return (
     <div className="tw-root">
       <div className="tw-intro">
@@ -133,33 +159,40 @@ function TrainingRoom({
           <span className="eyebrow">PREPARE · COMPARE · REVIEW</span>
           <h2>让每一句话，都有来处</h2>
           <p>
-            先整理 {productName}{" "}
+            先整理 {basis?.productName || productName}{" "}
             的依据，再用场景检验表达。资料审核、提示词发布和人工评测各自保留记录。
           </p>
         </div>
         <BookOpen size={30} />
       </div>
+      {basis?.contentBound && (
+        <p className={basis.stale ? "tw-alert" : "tw-notice"}>
+          {basis.stale
+            ? "本场定稿依据已改变，请先在“商品与课程”中重新复核并绑定，再进行评测。"
+            : "场景评测使用本场已绑定课程的商品依据。此页“房间备用资料”保留旧数据，修改它不会改变已绑定的商品版本。"}
+        </p>
+      )}
       <nav className="tw-tabs" aria-label="资料与评测步骤">
         <button
           className={section === "materials" ? "active" : ""}
           aria-current={section === "materials" ? "step" : undefined}
           onClick={() => setSection("materials")}
         >
-          <FileCheck2 size={18} /> 1 商品资料
+          <FileCheck2 size={18} /> 房间备用资料
         </button>
         <button
           className={section === "examples" ? "active" : ""}
           aria-current={section === "examples" ? "step" : undefined}
           onClick={() => setSection("examples")}
         >
-          <BookOpen size={18} /> 2 品牌话术
+          <BookOpen size={18} /> 品牌话术
         </button>
         <button
           className={section === "evaluations" ? "active" : ""}
           aria-current={section === "evaluations" ? "step" : undefined}
           onClick={() => setSection("evaluations")}
         >
-          <FlaskConical size={18} /> 3 场景评测
+          <FlaskConical size={18} /> 场景评测
         </button>
       </nav>
       <div hidden={section !== "materials"}>
@@ -721,7 +754,7 @@ function Examples() {
         </div>
         <small>
           {latest
-            ? `以最新 V${latest} 为基础建立新草稿。可在“直播 Agent”中新建品牌风格。`
+            ? `以最新 V${latest} 为基础建立新草稿。可在“表达与提示词”中新建品牌风格。`
             : "选择风格后将读取其版本。"}
         </small>
         <label className="tw-upload">

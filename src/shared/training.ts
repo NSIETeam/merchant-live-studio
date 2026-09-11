@@ -99,6 +99,7 @@ export interface EvaluationReport {
   status: "queued" | "running" | "completed";
   createdAt: number;
   productName: string;
+  category?: string;
   factSnapshot: AgentFact[];
   items: EvaluationItem[];
   stale?: boolean;

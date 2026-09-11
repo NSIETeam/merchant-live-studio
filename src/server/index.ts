@@ -12,6 +12,7 @@ if (config.demoMode) seedDemo(db);
 const app = createApp(db, config);
 if (existsSync("dist/web/index.html")) {
   app.get("/assets/*", serveStatic({ root: "./dist/web" }));
+  app.get("/brand/*", serveStatic({ root: "./dist/web" }));
   app.get("/", serveStatic({ path: "./dist/web/index.html" }));
   app.get("/watch/*", serveStatic({ path: "./dist/web/index.html" }));
 }

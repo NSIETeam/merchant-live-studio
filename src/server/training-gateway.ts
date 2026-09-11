@@ -55,16 +55,19 @@ export function attachTrainingGateway(
       facts
         .map((f) => JSON.stringify([f.id, f.text, f.evidence, f.approved]))
         .sort();
+    const items = evaluation.items.map((item) => ({
+      ...item,
+      run: validateRun(tenant, item.run),
+    }));
     const stale =
+      items.some((item) => item.run.stale) ||
       current.productName !== evaluation.productName ||
+      current.category !== evaluation.category ||
       JSON.stringify(keys(current.facts)) !==
         JSON.stringify(keys(evaluation.factSnapshot));
     return {
       ...evaluation,
-      items: evaluation.items.map((item) => ({
-        ...item,
-        run: validateRun(tenant, item.run),
-      })),
+      items,
       stale,
       staleReason: stale
         ? "商品资料或审核状态已变化，本报告保留为历史记录，请用当前资料重新评测。"

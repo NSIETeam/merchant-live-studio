@@ -84,6 +84,62 @@ export function openDatabase(path: string) {
         INSERT INTO schema_migrations VALUES(3,unixepoch());
       `);
     });
+  if (version < 4)
+    transaction(db, () => {
+      db.exec(`
+        CREATE TABLE content_products (
+          id TEXT PRIMARY KEY, merchant_id TEXT NOT NULL, name TEXT NOT NULL,
+          sku TEXT NOT NULL, category TEXT NOT NULL, latest_version INTEGER NOT NULL,
+          created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, UNIQUE(merchant_id,sku)
+        );
+        CREATE TABLE content_product_versions (
+          product_id TEXT NOT NULL REFERENCES content_products(id), version INTEGER NOT NULL,
+          snapshot_json TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY(product_id,version)
+        );
+        CREATE TABLE content_plans (
+          id TEXT PRIMARY KEY, product_id TEXT NOT NULL REFERENCES content_products(id),
+          name TEXT NOT NULL, audience TEXT NOT NULL, total_days INTEGER NOT NULL, created_at INTEGER NOT NULL
+        );
+        CREATE TABLE content_courses (
+          id TEXT PRIMARY KEY, plan_id TEXT NOT NULL REFERENCES content_plans(id),
+          title TEXT NOT NULL, day_index INTEGER NOT NULL, objective TEXT NOT NULL,
+          duration_minutes INTEGER NOT NULL, schedule_label TEXT NOT NULL, presenter_name TEXT NOT NULL,
+          latest_script_version INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL
+        );
+        CREATE TABLE content_script_versions (
+          course_id TEXT NOT NULL REFERENCES content_courses(id), version INTEGER NOT NULL,
+          product_id TEXT NOT NULL, product_version INTEGER NOT NULL, product_snapshot_json TEXT NOT NULL,
+          paragraphs_json TEXT NOT NULL, change_note TEXT NOT NULL, check_json TEXT NOT NULL,
+          created_at INTEGER NOT NULL, PRIMARY KEY(course_id,version),
+          FOREIGN KEY(product_id,product_version) REFERENCES content_product_versions(product_id,version)
+        );
+        CREATE TABLE content_script_confirmations (
+          course_id TEXT NOT NULL, script_version INTEGER NOT NULL, confirmed_at INTEGER NOT NULL,
+          confirmed_by TEXT NOT NULL, note TEXT NOT NULL, PRIMARY KEY(course_id,script_version),
+          FOREIGN KEY(course_id,script_version) REFERENCES content_script_versions(course_id,version)
+        );
+        CREATE TABLE content_room_bindings (
+          room_id TEXT PRIMARY KEY REFERENCES rooms(id), course_id TEXT NOT NULL,
+          script_version INTEGER NOT NULL, bound_at INTEGER NOT NULL,
+          FOREIGN KEY(course_id,script_version) REFERENCES content_script_versions(course_id,version)
+        );
+        CREATE INDEX content_products_merchant ON content_products(merchant_id,updated_at);
+        CREATE INDEX content_plans_product ON content_plans(product_id,created_at);
+        CREATE INDEX content_courses_plan ON content_courses(plan_id,day_index);
+        INSERT INTO schema_migrations VALUES(4,unixepoch());
+      `);
+      for (const table of [
+        "content_product_versions",
+        "content_script_versions",
+        "content_script_confirmations",
+      ])
+        db.exec(`
+          CREATE TRIGGER ${table}_immutable_update BEFORE UPDATE ON ${table}
+            BEGIN SELECT RAISE(ABORT,'Content versions and confirmations are immutable'); END;
+          CREATE TRIGGER ${table}_immutable_delete BEFORE DELETE ON ${table}
+            BEGIN SELECT RAISE(ABORT,'Content versions and confirmations are immutable'); END;
+        `);
+    });
   return db;
 }
 export type DB = ReturnType<typeof openDatabase>;

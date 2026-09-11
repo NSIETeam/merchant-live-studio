@@ -1,3 +1,6 @@
+import { Audience } from "./Audience.js";
+import { BoundScriptPanel } from "./BoundScriptPanel.js";
+import { ContentWorkbench } from "./ContentWorkbench.js";
 import { TrainingWorkbench } from "./TrainingWorkbench.js";
 import { AgentWorkbench } from "./AgentWorkbench.js";
 import { AgentLiveCard } from "./AgentLiveCard.js";
@@ -39,8 +42,10 @@ import type {
 import { api, duration, money } from "./api";
 import { Player } from "./Player";
 import "./styles.css";
+import "./merchant-density.css";
 
-type Tab = "studio" | "copilot" | "training" | "rewards" | "analytics";
+type Tab =
+  "content" | "studio" | "copilot" | "training" | "rewards" | "analytics";
 const statusText = { draft: "待开播", live: "直播间开放", ended: "已结束" };
 function useClock() {
   const [now, set] = useState(Date.now());
@@ -105,13 +110,13 @@ function Merchant() {
       <div className="login-page">
         <div className="login-card">
           <Brand />
-          <span className="eyebrow">MERCHANT WORKSPACE</span>
+          <span className="eyebrow">内容与直播工作台</span>
           <h1>
-            一场好直播，
+            把内容准备好，
             <br />
-            从这里开始。
+            再从容开播。
           </h1>
-          <p>准备直播间、组织话术，让每一次互动有据可依。</p>
+          <p>从商品依据、课程讲稿到真人直播，把每一次表达准备充分。</p>
           {!auth && !error ? (
             <Notice>正在连接工作台…</Notice>
           ) : (
@@ -171,7 +176,7 @@ function Merchant() {
             <br />
             互动有数
           </h2>
-          <span>LIVE STUDIO / 01</span>
+          <span>靠谱 · 内容有据，表达有温度</span>
         </div>
       </div>
     );
@@ -194,8 +199,8 @@ function Brand() {
         <Radio size={22} />
       </span>
       <span>
-        Live<span className="brand-light">Studio</span>
-        <small>商家直播工作台</small>
+        靠谱
+        <small>内容与直播工作台</small>
       </span>
     </div>
   );
@@ -211,7 +216,7 @@ function Workspace({
 }) {
   const [rooms, setRooms] = useState<Room[]>([]),
     [roomId, setRoomId] = useState(""),
-    [tab, setTab] = useState<Tab>("studio"),
+    [tab, setTab] = useState<Tab>("content"),
     [error, setError] = useState(""),
     [notice, setNotice] = useState("");
   const [creating, setCreating] = useState(false),
@@ -268,7 +273,7 @@ function Workspace({
       setCreating(false);
       setTitle("");
       setProduct("");
-      setNotice("直播间已创建。添加商品事实后即可准备开播。");
+      setNotice("直播间已创建。可在“商品与课程”中绑定已定稿讲稿。");
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -305,11 +310,12 @@ function Workspace({
     }
   }
   const tabs: { id: Tab; label: string; icon: typeof Radio }[] = [
-    { id: "studio", label: "直播工作台", icon: Video },
-    { id: "copilot", label: "直播 Agent", icon: Sparkles },
-    { id: "training", label: "资料与评测", icon: FileCheck2 },
-    { id: "rewards", label: "红包活动", icon: Gift },
-    { id: "analytics", label: "直播分析", icon: Activity },
+    { id: "content", label: "商品与课程", icon: Layers },
+    { id: "studio", label: "直播现场", icon: Video },
+    { id: "copilot", label: "表达与提示词", icon: Sparkles },
+    { id: "training", label: "品牌与评测", icon: FileCheck2 },
+    { id: "rewards", label: "互动活动", icon: Gift },
+    { id: "analytics", label: "数据复盘", icon: Activity },
   ];
   const watchUrl = selected
     ? `${location.origin}${import.meta.env.BASE_URL}watch/${selected.id}`
@@ -318,7 +324,7 @@ function Workspace({
     <div className="workspace">
       <aside className="sidebar">
         <Brand />
-        <div className="workspace-label">WORKSPACE</div>
+        <div className="workspace-label">准备 · 播讲 · 复盘</div>
         <nav aria-label="工作台导航">
           {tabs.map((t) => (
             <button
@@ -338,7 +344,7 @@ function Workspace({
           <p>
             主播提示仅商家可见。
             <br />
-            商品事实需人工审核。
+            讲稿定稿后再播讲。
           </p>
         </div>
         <div className="account">
@@ -370,27 +376,31 @@ function Workspace({
           <div className="page-heading">
             <div>
               <span className="eyebrow">
-                {tab === "studio"
-                  ? "ON AIR, IN CONTROL"
-                  : tab === "copilot"
-                    ? "SPEAK WITH CONFIDENCE"
-                    : tab === "training"
-                      ? "PREPARE, COMPARE, REVIEW"
-                      : tab === "rewards"
-                        ? "MAKE EVERY MOMENT COUNT"
-                        : "MEASURE WHAT HAPPENED"}
+                {tab === "content"
+                  ? "内容准备"
+                  : tab === "studio"
+                    ? "ON AIR, IN CONTROL"
+                    : tab === "copilot"
+                      ? "SPEAK WITH CONFIDENCE"
+                      : tab === "training"
+                        ? "PREPARE, COMPARE, REVIEW"
+                        : tab === "rewards"
+                          ? "MAKE EVERY MOMENT COUNT"
+                          : "MEASURE WHAT HAPPENED"}
               </span>
               <h1>{tabs.find((t) => t.id === tab)?.label}</h1>
               <p>
-                {tab === "studio"
-                  ? "从开播准备，到现场互动。"
-                  : tab === "copilot"
-                    ? "用已核实的信息，组织下一句话。"
-                    : tab === "training"
-                      ? "整理商品证据与品牌话术，用场景打磨表达。"
-                      : tab === "rewards"
-                        ? "设置领取规则，追踪每一笔演示记录。"
-                        : "来自当前直播间的实际访问与互动记录。"}
+                {tab === "content"
+                  ? "商品资料 → 课程讲稿 → 审改定稿 → 真人直播"
+                  : tab === "studio"
+                    ? "查看定稿，准备信号与现场互动。"
+                    : tab === "copilot"
+                      ? "用已核实的信息，组织下一句话。"
+                      : tab === "training"
+                        ? "整理商品证据与品牌话术，用场景打磨表达。"
+                        : tab === "rewards"
+                          ? "设置领取规则，追踪每一笔演示记录。"
+                          : "来自当前直播间的实际访问与互动记录。"}
               </p>
             </div>
             <button className="primary" onClick={() => setCreating(true)}>
@@ -398,46 +408,51 @@ function Workspace({
               创建直播间
             </button>
           </div>
-          <div className="room-bar">
-            <label>
-              当前直播间
-              <select
-                value={roomId}
-                onChange={(e) => {
-                  setRoomId(e.target.value);
-                  setError("");
-                  setNotice("");
-                }}
-              >
-                {!rooms.length && <option value="">暂无直播间</option>}
-                {rooms.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.title}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {selected && (
-              <>
-                <span className={`status ${selected.status}`}>
-                  {statusText[selected.status]}
-                </span>
-                <button className="text-button" onClick={() => copy(watchUrl)}>
-                  <Clipboard size={15} />
-                  复制观看链接
-                </button>
-                <a
-                  className="text-button"
-                  href={watchUrl}
-                  target="_blank"
-                  rel="noreferrer"
+          {tab !== "content" && (
+            <div className="room-bar">
+              <label>
+                当前直播间
+                <select
+                  value={roomId}
+                  onChange={(e) => {
+                    setRoomId(e.target.value);
+                    setError("");
+                    setNotice("");
+                  }}
                 >
-                  观众页
-                  <ArrowUpRight size={16} />
-                </a>
-              </>
-            )}
-          </div>
+                  {!rooms.length && <option value="">暂无直播间</option>}
+                  {rooms.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {selected && (
+                <>
+                  <span className={`status ${selected.status}`}>
+                    {statusText[selected.status]}
+                  </span>
+                  <button
+                    className="text-button"
+                    onClick={() => copy(watchUrl)}
+                  >
+                    <Clipboard size={15} />
+                    复制观看链接
+                  </button>
+                  <a
+                    className="text-button"
+                    href={watchUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    观众页
+                    <ArrowUpRight size={16} />
+                  </a>
+                </>
+              )}
+            </div>
+          )}
           {error && (
             <div className="alert-banner" role="alert">
               {error}
@@ -458,7 +473,10 @@ function Workspace({
               </button>
             </Notice>
           )}
-          {!selected ? (
+          <div hidden={tab !== "content"}>
+            <ContentWorkbench rooms={rooms} />
+          </div>
+          {tab === "content" ? null : !selected ? (
             <div className="empty-state">
               <Radio size={44} />
               <h2>准备你的第一场直播</h2>
@@ -527,6 +545,11 @@ function Workspace({
                       />
                     </section>
                     <div className="studio-side">
+                      <BoundScriptPanel
+                        key={selected.id}
+                        roomId={selected.id}
+                        onOpenContent={() => setTab("content")}
+                      />
                       <AgentLiveCard
                         roomId={selected.id}
                         onOpen={() => setTab("copilot")}
@@ -672,7 +695,14 @@ function Workspace({
           )}
         </div>
         <footer>
-          Live Studio <span>直播底座 + 独立 Agent · 0.4</span>
+          靠谱 <span>商品 · 课程 · 真人直播</span>
+          <a
+            href={`${import.meta.env.BASE_URL}brand/index.html`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Logo 候选
+          </a>
         </footer>
       </main>
       {creating && (
@@ -1217,338 +1247,6 @@ function Rewards({
         </div>
       </section>
     </>
-  );
-}
-function Audience({ id }: { id: string }) {
-  const [data, setData] = useState<{
-      room: Room;
-      campaigns: Campaign[];
-      serverTime: number;
-      requirePlayback: boolean;
-    } | null>(null),
-    [claims, setClaims] = useState<Claim[]>([]),
-    [watch, setWatch] = useState(0),
-    [error, setError] = useState(""),
-    [notice, setNotice] = useState(""),
-    [question, setQuestion] = useState(""),
-    [pending, setPending] = useState("");
-  const [ready, setReady] = useState(false),
-    [offset, setOffset] = useState(0);
-  const now = useClock() + offset;
-  const playing = useRef(false);
-  const [interactive, setInteractive] = useState(false);
-  useEffect(() => {
-    let active = true;
-    api("/auth/viewer", "POST", {})
-      .then(() => {
-        if (active) setReady(true);
-      })
-      .catch((e) => {
-        if (active) setNotice("观看不受影响，互动暂时不可用：" + e.message);
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
-  const refresh = useCallback(async () => {
-    const d = await api<{
-      room: Room;
-      campaigns: Campaign[];
-      serverTime: number;
-      requirePlayback: boolean;
-    }>(`/public/rooms/${id}`);
-    setData(d);
-    setOffset(d.serverTime - Date.now());
-  }, [id]);
-  useEffect(() => {
-    let active = true,
-      inFlight = false;
-    const poll = async () => {
-      if (inFlight || document.visibilityState !== "visible") return;
-      inFlight = true;
-      try {
-        await refresh();
-        if (active) setError("");
-      } catch (e) {
-        if (active) setError((e as Error).message);
-      } finally {
-        inFlight = false;
-      }
-    };
-    void poll();
-    const timer = setInterval(poll, 5000);
-    return () => {
-      active = false;
-      clearInterval(timer);
-    };
-  }, [refresh]);
-  useEffect(() => {
-    if (!ready) return;
-    let active = true,
-      inFlight = false;
-    const poll = async () => {
-      if (inFlight) return;
-      inFlight = true;
-      try {
-        const visible = document.visibilityState === "visible";
-        const h = await api<{ watchSeconds: number }>(
-          `/viewer/rooms/${id}/heartbeat`,
-          "POST",
-          { visible, playing: playing.current },
-        );
-        if (visible) {
-          const c = await api<{ claims: Claim[] }>(
-            `/viewer/rooms/${id}/claims`,
-          );
-          if (active) {
-            setWatch(h.watchSeconds);
-            setClaims(c.claims);
-            setInteractive(true);
-          }
-        }
-      } catch (e) {
-        if (active) {
-          setInteractive(false);
-          setNotice("直播可继续观看，互动暂不可用：" + (e as Error).message);
-        }
-      } finally {
-        inFlight = false;
-      }
-    };
-    void poll();
-    const timer = setInterval(poll, 5000);
-    document.addEventListener("visibilitychange", poll);
-    return () => {
-      active = false;
-      clearInterval(timer);
-      document.removeEventListener("visibilitychange", poll);
-    };
-  }, [ready, id]);
-  async function claim(c: Campaign) {
-    setPending(c.id);
-    setError("");
-    try {
-      const response = await api<{ claim: Claim }>(
-        `/viewer/campaigns/${c.id}/claim`,
-        "POST",
-        {},
-      );
-      setNotice(
-        `已领取演示红包 ${money(response.claim.amountCents)}，不发生真实转账。`,
-      );
-      await refresh();
-      setClaims(
-        (await api<{ claims: Claim[] }>(`/viewer/rooms/${id}/claims`)).claims,
-      );
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setPending("");
-    }
-  }
-  return (
-    <div className="audience-page">
-      <header className="audience-header">
-        <Brand />
-        <span className="env-badge">观众直播间</span>
-      </header>
-      <main className="audience-main">
-        {error && (
-          <div className="alert-banner" role="alert">
-            {error}
-            <button
-              className="icon-button"
-              aria-label="关闭错误"
-              onClick={() => setError("")}
-            >
-              <X size={15} />
-            </button>
-          </div>
-        )}
-        {!data ? (
-          <div className="empty-state">
-            <Radio size={40} />
-            <p>{error ? "暂时无法打开直播间" : "正在连接直播间…"}</p>
-          </div>
-        ) : (
-          <>
-            <div className="audience-title">
-              <div>
-                <h1>{data.room.title}</h1>
-                <span>{data.room.productName}</span>
-              </div>
-              <span className={`status ${data.room.status}`}>
-                {statusText[data.room.status]}
-              </span>
-            </div>
-            {data.room.signal && <SignalBadge signal={data.room.signal} />}
-            <div className="audience-grid">
-              <section>
-                <Player
-                  url={data.room.playbackUrl}
-                  live={data.room.status === "live"}
-                  onPlayback={(value) => {
-                    playing.current = value;
-                  }}
-                />
-                <div className="viewer-bar">
-                  <span>
-                    <Eye size={16} />
-                    本场有效观看 {duration(watch)}
-                  </span>
-                  <small>
-                    {data.requirePlayback
-                      ? "直播播放时累计 · 演示资格"
-                      : "页面可见时累计 · 演示资格"}
-                  </small>
-                </div>
-                <section className="card ask">
-                  <h2>
-                    <MessageCircle size={19} />
-                    向主播提问
-                  </h2>
-                  <form
-                    onSubmit={async (e) => {
-                      e.preventDefault();
-                      try {
-                        await api(`/viewer/rooms/${id}/questions`, "POST", {
-                          text: question,
-                        });
-                        setQuestion("");
-                        setNotice("问题已送达主播工作台。");
-                      } catch (e) {
-                        setError((e as Error).message);
-                      }
-                    }}
-                  >
-                    <label className="sr-only" htmlFor="question">
-                      想了解商品的哪些信息
-                    </label>
-                    <input
-                      id="question"
-                      value={question}
-                      onChange={(e) => setQuestion(e.target.value)}
-                      maxLength={200}
-                      placeholder="想了解商品的哪些信息？"
-                      required
-                    />
-                    <button
-                      className="primary"
-                      disabled={!interactive || data.room.status !== "live"}
-                    >
-                      发送
-                    </button>
-                  </form>
-                  <small>
-                    问题仅发送给商家；请勿填写手机号等个人敏感信息。
-                  </small>
-                </section>
-              </section>
-              <aside className="audience-rewards">
-                <div className="section-title">
-                  <h2>
-                    <Gift size={19} />
-                    直播红包
-                  </h2>
-                  <span className="pill">演示</span>
-                </div>
-                {notice && <Notice>{notice}</Notice>}
-                {data.campaigns.length ? (
-                  data.campaigns.map((c) => {
-                    const mine = claims.find((x) => x.campaignId === c.id),
-                      waiting = now < c.opensAt,
-                      eligible = watch >= c.minWatchSeconds;
-                    return (
-                      <article className="viewer-reward" key={c.id}>
-                        <div className="gift-mark">
-                          <Gift size={26} />
-                        </div>
-                        <span className="eyebrow">直播间专属 · 演示红包</span>
-                        <strong>{money(c.totalCents)}</strong>
-                        <p>
-                          共 {c.count} 个 · 剩余 {c.remainingCount} 个
-                        </p>
-                        <div className="eligibility">
-                          <span>观看满 {c.minWatchSeconds} 秒</span>
-                          <span>
-                            {eligible ? (
-                              <Check size={17} />
-                            ) : (
-                              duration(Math.max(0, c.minWatchSeconds - watch))
-                            )}
-                          </span>
-                        </div>
-                        <progress
-                          max={Math.max(1, c.minWatchSeconds)}
-                          value={
-                            c.minWatchSeconds === 0
-                              ? 1
-                              : Math.min(watch, c.minWatchSeconds)
-                          }
-                        />
-                        <button
-                          className="reward-button"
-                          disabled={
-                            !interactive ||
-                            !!mine ||
-                            pending === c.id ||
-                            waiting ||
-                            !eligible ||
-                            c.remainingCount === 0 ||
-                            now >= c.expiresAt ||
-                            data.room.status !== "live"
-                          }
-                          onClick={() => claim(c)}
-                        >
-                          {mine
-                            ? `已领取 ${money(mine.amountCents)}`
-                            : pending === c.id
-                              ? "领取中…"
-                              : waiting
-                                ? `${Math.max(0, Math.ceil((c.opensAt - now) / 1000))} 秒后开启`
-                                : c.remainingCount === 0
-                                  ? "已领完"
-                                  : !eligible
-                                    ? "继续观看，解锁资格"
-                                    : "领取演示红包"}
-                        </button>
-                        <small>不发生实际转账 · 不会进入微信零钱</small>
-                      </article>
-                    );
-                  })
-                ) : (
-                  <div className="card empty-state small">
-                    <Gift size={32} />
-                    <p>主播还没有发起红包活动</p>
-                  </div>
-                )}
-                {claims.length > 0 && (
-                  <section className="card">
-                    <h2>我的演示记录</h2>
-                    {claims.map((c) => (
-                      <div className="claim-record" key={c.id}>
-                        <span>{money(c.amountCents)}</span>
-                        <small>
-                          {c.status === "simulated"
-                            ? "演示处理完成"
-                            : "等待演示处理"}
-                        </small>
-                      </div>
-                    ))}
-                  </section>
-                )}
-                <p className="fine-print">
-                  普通观看无需下载。匿名浏览器身份仅用于体验，不能用于真实提现。视频可能需要点击播放。
-                </p>
-              </aside>
-            </div>
-          </>
-        )}
-      </main>
-      <footer>
-        Live Studio<span>商家直播 · 轻松观看</span>
-      </footer>
-    </div>
   );
 }
 createRoot(document.getElementById("root")!).render(

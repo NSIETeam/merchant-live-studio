@@ -63,6 +63,11 @@ export function AgentWorkbench({
   const [transcript, setTranscript] = useState("");
   const [question, setQuestion] = useState("");
   const [facts, setFacts] = useState<Fact[]>([]);
+  const [basis, setBasis] = useState<{
+    productName: string;
+    contentBound: boolean;
+    stale: boolean;
+  } | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [factsError, setFactsError] = useState("");
   const [questionsError, setQuestionsError] = useState("");
@@ -97,14 +102,15 @@ export function AgentWorkbench({
     JSON.stringify(draft) !== JSON.stringify(contentOf(savedVersion));
   const promptTooLarge =
     new TextEncoder().encode(JSON.stringify(draft)).byteLength > 30000;
-  const factSignature = JSON.stringify(
+  const factSignature = JSON.stringify([
+    basis,
     facts.map(({ id, text, evidence, approved }) => ({
       id,
       text,
       evidence,
       approved,
     })),
-  );
+  ]);
   const quickKey = JSON.stringify([
     roomId,
     transcript,
@@ -237,6 +243,7 @@ export function AgentWorkbench({
     setTranscript("");
     setQuestion("");
     setFacts([]);
+    setBasis(null);
     setQuestions([]);
     setQuick(null);
     setRun(null);
@@ -250,12 +257,16 @@ export function AgentWorkbench({
   useEffect(() => {
     let cancelled = false;
     const refresh = () => {
-      void api<{ facts: Fact[] }>(
-        `/merchant/rooms/${encodeURIComponent(roomId)}/facts`,
-      )
+      void api<{
+        facts: Fact[];
+        productName: string;
+        contentBound: boolean;
+        stale: boolean;
+      }>(`/merchant/rooms/${encodeURIComponent(roomId)}/agent/basis`)
         .then((response) => {
           if (!cancelled && roomRef.current === roomId) {
-            setFacts(response.facts);
+            setFacts(response.facts.map((f) => ({ ...f, roomId })));
+            setBasis(response);
             setFactsError("");
           }
         })
@@ -766,7 +777,7 @@ export function AgentWorkbench({
               value={transcript}
               maxLength={4000}
               onChange={(event) => setTranscript(event.target.value)}
-              placeholder={`输入你准备介绍「${productName}」的话，或粘贴一段需要改进的话术。`}
+              placeholder={`输入你准备介绍「${basis?.productName || productName}」的话，或粘贴一段需要改进的话术。`}
             />
             {question && (
               <div className="aw-selected-question">
@@ -1295,15 +1306,26 @@ export function AgentWorkbench({
           <details className="aw-card aw-facts" open={!facts.length}>
             <summary>
               <div>
-                <h2>可宣称事实库</h2>
+                <h2>
+                  {basis?.contentBound
+                    ? "本场定稿的商品依据"
+                    : "房间备用事实库"}
+                </h2>
                 <span>
                   {facts.filter((item) => item.approved).length} 条已审核 ·{" "}
-                  {productName}
+                  {basis?.productName || productName}
                 </span>
               </div>
               <ChevronRight size={19} />
             </summary>
             <div className="aw-facts-content">
+              {basis?.contentBound && (
+                <p className="aw-help">
+                  {basis.stale
+                    ? "商品依据已改变，暂停使用旧定稿事实。请在“商品与课程”中重新审改、定稿并绑定。"
+                    : "使用已绑定定稿的商品证据版本。修改商品资料请到“商品与课程”；此处只读。"}
+                </p>
+              )}
               {factsError && (
                 <p className="aw-inline-error" role="alert">
                   {factsError}
@@ -1316,11 +1338,15 @@ export function AgentWorkbench({
                     <p>{fact.evidence}</p>
                     <button
                       type="button"
-                      disabled={factBusy}
+                      disabled={factBusy || basis?.contentBound}
                       className={fact.approved ? "aw-approved" : "aw-secondary"}
                       onClick={() => void reviewFact(fact)}
                     >
-                      {fact.approved ? "已审核 · 撤回" : "审核通过"}
+                      {basis?.contentBound
+                        ? "定稿依据 · 只读"
+                        : fact.approved
+                          ? "已审核 · 撤回"
+                          : "审核通过"}
                     </button>
                   </div>
                 ))
@@ -1329,38 +1355,40 @@ export function AgentWorkbench({
                   添加商品标签、检测报告或活动规则中的事实，再由商家审核。
                 </p>
               )}
-              <form onSubmit={addFact}>
-                <label>
-                  事实内容
-                  <input
-                    value={factText}
-                    onChange={(event) => setFactText(event.target.value)}
-                    maxLength={400}
-                    required
-                    placeholder="例如：容量为 500 mL"
-                  />
-                </label>
-                <label>
-                  依据与出处
-                  <input
-                    value={evidenceText}
-                    onChange={(event) => setEvidenceText(event.target.value)}
-                    maxLength={500}
-                    required
-                    placeholder="文件名称、页码或可核验链接"
-                  />
-                </label>
-                <button
-                  type="submit"
-                  className="aw-secondary"
-                  disabled={
-                    factBusy || !factText.trim() || !evidenceText.trim()
-                  }
-                >
-                  <Plus size={16} />
-                  添加待审核事实
-                </button>
-              </form>
+              {!basis?.contentBound && (
+                <form onSubmit={addFact}>
+                  <label>
+                    事实内容
+                    <input
+                      value={factText}
+                      onChange={(event) => setFactText(event.target.value)}
+                      maxLength={400}
+                      required
+                      placeholder="例如：容量为 500 mL"
+                    />
+                  </label>
+                  <label>
+                    依据与出处
+                    <input
+                      value={evidenceText}
+                      onChange={(event) => setEvidenceText(event.target.value)}
+                      maxLength={500}
+                      required
+                      placeholder="文件名称、页码或可核验链接"
+                    />
+                  </label>
+                  <button
+                    type="submit"
+                    className="aw-secondary"
+                    disabled={
+                      factBusy || !factText.trim() || !evidenceText.trim()
+                    }
+                  >
+                    <Plus size={16} />
+                    添加待审核事实
+                  </button>
+                </form>
+              )}
             </div>
           </details>
         </aside>

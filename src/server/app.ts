@@ -23,6 +23,7 @@ import {
 import { HttpAgentBridge, type AgentBridge } from "./services/agent-bridge.js";
 import { attachAgentGateway } from "./agent-gateway.js";
 import { attachMaterials } from "./materials.js";
+import { attachContent, getRoomContentBinding } from "./content.js";
 import { channelCapabilities } from "../shared/channels.js";
 import type { Analytics, Fact, Room } from "../shared/types.js";
 
@@ -70,7 +71,14 @@ export function createApp(
     id: r.id,
     merchantId: r.merchant_id,
     title: r.title,
-    productName: r.product_name,
+    productName:
+      (db
+        .prepare(
+          `SELECT json_extract(v.product_snapshot_json,'$.name') AS name
+      FROM content_room_bindings b JOIN content_script_versions v
+      ON v.course_id=b.course_id AND v.version=b.script_version WHERE b.room_id=?`,
+        )
+        .get(r.id)?.name as string | undefined) || r.product_name,
     status: r.status,
     createdAt: r.created_at,
     playbackUrl: stream.playbackUrl(r.id),
@@ -95,12 +103,13 @@ export function createApp(
     return r;
   };
   app.use("*", secureHeaders());
-  app.use(
-    "/api/*",
+  app.use("/api/*", (c, next) =>
     bodyLimit({
-      maxSize: 32 * 1024,
+      maxSize: c.req.path.startsWith("/api/merchant/content/")
+        ? 128 * 1024
+        : 32 * 1024,
       onError: (c) => c.json({ error: "请求内容过大" }, 413),
-    }),
+    })(c, next),
   );
   app.use("/api/*", async (c, next) => {
     c.header("Cache-Control", "no-store");
@@ -387,11 +396,59 @@ export function createApp(
     return c.json({ ok: true });
   });
   attachMaterials(app, db, owned, (roomId) => factsFor(db, roomId), clock);
+  attachContent(app, db, clock);
+  const agentBasis = (roomId: string, tenant: string) => {
+    const r = owned(roomId, tenant);
+    const binding = getRoomContentBinding(db, roomId, tenant);
+    if (!binding)
+      return {
+        productName: r.product_name,
+        category: undefined,
+        facts: factsFor(db, roomId)
+          .filter((f) => f.approved && f.evidence.trim())
+          .map(({ id, text, evidence, approved }) => ({
+            id,
+            text,
+            evidence,
+            approved,
+          })),
+        contentBound: false,
+        stale: false,
+      };
+    return {
+      productName: binding.productName,
+      category: binding.category,
+      // Namespace references by product revision so re-binding cannot make an
+      // old Agent result appear current merely because a fact id was reused.
+      facts: binding.stale
+        ? []
+        : binding.script.productSnapshot.facts
+            .filter((f) => f.approved && f.evidence.trim())
+            .map((f) => ({
+              ...f,
+              id: `${binding.productId}:v${binding.script.productSnapshot.version}:${f.id}`,
+            })),
+      contentBound: true,
+      stale: binding.stale,
+    };
+  };
+  app.get("/api/merchant/rooms/:id/agent/basis", (c) => {
+    const basis = agentBasis(c.req.param("id"), c.get("merchantId"));
+    return c.json(
+      basis.contentBound
+        ? basis
+        : {
+            ...basis,
+            facts: factsFor(db, c.req.param("id")),
+          },
+    );
+  });
   attachAgentGateway(
     app,
     agentBridge,
     (roomId, tenant, input) => {
       const r = owned(roomId, tenant);
+      const basis = agentBasis(roomId, tenant);
       const campaign = db
         .prepare(
           `SELECT * FROM campaigns WHERE room_id=? AND status='active' AND expires_at>? ORDER BY opens_at LIMIT 1`,
@@ -404,22 +461,17 @@ export function createApp(
         transcript: input.transcript,
         question: input.question,
         roomId: r.id,
-        productName: r.product_name,
-        facts: factsFor(db, r.id)
-          .filter((f) => f.approved && f.evidence.trim())
-          .map(({ id, text, evidence, approved }) => ({
-            id,
-            text,
-            evidence,
-            approved,
-          })),
+        productName: basis.productName,
+        category: basis.category,
+        facts: basis.facts,
         campaignCue: cue,
       };
     },
     (tenant, run) => {
       const current = owned(run.roomId, tenant);
+      const basis = agentBasis(run.roomId, tenant);
       const approved = new Set(
-        factsFor(db, current.id)
+        basis.facts
           .filter((f) => f.approved && f.evidence.trim())
           .map((f) => f.id),
       );
@@ -433,12 +485,14 @@ export function createApp(
           clock() - run.createdAt > 120000);
       return {
         ...run,
-        stale: Boolean(evidenceChanged || expired),
-        staleReason: evidenceChanged
-          ? "引用的事实已撤回，请重新生成。"
-          : expired
-            ? "直播场次或时间已变化，请重新生成当前建议。"
-            : undefined,
+        stale: Boolean(basis.stale || evidenceChanged || expired),
+        staleReason: basis.stale
+          ? "本场定稿的商品依据已变化，请先复核课程讲稿。"
+          : evidenceChanged
+            ? "引用的事实已撤回，请重新生成。"
+            : expired
+              ? "直播场次或时间已变化，请重新生成当前建议。"
+              : undefined,
       };
     },
   );

@@ -279,6 +279,7 @@ export function registerTrainingRoutes(
           : "running",
       createdAt: row.created_at,
       productName: context.productName,
+      category: context.category,
       factSnapshot: context.facts,
       items,
     };
