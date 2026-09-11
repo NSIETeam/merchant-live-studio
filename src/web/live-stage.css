@@ -1,0 +1,194 @@
+/* The live canvas is the primary workspace; supporting tools follow it in DOM order. */
+.workspace.live-workspace .studio-grid {
+  grid-template-columns: minmax(0, 3fr) minmax(260px, 1fr);
+  align-items: start;
+  gap: 16px;
+}
+.workspace.live-workspace .live-stage {
+  min-width: 0;
+}
+.workspace.live-workspace .live-stage .player {
+  height: clamp(300px, 62dvh, 900px);
+  aspect-ratio: auto;
+  min-height: 0;
+  border-radius: 10px;
+}
+.workspace.live-workspace .live-stage .section-title {
+  display: none;
+}
+.workspace.live-workspace .live-stage .signal-status {
+  margin: 8px 0 0;
+  background: transparent;
+  border: 0;
+  padding: 4px 0;
+}
+.workspace.live-workspace .page-heading {
+  margin-bottom: 10px;
+}
+.workspace.live-workspace .page-heading p {
+  display: none;
+}
+.workspace.live-workspace .room-bar {
+  margin-bottom: 12px;
+}
+.workspace.live-workspace .studio-side {
+  border: 1px solid #dfe5e3;
+  background: white;
+  border-radius: 10px;
+  min-width: 0;
+  overflow: hidden;
+  gap: 0;
+}
+.workspace.live-workspace .studio-side [hidden] {
+  display: none !important;
+}
+.workspace.live-workspace .studio-side .card {
+  border: 0;
+  box-shadow: none;
+}
+.live-tool-tabs {
+  display: flex;
+  border-bottom: 1px solid #e0e6e3;
+  padding: 5px;
+  gap: 3px;
+}
+.live-tool-tabs button {
+  flex: 1;
+  padding: 10px 4px;
+  background: transparent;
+  color: #69746f;
+  white-space: nowrap;
+  font-size: 12px;
+  border-radius: 6px;
+}
+.live-tool-tabs button[aria-selected="true"] {
+  background: #edf5ee;
+  color: #1e674c;
+  font-weight: 600;
+}
+.workspace.live-workspace .bound-paragraph {
+  max-height: 42dvh;
+  font-size: 21px;
+}
+.workspace.live-workspace .live-management {
+  margin-top: 12px;
+}
+@media (max-width: 1100px) {
+  .workspace.live-workspace .studio-grid {
+    grid-template-columns: minmax(0, 2fr) minmax(240px, 1fr);
+  }
+}
+@media (max-width: 950px) {
+  .workspace .sidebar {
+    padding: 8px 12px;
+    min-height: 48px;
+    flex-wrap: nowrap;
+  }
+  .workspace .sidebar nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 30;
+    background: #12202a;
+    padding: 6px 10px calc(6px + env(safe-area-inset-bottom));
+    width: auto;
+    margin: 0;
+    overflow: visible;
+    border-top: 1px solid #31414a;
+  }
+  .workspace .sidebar .nav-item {
+    min-height: 46px;
+    flex: 1;
+    flex-direction: row;
+    padding: 8px;
+    white-space: nowrap;
+  }
+  .workspace .main {
+    padding-bottom: 74px;
+  }
+  .workspace .brand small {
+    display: none;
+  }
+  .workspace .sidebar .brand {
+    font-size: 20px;
+  }
+  .workspace .sidebar .account {
+    margin-left: auto;
+  }
+  .workspace.live-workspace .topbar,
+  .workspace.live-workspace .page-heading {
+    display: none;
+  }
+  .workspace.live-workspace .content {
+    padding: 10px 12px;
+  }
+  .workspace.live-workspace .room-bar {
+    gap: 6px;
+    margin-bottom: 8px;
+    padding: 6px 8px;
+  }
+  .workspace.live-workspace .room-bar label {
+    flex: 1;
+    min-width: 0;
+    font-size: 0;
+    display: block;
+  }
+  .workspace.live-workspace .room-bar select {
+    width: 100%;
+    max-width: 100%;
+    font-size: 16px;
+    min-height: 40px;
+  }
+  .workspace.live-workspace .room-bar > .text-button,
+  .workspace.live-workspace .room-bar > a {
+    display: none;
+  }
+}
+@media (max-width: 700px) {
+  .workspace.live-workspace .studio-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+  .workspace.live-workspace .live-stage .player {
+    height: clamp(230px, 43dvh, 480px);
+    width: 100%;
+    border-radius: 8px;
+  }
+  .workspace.live-workspace .stream-actions {
+    padding: 8px 0;
+    align-items: center;
+  }
+  .workspace.live-workspace .stream-actions small {
+    display: none;
+  }
+  .workspace.live-workspace .stream-actions strong {
+    overflow-wrap: anywhere;
+  }
+  .workspace.live-workspace .live-stage .signal-status {
+    font-size: 12px;
+  }
+  .workspace.live-workspace .live-stage .stream-settings {
+    padding: 10px;
+  }
+  .workspace.live-workspace .bound-paragraph {
+    max-height: 260px;
+    font-size: 20px;
+  }
+  .workspace.live-workspace button,
+  .workspace.live-workspace summary {
+    min-height: 44px;
+  }
+  .workspace .home-heading h1 {
+    font-size: 25px;
+  }
+}
+@media (max-height: 500px) and (orientation: landscape) {
+  .workspace.live-workspace .studio-grid {
+    grid-template-columns: minmax(0, 2fr) minmax(230px, 1fr);
+  }
+  .workspace.live-workspace .live-stage .player {
+    height: 65dvh;
+    min-height: 180px;
+  }
+}

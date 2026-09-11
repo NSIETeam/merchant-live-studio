@@ -37,6 +37,8 @@ export function memberMayAccess(
   method: string,
   path: string,
 ) {
+  if (path === "/api/merchant/home")
+    return ["GET", "HEAD", "PUT"].includes(method);
   if (role === "owner") return true;
   if (
     /^\/api\/merchant\/(?:recordings(?:\/|$)|rooms\/[^/]+\/recordings$)/.test(

@@ -1,3 +1,4 @@
+import { attachHome } from "./home.js";
 import { attachRecordings } from "./recordings.js";
 import { activeModerationHold, attachModeration } from "./moderation.js";
 import { admissionCheck } from "./admission.js";
@@ -519,6 +520,7 @@ export function createApp(
   attachComplaints(app, db, clock);
   attachDisclosure(app, db, clock);
   attachModeration(app, db, media, clock);
+  attachHome(app, db);
   attachRecordings(app, db, config);
   const agentBasis = (roomId: string, tenant: string) => {
     const r = owned(roomId, tenant);

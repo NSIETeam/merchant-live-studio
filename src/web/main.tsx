@@ -1,3 +1,4 @@
+import { homeDestinations } from "../shared/home.js";
 import { PersonalHome, type Destination } from "./PersonalHome.js";
 import { Home } from "lucide-react";
 import { RecordingsPanel } from "./RecordingsPanel.js";
@@ -53,6 +54,7 @@ import { api, duration, money } from "./api";
 import { Player } from "./Player";
 import "./styles.css";
 import "./merchant-density.css";
+import "./live-stage.css";
 
 type Tab = "home" | Destination;
 const statusText = { draft: "待开播", live: "直播间开放", ended: "已结束" };
@@ -247,6 +249,9 @@ function Workspace({
     [product, setProduct] = useState(""),
     [saving, setSaving] = useState(false);
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
+  const [liveTool, setLiveTool] = useState<"script" | "questions" | "agent">(
+    "script",
+  );
   const [admissionRevision, setAdmissionRevision] = useState(0);
   const selected = rooms.find((r) => r.id === roomId);
   const refreshRooms = useCallback(async () => {
@@ -342,23 +347,12 @@ function Workspace({
     { id: "rewards", label: "互动活动", icon: Gift },
     { id: "analytics", label: "数据复盘", icon: Activity },
   ];
-  const allowed = tabs
-    .filter(
-      (t) =>
-        t.id !== "home" &&
-        (memberRole === "owner" ||
-          (memberRole === "analyst"
-            ? t.id === "analytics"
-            : memberRole === "reviewer"
-              ? ["content", "studio", "analytics"].includes(t.id)
-              : t.id !== "rewards")),
-    )
-    .map((t) => t.id as Destination);
+  const allowed = homeDestinations(memberRole);
   const watchUrl = selected
     ? `${location.origin}${import.meta.env.BASE_URL}watch/${selected.id}`
     : "";
   return (
-    <div className="workspace">
+    <div className={`workspace ${tab === "studio" ? "live-workspace" : ""}`}>
       <aside className="sidebar">
         <Brand />
         <div className="workspace-label">准备 · 播讲 · 复盘</div>
@@ -576,34 +570,20 @@ function Workspace({
             <>
               {tab === "studio" && (
                 <>
-                  <AdmissionPanel
-                    key={selected.id + selected.status + admissionRevision}
-                    roomId={selected.id}
-                  />
-                  <ModerationPanel
-                    key={selected.id + "-moderation"}
-                    onChanged={async () => {
-                      await refreshRooms();
-                      setAdmissionRevision((value) => value + 1);
-                    }}
-                    roomId={selected.id}
-                    actorId={actorId}
-                    editable={["owner", "reviewer"].includes(memberRole)}
-                  />
                   <div className="studio-grid">
-                    <section>
+                    <section className="live-stage" aria-label="直播画面与控制">
                       <div className="section-title">
                         <h2>直播预览</h2>
                         <span className="muted">{selected.productName}</span>
                       </div>
-                      <Signal
-                        key={selected.id + selected.status}
-                        roomId={selected.id}
-                      />
                       <Player
                         key={selected.id}
                         url={selected.playbackUrl}
                         live={selected.status === "live"}
+                      />
+                      <Signal
+                        key={selected.id + selected.status}
+                        roomId={selected.id}
                       />
                       <div className="stream-actions">
                         <div>
@@ -653,64 +633,92 @@ function Workspace({
                         />
                       )}
                     </section>
-                    <div className="studio-side">
-                      <BoundScriptPanel
-                        key={selected.id}
-                        roomId={selected.id}
-                        onOpenContent={() => setTab("content")}
-                      />
-                      <AgentLiveCard
-                        roomId={selected.id}
-                        onOpen={() => setTab("copilot")}
-                      />
-                      <details className="card readiness">
-                        <summary>更多准备工具</summary>
-                        <span className="eyebrow">BEFORE YOU GO LIVE</span>
-                        <h2>开播准备</h2>
-                        <div className="check-row">
-                          <CheckCheck size={19} />
-                          <div>
-                            <strong>直播间已创建</strong>
-                            <small>观看链接随时可分享</small>
-                          </div>
-                        </div>
-                        <button
-                          className="check-row"
-                          onClick={() => setTab("copilot")}
-                        >
-                          <ShieldCheck size={19} />
-                          <div>
-                            <strong>审核商品事实</strong>
-                            <small>为每一句话补充依据</small>
-                          </div>
-                          <ChevronRight size={16} />
-                        </button>
-                        <button
-                          className="check-row"
-                          onClick={() => setTab("rewards")}
-                        >
-                          <Gift size={19} />
-                          <div>
-                            <strong>设置红包活动</strong>
-                            <small>金额、时间与领取条件</small>
-                          </div>
-                          <ChevronRight size={16} />
-                        </button>
-                      </details>
-                      <Questions
-                        roomId={selected.id}
-                        onChoose={() => setTab("copilot")}
-                      />
-                      <div className="mini-note">
-                        <Layers size={20} />
-                        <p>
-                          红包当前为演示记录。
-                          <br />
-                          未连接微信支付，不发生资金转账。
-                        </p>
+                    <aside className="studio-side" aria-label="直播辅助工具">
+                      <div
+                        className="live-tool-tabs"
+                        role="tablist"
+                        aria-label="直播辅助工具切换"
+                      >
+                        {(["script", "questions", "agent"] as const).map(
+                          (id) => (
+                            <button
+                              key={id}
+                              id={`tool-${id}`}
+                              role="tab"
+                              aria-selected={liveTool === id}
+                              aria-controls={`panel-${id}`}
+                              onClick={() => setLiveTool(id)}
+                            >
+                              {
+                                {
+                                  script: "提词器",
+                                  questions: "观众提问",
+                                  agent: "Agent 建议",
+                                }[id]
+                              }
+                            </button>
+                          ),
+                        )}
                       </div>
-                    </div>
+                      <div
+                        role="tabpanel"
+                        id="panel-script"
+                        aria-labelledby="tool-script"
+                        hidden={liveTool !== "script"}
+                      >
+                        <BoundScriptPanel
+                          key={selected.id}
+                          roomId={selected.id}
+                          onOpenContent={() => setTab("content")}
+                        />
+                      </div>
+                      <div
+                        role="tabpanel"
+                        id="panel-questions"
+                        aria-labelledby="tool-questions"
+                        hidden={liveTool !== "questions"}
+                      >
+                        <Questions
+                          roomId={selected.id}
+                          onChoose={() => {
+                            if (allowed.includes("copilot")) setTab("copilot");
+                          }}
+                        />
+                      </div>
+                      <div
+                        role="tabpanel"
+                        id="panel-agent"
+                        aria-labelledby="tool-agent"
+                        hidden={liveTool !== "agent"}
+                      >
+                        {allowed.includes("copilot") ? (
+                          <AgentLiveCard
+                            roomId={selected.id}
+                            onOpen={() => setTab("copilot")}
+                          />
+                        ) : (
+                          <p className="muted">当前角色使用已审核定稿播讲。</p>
+                        )}
+                      </div>
+                    </aside>
                   </div>
+                  <details className="live-management">
+                    <summary>开播检查与现场处置</summary>
+                    <AdmissionPanel
+                      key={selected.id + selected.status + admissionRevision}
+                      roomId={selected.id}
+                    />
+                    <ModerationPanel
+                      key={selected.id + "-moderation"}
+                      onChanged={async () => {
+                        await refreshRooms();
+                        setAdmissionRevision((value) => value + 1);
+                      }}
+                      roomId={selected.id}
+                      actorId={actorId}
+                      editable={["owner", "reviewer"].includes(memberRole)}
+                    />
+                  </details>
                   <details className="live-management">
                     <summary>直播管理 · 投诉、录像与数据</summary>
                     {memberRole === "owner" && (

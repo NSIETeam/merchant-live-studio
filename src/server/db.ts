@@ -365,6 +365,16 @@ export function openDatabase(path: string) {
         Date.now(),
       );
     });
+  if (version < 17)
+    transaction(db, () => {
+      db.exec(
+        "CREATE TABLE home_preferences(merchant_id TEXT NOT NULL,actor_id TEXT NOT NULL,layout_json TEXT NOT NULL,version INTEGER NOT NULL,updated_at INTEGER NOT NULL,PRIMARY KEY(merchant_id,actor_id))",
+      );
+      db.prepare("INSERT INTO schema_migrations VALUES(?,?)").run(
+        17,
+        Date.now(),
+      );
+    });
   return db;
 }
 export type DB = ReturnType<typeof openDatabase>;

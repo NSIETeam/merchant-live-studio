@@ -1,10 +1,14 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { ArrowRight, ArrowUp, ArrowDown, Plus, Settings2 } from "lucide-react";
 import type { Room } from "../shared/types";
 import "./personal-home.css";
-export type Destination =
-  "content" | "studio" | "copilot" | "training" | "rewards" | "analytics";
-type Module = "shortcuts" | "rooms" | Destination;
+import { api } from "./api.js";
+import type {
+  Destination,
+  HomeModule as Module,
+  HomePreferences,
+} from "../shared/home.js";
+export type { Destination } from "../shared/home.js";
 const labels: Record<Module, string> = {
   shortcuts: "常用功能",
   rooms: "我的直播间",
@@ -41,29 +45,71 @@ export function PersonalHome({
   const key = `kaopu:home:v1:${encodeURIComponent(merchantId)}:${encodeURIComponent(actorId)}`;
   const available: Module[] = ["shortcuts", "rooms", ...allowed];
   const defaults: Module[] = ["shortcuts", "rooms"];
-  const [modules, setModules] = useState<Module[]>(() => {
+  const [preferences, setPreferences] = useState<HomePreferences>({
+    modules: defaults,
+    shortcuts: allowed,
+    version: 0,
+  });
+  const { modules, shortcuts } = preferences;
+  const [editing, setEditing] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [ready, setReady] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [legacy, setLegacy] = useState<Module[] | null>(null);
+  useEffect(() => {
+    let active = true;
+    api<HomePreferences>("/merchant/home")
+      .then((data) => {
+        if (active) {
+          setPreferences(data);
+          setReady(true);
+        }
+      })
+      .catch((error) => {
+        if (active) setNotice(error.message);
+      });
     try {
       const saved: unknown = JSON.parse(localStorage.getItem(key) || "null");
       if (Array.isArray(saved))
-        return [
+        setLegacy([
           ...new Set(
             saved.filter((id): id is Module => available.includes(id)),
           ),
-        ];
+        ]);
     } catch {
-      /* Use defaults when storage is unavailable. */
+      /* Old browser preferences are optional. */
     }
-    return defaults;
-  });
-  const [editing, setEditing] = useState(false);
-  const [notice, setNotice] = useState("");
-  function save(next: Module[]) {
-    setModules(next);
+    return () => {
+      active = false;
+    };
+  }, [key]);
+  async function reload() {
+    setBusy(true);
     try {
-      localStorage.setItem(key, JSON.stringify(next));
-      setNotice("布局已保存到当前浏览器，仅影响当前账号。");
-    } catch {
-      setNotice("浏览器无法保存布局，本次调整仅在当前页面有效。");
+      setPreferences(await api<HomePreferences>("/merchant/home"));
+      setReady(true);
+      setNotice("已载入账号保存的布局。");
+    } catch (error) {
+      setNotice((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function save(next: Module[], nextShortcuts = shortcuts) {
+    if (!ready || busy) return;
+    setBusy(true);
+    try {
+      const saved = await api<HomePreferences>("/merchant/home", "PUT", {
+        modules: next,
+        shortcuts: nextShortcuts,
+        version: preferences.version,
+      });
+      setPreferences(saved);
+      setNotice("主页已保存，使用此账号登录其他设备也能恢复。");
+    } catch (error) {
+      setNotice((error as Error).message);
+    } finally {
+      setBusy(false);
     }
   }
   function move(index: number, delta: number) {
@@ -91,11 +137,13 @@ export function PersonalHome({
         </button>
       </div>
       {editing && (
-        <section className="home-customizer" aria-label="主页模块设置">
+        <fieldset
+          disabled={!ready || busy}
+          className="home-customizer"
+          aria-label="主页模块设置"
+        >
           <h2>添加或隐藏模块</h2>
-          <p>
-            调整仅对当前账号、当前浏览器生效。使用卡片上的上下移按钮调整顺序。
-          </p>
+          <p>布局随当前账号保存。使用卡片上的上下移按钮调整顺序。</p>
           <div className="home-module-options">
             {available.map((id) => (
               <label key={id}>
@@ -114,16 +162,51 @@ export function PersonalHome({
               </label>
             ))}
           </div>
-          <button className="text-button" onClick={() => save(defaults)}>
+          <button
+            className="text-button"
+            onClick={() => save(defaults, allowed)}
+          >
             恢复默认布局
           </button>
-        </section>
+          <h2>常用功能入口</h2>
+          <div className="home-module-options">
+            {allowed.map((id) => (
+              <label key={id}>
+                <input
+                  type="checkbox"
+                  checked={shortcuts.includes(id)}
+                  onChange={(e) =>
+                    void save(
+                      modules,
+                      e.target.checked
+                        ? [...shortcuts, id]
+                        : shortcuts.filter((x) => x !== id),
+                    )
+                  }
+                />
+                {labels[id]}
+              </label>
+            ))}
+          </div>
+          {legacy && (
+            <button className="text-button" onClick={() => void save(legacy)}>
+              导入此浏览器的旧布局
+            </button>
+          )}
+        </fieldset>
       )}
       {notice && (
         <p role="status" className="muted">
           {notice}
         </p>
       )}
+      <button
+        className="text-button"
+        disabled={busy}
+        onClick={() => void reload()}
+      >
+        重新载入布局
+      </button>
       {!modules.length && (
         <div className="home-card">
           <h2>从你关心的功能开始</h2>
@@ -143,7 +226,7 @@ export function PersonalHome({
                   <button
                     className="icon-button"
                     aria-label={`上移${labels[id]}`}
-                    disabled={!index}
+                    disabled={!index || busy || !ready}
                     onClick={() => move(index, -1)}
                   >
                     <ArrowUp size={16} />
@@ -151,13 +234,14 @@ export function PersonalHome({
                   <button
                     className="icon-button"
                     aria-label={`下移${labels[id]}`}
-                    disabled={index === modules.length - 1}
+                    disabled={index === modules.length - 1 || busy || !ready}
                     onClick={() => move(index, 1)}
                   >
                     <ArrowDown size={16} />
                   </button>
                   <button
                     className="text-button"
+                    disabled={busy || !ready}
                     onClick={() => save(modules.filter((x) => x !== id))}
                   >
                     隐藏
@@ -167,7 +251,7 @@ export function PersonalHome({
             </header>
             {id === "shortcuts" ? (
               <div className="home-links">
-                {allowed.map((target) => (
+                {shortcuts.map((target) => (
                   <button key={target} onClick={() => onOpen(target)}>
                     <span>
                       {labels[target]}

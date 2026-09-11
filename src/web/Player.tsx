@@ -115,7 +115,14 @@ export function Player({
       {message && (
         <div className="player-message">
           {message}
-          <button onClick={() => setActive(false)}>重试</button>
+          <button
+            onClick={() => {
+              setMessage("");
+              setActive(false);
+            }}
+          >
+            重试
+          </button>
         </div>
       )}
       <span className="player-label">
