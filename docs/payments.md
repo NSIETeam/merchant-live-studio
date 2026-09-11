@@ -48,7 +48,9 @@ interface PaymentProvider {
 
 `TransferRequest` 包含 `merchantId`、`outBillNo`、`amountCents`、`verifiedRecipientId`。后者应由服务端可信身份映射生成，不能接受匿名浏览器随意提交的 OpenID。返回状态预留 `pending / wait_user_confirm / paid / failed / cancelled`。
 
-`WeChatPaymentProvider` 的三个方法当前全部抛出“尚未实现”错误。`.env.example` 中从 `WECHAT_MCH_ID` 开始的支付字段只是接入占位，模拟服务不会读取它们；公众号 OAuth 和 JS-SDK 会使用单独启用的 AppID/AppSecret，但这仍不能启用支付。真实支付需要补充数据迁移、商户配置存储、授权状态、订单、幂等通知收件箱与对账任务。
+`WeChatPaymentProvider` 已实现普通商户 APIv3 的请求签名、发起转账、原商户单号查询、微信应答验签、终态通知验签及 AES-256-GCM 解密。适配器固定商户号、AppID、获批场景、报备字段、通知地址和服务器密钥，并校验内部租户、商户单号、整数分金额、OpenID、回调商户号与终态；请求失败时明确要求查询原单，不能换单重付。协议实现与验证边界见[微信商家转账适配器功能卡](wechat-transfer-adapter.md)。
+
+当前本地候选还增加逐领取唯一出款单、不可改写状态事件、幂等通知收件箱，以及明确授权后才持久化的加密 OpenID 保险库；支付模块只持有按商家隔离的收款人摘要。它们尚未接入现有模拟任务和 HTTP 用户流程；`.env.example` 中从 `WECHAT_MCH_ID` 开始的支付字段仍只是接入占位，服务不会读取，通知入口继续返回 501。公众号 OAuth 和 JS-SDK 使用单独启用的 AppID/AppSecret，但这仍不能启用支付。真实支付还需补充多商户配置、授权界面、worker 调度及对账任务。
 
 ## 微信支付产品选择与身份
 

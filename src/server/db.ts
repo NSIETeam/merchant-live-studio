@@ -533,6 +533,77 @@ export function openDatabase(path: string) {
         Date.now(),
       );
     });
+  if (version < 25)
+    transaction(db, () => {
+      db.exec(`CREATE TABLE payment_transfers(
+        out_bill_no TEXT PRIMARY KEY,
+        claim_id TEXT NOT NULL UNIQUE REFERENCES claims(id),
+        campaign_id TEXT NOT NULL REFERENCES campaigns(id),
+        merchant_id TEXT NOT NULL,
+        recipient_digest TEXT NOT NULL,
+        amount_cents INTEGER NOT NULL CHECK(amount_cents>0),
+        state TEXT NOT NULL CHECK(state IN('queued','create_unknown','pending','wait_user_confirm','paid','failed','cancelled')),
+        provider_id TEXT,
+        confirmation_package TEXT,
+        attempts INTEGER NOT NULL DEFAULT 0 CHECK(attempts>=0),
+        next_attempt_at INTEGER NOT NULL,
+        last_error_code TEXT NOT NULL DEFAULT '',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      CREATE INDEX payment_transfers_merchant ON payment_transfers(merchant_id,updated_at DESC);
+      CREATE INDEX payment_transfers_state ON payment_transfers(state,updated_at);
+      CREATE TABLE payment_transfer_events(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        out_bill_no TEXT NOT NULL REFERENCES payment_transfers(out_bill_no),
+        source TEXT NOT NULL CHECK(source IN('reserve','create_attempt','create','query','notify')),
+        state TEXT NOT NULL CHECK(state IN('queued','create_unknown','pending','wait_user_confirm','paid','failed','cancelled')),
+        provider_id TEXT,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX payment_transfer_events_bill ON payment_transfer_events(out_bill_no,id);
+      CREATE TABLE payment_notification_receipts(
+        event_id TEXT PRIMARY KEY,
+        payload_sha256 TEXT NOT NULL,
+        out_bill_no TEXT NOT NULL REFERENCES payment_transfers(out_bill_no),
+        received_at INTEGER NOT NULL
+      );`);
+      for (const table of [
+        "payment_transfer_events",
+        "payment_notification_receipts",
+      ])
+        db.exec(
+          `CREATE TRIGGER ${table}_immutable_update BEFORE UPDATE ON ${table} BEGIN SELECT RAISE(ABORT,'immutable'); END; CREATE TRIGGER ${table}_immutable_delete BEFORE DELETE ON ${table} BEGIN SELECT RAISE(ABORT,'immutable'); END;`,
+        );
+      db.prepare("INSERT INTO schema_migrations VALUES(?,?)").run(
+        25,
+        Date.now(),
+      );
+    });
+  if (version < 26)
+    transaction(db, () => {
+      db.exec(`CREATE TABLE wechat_recipient_authorization_events(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        viewer_id TEXT NOT NULL,
+        merchant_id TEXT NOT NULL,
+        state TEXT NOT NULL CHECK(state IN('authorized','revoked')),
+        recipient_ciphertext TEXT NOT NULL,
+        recipient_digest TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX wechat_recipient_authorization_current
+        ON wechat_recipient_authorization_events(viewer_id,merchant_id,id DESC);
+      CREATE TRIGGER wechat_recipient_authorization_events_immutable_update
+        BEFORE UPDATE ON wechat_recipient_authorization_events
+        BEGIN SELECT RAISE(ABORT,'immutable'); END;
+      CREATE TRIGGER wechat_recipient_authorization_events_immutable_delete
+        BEFORE DELETE ON wechat_recipient_authorization_events
+        BEGIN SELECT RAISE(ABORT,'immutable'); END;`);
+      db.prepare("INSERT INTO schema_migrations VALUES(?,?)").run(
+        26,
+        Date.now(),
+      );
+    });
   return db;
 }
 export type DB = ReturnType<typeof openDatabase>;

@@ -7,5 +7,6 @@ export {
 } from "./permissions.js";
 
 export { createIdentity } from "./http.js";
+export { createWeChatRecipientVault } from "./wechat-recipient-vault.js";
 
 export { attachHome } from "./home.js";

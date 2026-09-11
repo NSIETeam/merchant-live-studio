@@ -424,7 +424,7 @@ test("v22 databases add retention controls without changing registered recording
         3,
       );
     first.exec(
-      "DROP TABLE speech_relay_status; DROP TABLE recording_deletion_events; DROP TABLE recording_deletion_requests; DROP TABLE recording_retention_hold_events; DROP TABLE recording_retention_holds; DELETE FROM schema_migrations WHERE version>=23",
+      "DROP TABLE wechat_recipient_authorization_events; DROP TABLE payment_notification_receipts; DROP TABLE payment_transfer_events; DROP TABLE payment_transfers; DROP TABLE speech_relay_status; DROP TABLE recording_deletion_events; DROP TABLE recording_deletion_requests; DROP TABLE recording_retention_hold_events; DROP TABLE recording_retention_holds; DELETE FROM schema_migrations WHERE version>=23",
     );
   } finally {
     first.close();
@@ -434,7 +434,7 @@ test("v22 databases add retention controls without changing registered recording
     assert.equal(
       migrated.prepare("SELECT max(version) AS v FROM schema_migrations").get()!
         .v,
-      24,
+      26,
     );
     assert.equal(
       migrated
