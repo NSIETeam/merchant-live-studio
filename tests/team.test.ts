@@ -89,6 +89,44 @@ test("team access revokes old sessions even after restoration and isolates owner
       db.prepare("SELECT count(*) AS n FROM team_access_events").get()!.n,
       2,
     );
+    const history = await call(
+      "/merchant/team/events",
+      "GET",
+      undefined,
+      owner,
+    );
+    assert.equal(history.headers.get("cache-control"), "no-store");
+    const events = (await history.json()) as any;
+    assert.equal(events.items.length, 2);
+    assert.equal(events.items[0].disabled, 0);
+    assert.equal(events.items[0].actorId, "owner");
+    assert.equal(
+      (await call("/merchant/team/events", "GET", undefined, renewed)).status,
+      403,
+    );
+    assert.equal(
+      (
+        (await (
+          await call("/merchant/team/events", "GET", undefined, other)
+        ).json()) as any
+      ).items.length,
+      0,
+    );
+    assert.equal(
+      (await call("/merchant/team/events?before=-1", "GET", undefined, owner))
+        .status,
+      400,
+    );
+    const earlier = (await (
+      await call(
+        `/merchant/team/events?before=${events.items[0].id}`,
+        "GET",
+        undefined,
+        owner,
+      )
+    ).json()) as any;
+    assert.equal(earlier.items.length, 1);
+    assert.equal(earlier.items[0].disabled, 1);
     assert.throws(() => db.exec("DELETE FROM team_access_events"));
   } finally {
     db.close();

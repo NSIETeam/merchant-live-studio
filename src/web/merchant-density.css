@@ -639,3 +639,11 @@
     display: none;
   }
 }
+.workspace .team-event {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+.workspace .team-event p {
+  margin: 6px 0;
+}

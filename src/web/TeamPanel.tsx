@@ -7,12 +7,37 @@ type Member = {
   disabled: boolean;
   version: number;
 };
+type AccessEvent = {
+  id: number;
+  targetActorId: string;
+  actorId: string;
+  disabled: number;
+  reason: string;
+  version: number;
+  createdAt: number;
+};
+type History = { items: AccessEvent[]; nextBefore: number | null };
 export function TeamPanel() {
   const [open, setOpen] = useState(false),
     [members, setMembers] = useState<Member[]>([]),
     [reason, setReason] = useState(""),
     [busy, setBusy] = useState(false),
     [message, setMessage] = useState("");
+  const [history, setHistory] = useState<History>({
+    items: [],
+    nextBefore: null,
+  });
+  const [showHistory, setShowHistory] = useState(false);
+  async function loadHistory(append = false) {
+    const result = await api<History>(
+      "/merchant/team/events" +
+        (append && history.nextBefore ? `?before=${history.nextBefore}` : ""),
+    );
+    setHistory((old) => ({
+      items: append ? [...old.items, ...result.items] : result.items,
+      nextBefore: result.nextBefore,
+    }));
+  }
   async function refresh() {
     setMembers((await api<{ members: Member[] }>("/merchant/team")).members);
   }
@@ -71,6 +96,7 @@ export function TeamPanel() {
                       { disabled: !m.disabled, version: m.version, reason },
                     );
                     await refresh();
+                    if (showHistory) await loadHistory();
                     setReason("");
                     setMessage("成员状态已更新，原会话已失效。");
                   })
@@ -80,6 +106,50 @@ export function TeamPanel() {
               </button>
             </div>
           ))}
+          <button
+            className="text-button"
+            disabled={busy}
+            aria-expanded={showHistory}
+            onClick={() => {
+              setShowHistory(!showHistory);
+              if (!showHistory) void act(() => loadHistory());
+            }}
+          >
+            成员变更历史
+          </button>
+          {showHistory && (
+            <section aria-label="成员变更历史">
+              <button
+                className="text-button"
+                disabled={busy}
+                onClick={() => void act(() => loadHistory())}
+              >
+                刷新历史
+              </button>
+              {!history.items.length && <p>暂无变更记录。</p>}
+              {history.items.map((item) => (
+                <article className="team-event" key={item.id}>
+                  <strong>
+                    {item.targetActorId} · {item.disabled ? "停用" : "恢复"}
+                  </strong>
+                  <p>{item.reason}</p>
+                  <small>
+                    {new Date(item.createdAt).toLocaleString()} · 操作人{" "}
+                    {item.actorId} · V{item.version}
+                  </small>
+                </article>
+              ))}
+              {history.nextBefore && (
+                <button
+                  className="secondary"
+                  disabled={busy}
+                  onClick={() => void act(() => loadHistory(true))}
+                >
+                  更早变更
+                </button>
+              )}
+            </section>
+          )}
         </>
       )}
       {message && <p role="status">{message}</p>}

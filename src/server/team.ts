@@ -27,6 +27,24 @@ export function attachTeam(
         }),
     }),
   );
+  app.get("/api/merchant/team/events", (c) => {
+    const before = z.coerce
+      .number()
+      .int()
+      .positive()
+      .max(Number.MAX_SAFE_INTEGER)
+      .parse(c.req.query("before") || Number.MAX_SAFE_INTEGER);
+    const rows = db
+      .prepare(
+        "SELECT id,target_actor_id AS targetActorId,actor_id AS actorId,disabled,reason,version,created_at AS createdAt FROM team_access_events WHERE merchant_id=? AND id<? ORDER BY id DESC LIMIT 51",
+      )
+      .all(c.get("merchantId"), before);
+    c.header("Cache-Control", "no-store");
+    return c.json({
+      items: rows.slice(0, 50),
+      nextBefore: rows.length > 50 ? rows[49].id : null,
+    });
+  });
   app.put("/api/merchant/team/:actorId", async (c) => {
     const actorId = c.req.param("actorId"),
       member = config.merchantMemberships?.[actorId];
