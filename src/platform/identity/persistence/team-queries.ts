@@ -1,0 +1,7 @@
+import type { DB, SQLValue } from "../../../shared/persistence.js";
+export function findTeamAccess(db: DB, ...values: SQLValue[]) { return db.prepare("SELECT disabled,version FROM team_access WHERE actor_id=?").get(...values); }
+export function listTeamAccessEvents(db: DB, ...values: SQLValue[]) { return db.prepare("SELECT id,target_actor_id AS targetActorId,actor_id AS actorId,disabled,reason,version,created_at AS createdAt,from_role AS fromRole,to_role AS toRole FROM team_access_events WHERE merchant_id=? AND id<? ORDER BY id DESC LIMIT 51").all(...values); }
+export function findTeamAccessVersion(db: DB, ...values: SQLValue[]) { return db.prepare("SELECT version FROM team_access WHERE actor_id=?").get(...values); }
+export function upsertTeamAccess(db: DB, ...values: SQLValue[]) { return db.prepare("INSERT INTO team_access(actor_id,merchant_id,disabled,version) VALUES(?,?,?,?) ON CONFLICT(actor_id) DO UPDATE SET merchant_id=excluded.merchant_id,disabled=excluded.disabled,version=excluded.version").run(...values); }
+export function updateTeamRole(db: DB, ...values: SQLValue[]) { return db.prepare("UPDATE team_access SET role_override=?,base_role=? WHERE actor_id=?").run(...values); }
+export function insertTeamAccessEvent(db: DB, ...values: SQLValue[]) { return db.prepare("INSERT INTO team_access_events(merchant_id,target_actor_id,actor_id,disabled,reason,version,created_at,from_role,to_role) VALUES(?,?,?,?,?,?,?,?,?)").run(...values); }

@@ -1,0 +1,310 @@
+.workspace.live-workspace .content {
+  max-width: 1800px;
+}
+/* The live canvas is the primary workspace; supporting tools follow it in DOM order. */
+.workspace.live-workspace .studio-grid {
+  grid-template-columns: minmax(0, 3fr) minmax(260px, 1fr);
+  align-items: start;
+  gap: 16px;
+}
+.workspace.live-workspace .live-stage {
+  min-width: 0;
+}
+.workspace.live-workspace .live-stage .player {
+  height: clamp(300px, 62dvh, 900px);
+  aspect-ratio: auto;
+  min-height: 0;
+  border-radius: 10px;
+}
+.workspace.live-workspace .live-stage .section-title {
+  display: none;
+}
+.workspace.live-workspace .live-stage .signal-status {
+  margin: 8px 0 0;
+  background: transparent;
+  border: 0;
+  padding: 4px 0;
+}
+.workspace.live-workspace .page-heading {
+  margin-bottom: 10px;
+}
+.workspace.live-workspace .page-heading p {
+  display: none;
+}
+.workspace.live-workspace .room-bar {
+  margin-bottom: 12px;
+}
+.workspace.live-workspace .studio-side {
+  border: 1px solid #dfe1e5;
+  background: white;
+  border-radius: 10px;
+  min-width: 0;
+  overflow: hidden;
+  gap: 0;
+}
+.workspace.live-workspace .studio-side [hidden] {
+  display: none !important;
+}
+.workspace.live-workspace .studio-side .card {
+  border: 0;
+  box-shadow: none;
+}
+.live-tool-tabs {
+  display: flex;
+  border-bottom: 1px solid #e0e2e6;
+  padding: 5px;
+  gap: 3px;
+}
+.live-tool-tabs button {
+  flex: 1;
+  padding: 10px 4px;
+  background: transparent;
+  color: #696d74;
+  white-space: nowrap;
+  font-size: 12px;
+  border-radius: 6px;
+}
+.live-tool-tabs button[aria-selected="true"] {
+  background: #eff0f3;
+  color: #3b404a;
+  font-weight: 600;
+}
+.workspace.live-workspace .bound-paragraph {
+  max-height: 42dvh;
+  font-size: 21px;
+}
+.workspace.live-workspace .live-management {
+  margin-top: 12px;
+}
+@media (max-width: 1100px) {
+  .workspace.live-workspace .studio-grid {
+    grid-template-columns: minmax(0, 2fr) minmax(240px, 1fr);
+  }
+}
+@media (max-width: 950px) {
+  .workspace .sidebar {
+    padding: 8px 12px;
+    min-height: 48px;
+    flex-wrap: nowrap;
+  }
+  .workspace .sidebar nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 30;
+    background: #1b1d21;
+    padding: 6px 10px calc(6px + env(safe-area-inset-bottom));
+    width: auto;
+    margin: 0;
+    overflow: visible;
+    border-top: 1px solid #383b43;
+  }
+  .workspace .sidebar .nav-item {
+    min-height: 46px;
+    flex: 1;
+    flex-direction: row;
+    padding: 8px;
+    white-space: nowrap;
+  }
+  .workspace .main {
+    padding-bottom: 74px;
+  }
+  .workspace .brand small {
+    display: none;
+  }
+  .workspace .sidebar .brand {
+    font-size: 20px;
+  }
+  .workspace .sidebar .account {
+    margin-left: auto;
+  }
+  .workspace.live-workspace .topbar,
+  .workspace.live-workspace .page-heading {
+    display: none;
+  }
+  .workspace.live-workspace .content {
+    padding: 10px 12px;
+  }
+  .workspace.live-workspace .room-bar {
+    gap: 6px;
+    margin-bottom: 8px;
+    padding: 6px 8px;
+  }
+  .workspace.live-workspace .room-bar label {
+    flex: 1;
+    min-width: 0;
+    font-size: 0;
+    display: block;
+  }
+  .workspace.live-workspace .room-bar select {
+    width: 100%;
+    max-width: 100%;
+    font-size: 16px;
+    min-height: 40px;
+  }
+  .workspace.live-workspace .room-bar > .text-button,
+  .workspace.live-workspace .room-bar > a {
+    display: none;
+  }
+}
+@media (max-width: 700px) {
+  .workspace.live-workspace .studio-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+  .workspace.live-workspace .live-stage .player {
+    height: clamp(230px, 43dvh, 480px);
+    width: 100%;
+    border-radius: 8px;
+  }
+  .workspace.live-workspace .stream-actions {
+    padding: 8px 0;
+    align-items: center;
+  }
+  .workspace.live-workspace .stream-actions small {
+    display: none;
+  }
+  .workspace.live-workspace .stream-actions strong {
+    overflow-wrap: anywhere;
+  }
+  .workspace.live-workspace .live-stage .signal-status {
+    font-size: 12px;
+  }
+  .workspace.live-workspace .live-stage .stream-settings {
+    padding: 10px;
+  }
+  .workspace.live-workspace .bound-paragraph {
+    max-height: 260px;
+    font-size: 20px;
+  }
+  .workspace.live-workspace button,
+  .workspace.live-workspace summary {
+    min-height: 44px;
+  }
+  .workspace .home-heading h1 {
+    font-size: 25px;
+  }
+}
+@media (max-height: 500px) and (orientation: landscape) {
+  .workspace.live-workspace .studio-grid {
+    grid-template-columns: minmax(0, 2fr) minmax(230px, 1fr);
+  }
+  .workspace.live-workspace .live-stage .player {
+    height: 65dvh;
+    min-height: 180px;
+  }
+}
+.workspace .audience-share {
+  border: 1px solid #dfe1e5;
+  border-radius: 8px;
+  background: #fff;
+  margin: 0 0 10px;
+  padding: 10px 12px;
+}
+.workspace .audience-share summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.audience-share-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+.workspace .audience-share label {
+  margin: 0;
+  min-width: 0;
+}
+.workspace .audience-share input {
+  width: 100%;
+  min-width: 0;
+  font-size: 16px;
+}
+.workspace .audience-share p {
+  margin: 8px 0 0;
+  overflow-wrap: anywhere;
+}
+.workspace .live-moderation {
+  margin-top: 12px;
+}
+.workspace .live-moderation:not(.has-hold) > h2 {
+  display: none;
+}
+.workspace .live-moderation:not(.has-hold) > p:not([role="alert"]) {
+  margin: 0 0 6px;
+  color: var(--muted);
+}
+.workspace .live-moderation.has-hold {
+  border: 2px solid #b94838;
+  background: #fff6f3;
+}
+.workspace .moderation-tools > summary {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  font-weight: 600;
+}
+.workspace .moderation-tools form {
+  margin-top: 12px;
+}
+.local-camera-preview {
+  position: relative;
+}
+.local-camera-preview video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.local-camera-label {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  background: #25272be6;
+  color: #fff;
+  padding: 5px 8px;
+  border-radius: 4px;
+  pointer-events: none;
+}
+.camera-controls {
+  margin-top: 8px;
+}
+.camera-controls summary {
+  cursor: pointer;
+  padding: 10px 0;
+}
+.camera-controls p {
+  margin: 8px 0;
+}
+.camera-controls label {
+  max-width: 360px;
+}
+.camera-controls button {
+  min-height: 44px;
+}
+
+/* Expanded prompter uses the available viewport, not the inline card limit. */
+.workspace.live-workspace .bound-expanded .bound-paragraph {
+  max-height: none;
+  min-height: 0;
+}
+.workspace.live-workspace .bound-expanded {
+  overflow: auto;
+}
+
+.workspace.live-workspace dialog.bound-expanded {
+  margin: 0;
+  width: auto;
+  height: auto;
+  max-width: none;
+  color: inherit;
+  box-shadow: none;
+  overscroll-behavior: contain;
+}
+.workspace.live-workspace dialog.bound-expanded::backdrop {
+  background: #16181bcf;
+}

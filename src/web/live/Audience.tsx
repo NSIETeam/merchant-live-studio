@@ -1,3 +1,13 @@
+import { PublicDisclosurePanel } from "../review/DisclosurePanel.js";
+import { ComplaintsPanel } from "../review/ComplaintsPanel.js";
+import { ViewerEngagement } from "../engagement/EngagementPanel.js";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   Check,
   ChevronRight,
@@ -7,13 +17,6 @@ import {
   Radio,
   X,
 } from "lucide-react";
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
 import type { Campaign, Claim, Room } from "../../shared/types.js";
 import { api, duration, money } from "../shared/api.js";
 import { Player } from "./Player.js";
@@ -26,10 +29,13 @@ type RoomData = {
   requirePlayback: boolean;
 };
 type Heartbeat = { watchSeconds: number; counting: boolean };
-type Panel = "questions" | "rewards" | "information";
+type Panel =
+  "questions" | "rewards" | "information" | "complaints" | "disclosure";
 const panelNames: Record<Panel, string> = {
+  complaints: "投诉举报",
+  disclosure: "经营者信息",
   questions: "向主播提问",
-  rewards: "直播红包",
+  rewards: "签到与互动活动",
   information: "观看信息",
 };
 
@@ -184,6 +190,10 @@ function AudienceRoom({ id }: { id: string }) {
           {
             visible: watching,
             playing: watching,
+            sourceCode:
+              new URLSearchParams(window.location.search)
+                .get("source")
+                ?.slice(0, 100) || undefined,
           },
         );
         const heartbeat = await lastHeartbeat;
@@ -381,6 +391,8 @@ function AudienceRoom({ id }: { id: string }) {
             {roomStatus(data.room)}
           </span>
         )}
+        <button onClick={() => setPanel("disclosure")}>经营者信息</button>
+        <button onClick={() => setPanel("complaints")}>投诉举报</button>
       </header>
 
       <main className="audience-stage" aria-label="直播画面">
@@ -470,6 +482,12 @@ function AudienceRoom({ id }: { id: string }) {
               </button>
             </div>
             <div className="audience-drawer-body">
+              {panel === "disclosure" && (
+                <PublicDisclosurePanel key={id} roomId={id} />
+              )}
+              {panel === "complaints" && (
+                <ComplaintsPanel key={id} roomId={id} />
+              )}
               {interactionError && <Notice>{interactionError}</Notice>}
               {(interactionError || authConnecting) && (
                 <button
@@ -527,6 +545,13 @@ function AudienceRoom({ id }: { id: string }) {
 
               {panel === "rewards" && (
                 <>
+                  {ready && (
+                    <ViewerEngagement
+                      roomId={id}
+                      watch={watch}
+                      counting={counting}
+                    />
+                  )}
                   <p className="audience-help">
                     本场有效观看 <strong>{duration(watch)}</strong>
                     。红包为演示，不发生真实转账。
@@ -702,7 +727,7 @@ function AudienceRoom({ id }: { id: string }) {
             <Gift size={22} aria-hidden="true" />
             {openReward && <i aria-hidden="true" />}
           </span>
-          <span>红包{openReward ? " · 已开启" : ""}</span>
+          <span>活动{openReward ? " · 红包已开启" : ""}</span>
         </button>
         <button
           onClick={(event) => openPanel("information", event.currentTarget)}

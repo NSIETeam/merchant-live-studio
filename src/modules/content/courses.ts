@@ -1,3 +1,4 @@
+import { generationSources } from "./persistence/authorization-sources.js";
 import type { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { randomUUID } from "node:crypto";
@@ -158,7 +159,9 @@ export function createContent(
               }
             : undefined;
     const check = JSON.parse(row.check_json) as ScriptVersion["check"];
+    const authorizationIssue = reviewProvider().authorizationIssue(merchant, courseId, version, clock());
     const stale =
+      !!authorizationIssue ||
       current.latest_version !== row.product_version ||
       check.ruleVersion !== reviewProvider().ruleVersion;
     return {
@@ -171,6 +174,7 @@ export function createContent(
       createdAt: row.created_at,
       check,
       ...(confirmation ? { confirmation } : {}),
+      ...(authorizationIssue ? { authorizationIssue } : {}),
       stale,
       state: stale
         ? "needs_review"
@@ -261,6 +265,8 @@ export function createContent(
     return candidates;
   };
   return {
+    generationSources: (tenant: string, course?: string, version?: number) => generationSources(db, tenant, course, version),
+    draftCount: (tenant: string) => marketing.planIds(tenant).reduce((count, plan) => count + listCourses(plan).filter(course => course.latestScriptVersion > 0).length, 0),
     courseOwned,
     courseDto,
     scriptVersion,

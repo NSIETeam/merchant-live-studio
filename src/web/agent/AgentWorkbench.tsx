@@ -1,3 +1,5 @@
+import { PresenterEditor } from "./PresenterEditor.js";
+import { useEffect, useRef, useState } from "react";
 import {
   Check,
   ChevronRight,
@@ -12,7 +14,6 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
 import type {
   AgentProfile,
   AgentRun,
@@ -33,6 +34,7 @@ const emptyPrompt: PromptContent = {
 const messageOf = (error: unknown) =>
   error instanceof Error ? error.message : "请求暂时未完成，请重试。";
 const contentOf = (version: PromptVersion): PromptContent => ({
+  ...(version.presenter ? { presenter: { ...version.presenter } } : {}),
   systemPrompt: version.systemPrompt,
   styleGuide: version.styleGuide,
   audience: version.audience,
@@ -42,9 +44,11 @@ const contentOf = (version: PromptVersion): PromptContent => ({
 export function AgentWorkbench({
   roomId,
   productName,
+  canRevoke = false,
 }: {
   roomId: string;
   productName: string;
+  canRevoke?: boolean;
 }) {
   const [service, setService] = useState<AgentServiceStatus | null>(null);
   const [serviceError, setServiceError] = useState("");
@@ -55,6 +59,7 @@ export function AgentWorkbench({
   const [draft, setDraft] = useState<PromptContent>(emptyPrompt);
   const [brandName, setBrandName] = useState("");
   const [editorBusy, setEditorBusy] = useState(false);
+  const [revokeReason, setRevokeReason] = useState("");
   const [versionLoading, setVersionLoading] = useState(false);
   const [versionError, setVersionError] = useState("");
   const [versionRetryTick, setVersionRetryTick] = useState(0);
@@ -127,7 +132,7 @@ export function AgentWorkbench({
   const completedResult =
     currentRun?.status === "completed" ? currentRun.result : undefined;
   const agentResult = currentRun?.stale ? undefined : completedResult;
-  const visibleResult = agentResult || quickResult;
+  const visibleResult = profile?.revocation ? null : agentResult || quickResult;
   const running = runningKey === runKey;
 
   useEffect(() => {
@@ -164,7 +169,7 @@ export function AgentWorkbench({
         if (!cancelled) {
           setService(response);
           setServiceError("");
-          if (response.available && !profileRef.current) void refreshProfiles();
+          if (response.available) void refreshProfiles();
         }
       } catch (failure) {
         if (!cancelled) {
@@ -484,6 +489,7 @@ export function AgentWorkbench({
   async function startRun(mode: "rehearsal" | "live") {
     if (
       !profile ||
+      profile.revocation ||
       running ||
       !service?.available ||
       versionLoading ||
@@ -622,6 +628,13 @@ export function AgentWorkbench({
     }
   }
 
+  const presenterReady =
+    !draft.presenter ||
+    (draft.presenter.authorizationConfirmed &&
+      draft.presenter.displayName.trim() &&
+      draft.presenter.roleDescription.trim() &&
+      draft.presenter.speakingStyle.trim() &&
+      draft.presenter.authorizationReference.trim());
   return (
     <div className={`aw-workbench${focus ? " aw-focus" : ""}`}>
       <div className="aw-service" role="status">
@@ -641,14 +654,26 @@ export function AgentWorkbench({
         <span>
           {!service && !serviceError
             ? "正在读取模型配置…"
-            : service?.modelConfigured
-              ? "已配置生成模型"
-              : "生成模型尚未配置 · 可先调试提示词与事实规则"}
+            : !service?.available
+              ? "模型配置暂无法核实"
+              : service.modelConfigured
+                ? "已配置生成模型"
+                : "生成模型尚未配置 · 可先调试提示词与事实规则"}
         </span>
       </div>
       {(serviceError || service?.message) && (
-        <p className="aw-service-note">
-          {serviceError || service?.message}；当前话术快检仍可单独使用。
+        <details className="aw-service-note">
+          <summary>连接详情</summary>
+          <p>{serviceError || service?.message}</p>
+          <p>话术快检是否可用，以本次检查结果为准。</p>
+        </details>
+      )}
+      {profile?.revocation && (
+        <p className="aw-inline-error" role="alert">
+          此表达方案已撤回授权，所有提示词版本停止新建任务。原因：
+          {profile.revocation.reason} ·{" "}
+          {new Date(profile.revocation.createdAt).toLocaleString()}
+          。请选择其他获授权方案。
         </p>
       )}
       {versionError && (
@@ -812,6 +837,7 @@ export function AgentWorkbench({
                       .map((item) => (
                         <option key={item.id} value={item.id}>
                           {item.name}
+                          {item.revocation ? "（授权已撤回）" : ""}
                         </option>
                       ))}
                   </optgroup>
@@ -821,6 +847,7 @@ export function AgentWorkbench({
                       .map((item) => (
                         <option key={item.id} value={item.id}>
                           {item.name}
+                          {item.revocation ? "（授权已撤回）" : ""}
                         </option>
                       ))}
                   </optgroup>
@@ -831,6 +858,7 @@ export function AgentWorkbench({
                   type="button"
                   className="aw-primary"
                   disabled={
+                    !!profile?.revocation ||
                     !service?.available ||
                     !savedVersion ||
                     dirty ||
@@ -849,6 +877,7 @@ export function AgentWorkbench({
                   type="button"
                   className="aw-secondary"
                   disabled={
+                    !!profile?.revocation ||
                     !service?.available ||
                     !profile?.publishedVersion ||
                     running ||
@@ -1036,9 +1065,68 @@ export function AgentWorkbench({
                   每次保存生成新版本，便于反复试演与比较。
                 </span>
               </div>
+              {canRevoke &&
+                profile &&
+                profile.id !== "standard" &&
+                !profile.revocation && (
+                  <details>
+                    <summary>撤回此方案授权</summary>
+                    <p>
+                      将停止此方案所有版本的新任务及待完成任务，历史资料保留；此操作不能恢复。平台导入稿与同课程修订将停止播讲；手动复制到其他地方的稿件仍需单独下架。
+                    </p>
+                    <label>
+                      撤回原因
+                      <input
+                        maxLength={500}
+                        value={revokeReason}
+                        onChange={(e) => setRevokeReason(e.target.value)}
+                      />
+                    </label>
+                    <button
+                      disabled={editorBusy || !revokeReason.trim()}
+                      onClick={async () => {
+                        setEditorBusy(true);
+                        setError("");
+                        try {
+                          const r = await api<{ profile: AgentProfile }>(
+                            `/merchant/agent/profiles/${profile.id}/revoke`,
+                            "POST",
+                            { reason: revokeReason },
+                          );
+                          setProfiles((old) =>
+                            old.map((p) =>
+                              p.id === r.profile.id ? r.profile : p,
+                            ),
+                          );
+                          setRun(null);
+                          setQuick(null);
+                          setRevokeReason("");
+                          setNotice("表达方案已撤回，旧版本不能再次发起任务。");
+                        } catch (e) {
+                          setError(messageOf(e));
+                        } finally {
+                          setEditorBusy(false);
+                        }
+                      }}
+                    >
+                      确认撤回全部版本授权
+                    </button>
+                  </details>
+                )}
               <fieldset
-                disabled={versionLoading || editorBusy || !savedVersion}
+                disabled={
+                  versionLoading ||
+                  editorBusy ||
+                  !savedVersion ||
+                  !!profile?.revocation
+                }
               >
+                <PresenterEditor
+                  value={draft.presenter}
+                  onChange={(presenter) =>
+                    setDraft((current) => ({ ...current, presenter }))
+                  }
+                />
                 <label>
                   系统提示词
                   <textarea
@@ -1170,7 +1258,9 @@ export function AgentWorkbench({
                   className="aw-primary"
                   disabled={
                     !savedVersion ||
+                    !!profile?.revocation ||
                     !draft.systemPrompt.trim() ||
+                    !presenterReady ||
                     promptTooLarge ||
                     !dirty ||
                     editorBusy
@@ -1215,7 +1305,9 @@ export function AgentWorkbench({
                   disabled={
                     editorBusy ||
                     !savedVersion ||
+                    !!profile?.revocation ||
                     !draft.systemPrompt.trim() ||
+                    !presenterReady ||
                     promptTooLarge ||
                     !brandName.trim()
                   }

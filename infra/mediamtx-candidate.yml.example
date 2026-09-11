@@ -1,0 +1,32 @@
+# Isolated candidate; replace the hook secret locally, never commit it.
+logLevel: warn
+moq: false
+authMethod: http
+authHTTPAddress: http://127.0.0.1:18895/api/streams/mediamtx/auth?secret=REPLACE_LOCALLY
+authHTTPExclude:
+  - action: api
+api: true
+apiAddress: 127.0.0.1:18898
+rtsp: false
+srt: false
+webrtc: false
+rtmp: true
+rtmpAddress: 127.0.0.1:19360
+hls: true
+hlsAddress: 127.0.0.1:18897
+hlsVariant: mpegts
+hlsSegmentCount: 7
+hlsSegmentDuration: 1s
+hlsAllowOrigins:
+  - https://8.140.52.117
+pathDefaults:
+  overridePublisher: false
+  record: true
+  recordPath: /var/lib/merchant-live-candidate-live/recordings/%path/%s-%f
+  recordFormat: fmp4
+  recordPartDuration: 1s
+  recordSegmentDuration: 10s
+  recordDeleteAfter: 0s
+  runOnRecordSegmentComplete: /opt/merchant-live-studio/runtime/node/bin/node /opt/merchant-live-candidate/dist/server/composition/recording-hook.js
+paths:
+  all_others:

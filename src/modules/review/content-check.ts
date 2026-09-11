@@ -1,3 +1,4 @@
+import { normalizeRiskText } from "../../shared/risk-text.js";
 import type {
   ProductVersion,
   ScriptCheck,
@@ -5,7 +6,7 @@ import type {
   ScriptParagraph,
 } from "../../shared/content.js";
 
-export const CONTENT_RULE_VERSION = "kaopu-content-rules-1";
+export const CONTENT_RULE_VERSION = "kaopu-content-rules-2";
 
 /** A bounded editorial precheck. It cannot establish truth, efficacy, or legal permission. */
 export function checkScript(
@@ -27,7 +28,7 @@ export function checkScript(
   ) => issues.push({ paragraphId, level, code, message });
   for (const paragraph of paragraphs) {
     // Course ordinals and an explicit non-substitution disclaimer are not superiority or treatment claims.
-    const text = paragraph.text.normalize("NFKC");
+    const text = normalizeRiskText(paragraph.text);
     const claims = text
       .replace(
         /第[一二三四五六七八九十百零\d]+(?:课|讲|章|节|步|次|天|周|轮|段|批|阶段)/g,

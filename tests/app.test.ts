@@ -820,3 +820,83 @@ test("real payments fail closed, configuration blocks demo production, notify ne
     f.db.close();
   }
 });
+
+test("ledger pagination preserves tied timestamps and rejects foreign cursors", async () => {
+  const f = fixture();
+  try {
+    const cookie = await f.merchant();
+    await f.live(cookie);
+    const campaign = await f.campaign(cookie);
+    const insert = f.db.prepare("INSERT INTO ledger VALUES(?,?,NULL,?,?,?,?)");
+    for (let i = 0; i < 425; i++)
+      insert.run(
+        `page-${String(i).padStart(4, "0")}`,
+        campaign.id,
+        "test_debit",
+        "test_credit",
+        1,
+        f.now(),
+      );
+    const path = "/merchant/rooms/demo-room/ledger";
+    const ids: string[] = [];
+    let before: string | null = null;
+    do {
+      const response = await f.request(
+        path + (before ? `?before=${before}` : ""),
+        "GET",
+        undefined,
+        cookie,
+      );
+      assert.equal(response.status, 200);
+      assert.ok(response.data.entries.length <= 200);
+      ids.push(...response.data.entries.map((r: { id: string }) => r.id));
+      before = response.data.nextBefore;
+    } while (before);
+    assert.equal(ids.length, 426);
+    assert.equal(new Set(ids).size, 426);
+    assert.deepEqual(
+      ids.filter((id) => id.startsWith("page-")),
+      Array.from(
+        { length: 425 },
+        (_, i) => `page-${String(424 - i).padStart(4, "0")}`,
+      ),
+    );
+    assert.equal(
+      (await f.request(path + "?before=unknown", "GET", undefined, cookie))
+        .status,
+      400,
+    );
+    assert.equal(
+      (await f.request(path + "?before=", "GET", undefined, cookie)).status,
+      400,
+    );
+    const second = await f.request(
+      "/merchant/rooms",
+      "POST",
+      { title: "第二个房间", productName: "商品" },
+      cookie,
+    );
+    assert.equal(second.status, 201);
+    assert.equal(
+      (
+        await f.request(
+          `/merchant/rooms/${second.data.room.id}/ledger?before=${ids[0]}`,
+          "GET",
+          undefined,
+          cookie,
+        )
+      ).status,
+      400,
+    );
+    const other = await f.request("/auth/merchant", "POST", {
+      merchantId: "other",
+      token: "test-other-merchant-token-123456",
+    });
+    assert.equal(
+      (await f.request(path, "GET", undefined, other.cookie)).status,
+      404,
+    );
+  } finally {
+    f.db.close();
+  }
+});

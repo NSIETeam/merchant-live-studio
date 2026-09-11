@@ -1,3 +1,6 @@
+import { admissionQuery1, admissionQuery2, admissionQuery3, admissionQuery4 } from "./persistence/admission-queries.js";
+import { createAdmissionChecker } from "./admission.js";
+import { attachModeration, activeModerationHold } from "./moderation.js";
 import type { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { randomBytes, randomUUID } from "node:crypto";
@@ -38,12 +41,39 @@ export function createLive(
   db: DB,
   config: Config,
   ports: {
-    binding: (id: string, merchant: string) => ContentBinding | null;
+    binding: (id: string, merchant: string, independent?: boolean) => ContentBinding | null;
+    disclosure: (tenant:string, now:number) => {published:boolean;version:number|null;valid:boolean};
+    syncAuthorization: (tenant:string) => Promise<void>;
     engagement: () => EngagementPort;
     seedFacts: (room: string) => void;
+    recordAttribution: (room:string, viewer:string, code:string|undefined, now:number) => void;
   },
   clock: () => number = Date.now,
 ) {
+  const admissionCheck = createAdmissionChecker(db, config, ports);
+  async function controlForAdmission(r: RoomRow) {
+    await ports.syncAuthorization(r.merchant_id);
+    return media.readyForAdmission();
+  }
+  async function checkPublishAdmission(r: RoomRow) {
+    if (activeModerationHold(db, r.id)) throw new HTTPException(403);
+    if (!config.requireReviewedLive) return;
+    const reachable = await controlForAdmission(r);
+    const current = room(r.id);
+    if (current.status !== "live" || current.stream_secret !== r.stream_secret)
+      throw new HTTPException(403);
+    const check = admissionCheck(
+      r.id,
+      r.merchant_id,
+      reachable,
+      clock(),
+    );
+    if (!check.ready)
+      throw new HTTPException(403, {
+        message: "开播资料或流媒体控制已失效，请返回工作台核对",
+      });
+  }
+
   const stream = createStreamAdapter(config),
     media = new MediaController(config);
   const roomDto = (r: RoomRow): Room => ({
@@ -109,6 +139,33 @@ export function createLive(
     signal: (id: string) => media.status(id),
     mediaConfigured: media.configured,
     attach(app: App) {
+      attachModeration(app, db, media, (room, now) => ports.engagement().closeRoom(room, now), clock);
+app.get("/api/merchant/rooms/:id/admission", async (c) => {
+    const r = owned(c.req.param("id"), c.get("merchantId"));
+    const reachable = await controlForAdmission(r);
+    return c.json(
+      admissionCheck( r.id, r.merchant_id, reachable, clock()),
+    );
+  });
+app.get("/api/merchant/rooms/:id/admissions", (c) => {
+    const r = owned(c.req.param("id"), c.get("merchantId"));
+    const before = z.coerce
+      .number()
+      .int()
+      .positive()
+      .parse(c.req.query("before") || Number.MAX_SAFE_INTEGER);
+    const rows = admissionQuery1(db, r.id, before);
+    return c.json({
+      items: rows.slice(0, 50).map((row) => ({
+        id: row.id,
+        actorId: row.actorId,
+        createdAt: row.createdAt,
+        basis: JSON.parse(String(row.basis_json)),
+      })),
+      nextBefore: rows.length > 50 ? rows[49].id : null,
+    });
+  });
+
       app.get("/api/merchant/rooms", (c) =>
         c.json({
           rooms: (
@@ -139,38 +196,60 @@ export function createLive(
         return c.json({ room: roomDto(room(id)) }, 201);
       });
       app.patch("/api/merchant/rooms/:id", async (c) => {
-        const r = owned(c.req.param("id"), c.get("merchantId"));
-        const input = z
-          .object({ status: z.enum(["draft", "live", "ended"]) })
-          .parse(await c.req.json());
-        const legal: Record<string, string[]> = {
-          draft: ["draft", "live"],
-          live: ["live", "ended"],
-          ended: ["ended", "draft"],
-        };
-        if (!legal[r.status].includes(input.status))
-          throw new HTTPException(409, {
-            message: "请先结束当前直播，或将已结束直播重置为待开播",
-          });
-        transaction(db, () => {
-          updateRoomsById(
-            db,
-            input.status,
-            input.status === "live" && r.status !== "live"
-              ? clock()
-              : r.live_started_at,
-            r.id,
-          );
-          if (input.status === "live" && r.status !== "live")
-            updateVisitsByRoomId(db, r.id);
-          // Ended campaigns are closed separately to avoid nesting SQLite transactions.
-        });
-        if (input.status === "ended")
-          ports.engagement().closeRoom(r.id, clock());
-        const streamAction =
-          input.status === "ended" ? await media.disconnect(r.id) : undefined;
-        return c.json({ room: roomDto(room(r.id)), streamAction });
+    let r = owned(c.req.param("id"), c.get("merchantId"));
+    const input = z
+      .object({ status: z.enum(["draft", "live", "ended"]) })
+      .parse(await c.req.json());
+    let controlReachable = false;
+    if (input.status === "live" && config.requireReviewedLive) {
+      controlReachable = await controlForAdmission(r);
+      r = owned(r.id, c.get("merchantId"));
+    }
+    const legal: Record<string, string[]> = {
+      draft: ["draft", "live"],
+      live: ["live", "ended"],
+      ended: ["ended", "draft"],
+    };
+    if (!legal[r.status].includes(input.status))
+      throw new HTTPException(409, {
+        message: "请先结束当前直播，或将已结束直播重置为待开播",
       });
+    transaction(db, () => {
+      if (input.status === "live" && activeModerationHold(db, r.id))
+        throw new HTTPException(409, {
+          message: "直播间因现场处置暂停，请由另一审核账号复核解除后再开播",
+        });
+      if (input.status === "live" && config.requireReviewedLive) {
+        const check = admissionCheck(
+          r.id,
+          r.merchant_id,
+          controlReachable,
+          clock(),
+        );
+        if (!check.ready)
+          throw new HTTPException(409, {
+            message:
+              "暂不能开播：" +
+              check.checks
+                .filter((item) => !item.passed)
+                .map((item) => item.detail)
+                .join("；"),
+          });
+        if (r.status !== "live")
+          admissionQuery2(db, r.id, r.merchant_id, c.get("actorId"), JSON.stringify(check.basis), clock());
+      }
+      admissionQuery3(db, input.status, input.status === "live" && r.status !== "live"
+          ? clock()
+          : r.live_started_at, r.id);
+      if (input.status === "live" && r.status !== "live")
+        admissionQuery4(db, r.id);
+      // Ended campaigns are closed separately to avoid nesting SQLite transactions.
+    });
+    if (input.status === "ended") ports.engagement().closeRoom(r.id, clock());
+    const streamAction =
+      input.status === "ended" ? await media.disconnect(r.id) : undefined;
+    return c.json({ room: roomDto(room(r.id)), streamAction });
+  });
       app.get("/api/merchant/rooms/:id/stream", (c) => {
         const r = owned(c.req.param("id"), c.get("merchantId"));
         return c.json(stream.configuration(r.id, r.stream_secret));
@@ -206,73 +285,69 @@ export function createLive(
           now = clock(),
           viewer = c.get("viewerId");
         const input = z
-          .object({ visible: z.boolean(), playing: z.boolean().default(false) })
+          .object({ visible: z.boolean(), playing: z.boolean().default(false), sourceCode: z.string().max(100).optional() })
           .parse(await c.req.json());
         const connected = config.requirePlayback
           ? (await media.status(r.id)).connected === true
           : false;
-        return c.json(
-          recordPresence(
-            db,
-            r,
-            viewer,
-            input,
-            config.requirePlayback,
-            connected,
-            now,
-          ),
-        );
+        return c.json(transaction(db, () => {
+          const result = recordPresence(db,r,viewer,input,config.requirePlayback,connected,now);
+          if(result.counting) ports.recordAttribution(r.id,viewer,input.sourceCode,now);
+          return result;
+        }));
       });
       app.post("/api/streams/mediamtx/auth", async (c) => {
-        if (
-          !config.streamAuthSecret ||
-          !equalSecret(c.req.query("secret") || "", config.streamAuthSecret)
-        )
-          throw new HTTPException(403);
-        const input = z
-          .object({
-            action: z.string(),
-            path: z.string(),
-            query: z.string().optional(),
-          })
-          .parse(await c.req.json());
-        if (!input.path.startsWith("live/")) throw new HTTPException(403);
-        if (["read", "playback"].includes(input.action)) {
-          const r = room(input.path.slice(5));
-          if (r.status !== "live") throw new HTTPException(403);
-          return c.body(null, 204);
-        }
-        if (input.action !== "publish") throw new HTTPException(403);
-        const r = room(input.path.replace(/^live\//, ""));
-        const token = new URLSearchParams(input.query || "").get("token") || "";
-        if (r.status !== "live" || !equalSecret(token, r.stream_secret))
-          throw new HTTPException(403);
-        return c.body(null, 204);
-      });
+    if (
+      !config.streamAuthSecret ||
+      !equalSecret(c.req.query("secret") || "", config.streamAuthSecret)
+    )
+      throw new HTTPException(403);
+    const input = z
+      .object({
+        action: z.string(),
+        path: z.string(),
+        query: z.string().optional(),
+      })
+      .parse(await c.req.json());
+    if (!input.path.startsWith("live/")) throw new HTTPException(403);
+    if (["read", "playback"].includes(input.action)) {
+      const r = room(input.path.slice(5));
+      if (r.status !== "live") throw new HTTPException(403);
+      return c.body(null, 204);
+    }
+    if (input.action !== "publish") throw new HTTPException(403);
+    const r = room(input.path.replace(/^live\//, ""));
+    const token = new URLSearchParams(input.query || "").get("token") || "";
+    if (r.status !== "live" || !equalSecret(token, r.stream_secret))
+      throw new HTTPException(403);
+    await checkPublishAdmission(r);
+    return c.body(null, 204);
+  });
       app.post("/api/streams/srs/publish", async (c) => {
-        if (
-          !config.streamAuthSecret ||
-          !equalSecret(c.req.query("secret") || "", config.streamAuthSecret)
-        )
-          return c.json({ code: 403 }, 403);
-        const input = z
-          .object({
-            action: z.literal("on_publish"),
-            stream: z.string(),
-            param: z.string().optional(),
-            app: z.string(),
-          })
-          .parse(await c.req.json());
-        const r = room(input.stream);
-        const token = new URLSearchParams(input.param || "").get("token") || "";
-        if (
-          input.app !== "live" ||
-          r.status !== "live" ||
-          !equalSecret(token, r.stream_secret)
-        )
-          return c.json({ code: 403 }, 403);
-        return c.json({ code: 0 });
-      });
+    if (
+      !config.streamAuthSecret ||
+      !equalSecret(c.req.query("secret") || "", config.streamAuthSecret)
+    )
+      return c.json({ code: 403 }, 403);
+    const input = z
+      .object({
+        action: z.literal("on_publish"),
+        stream: z.string(),
+        param: z.string().optional(),
+        app: z.string(),
+      })
+      .parse(await c.req.json());
+    const r = room(input.stream);
+    const token = new URLSearchParams(input.param || "").get("token") || "";
+    if (
+      input.app !== "live" ||
+      r.status !== "live" ||
+      !equalSecret(token, r.stream_secret)
+    )
+      return c.json({ code: 403 }, 403);
+    await checkPublishAdmission(r);
+    return c.json({ code: 0 });
+  });
     },
   };
 }

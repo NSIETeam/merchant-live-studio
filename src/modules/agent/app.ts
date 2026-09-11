@@ -1,3 +1,5 @@
+import { assertProfileActive, profileRevocation, revokeProfile } from "./profile-lifecycle.js";
+import { presenterSchema } from "../../shared/presenter-schema.js";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { HTTPException } from "hono/http-exception";
@@ -55,6 +57,7 @@ import { registerTrainingRoutes, type ReservedRun } from "./training.js";
 
 const promptSchema = z
   .object({
+    presenter: presenterSchema.optional(),
     systemPrompt: z.string().trim().min(1).max(6000),
     styleGuide: z.string().max(4000),
     audience: z.string().max(1000),
@@ -102,6 +105,7 @@ const runSchema = z
   })
   .strict();
 type ProfileRow = {
+  tenant_id: string;
   id: string;
   name: string;
   kind: AgentProfile["kind"];
@@ -127,7 +131,7 @@ type RunRow = {
   created_at: number;
   completed_at: number | null;
 };
-const profileDto = (r: ProfileRow): AgentProfile => ({
+const baseProfileDto = (r: ProfileRow): AgentProfile => ({
   id: r.id,
   name: r.name,
   kind: r.kind,
@@ -140,7 +144,7 @@ const versionDto = (r: VersionRow): PromptVersion => ({
   version: r.version,
   createdAt: r.created_at,
 });
-const runDto = (r: RunRow): AgentRun => ({
+const baseRunDto = (r: RunRow): AgentRun => ({
   id: r.id,
   roomId: r.room_id,
   profileId: r.profile_id,
@@ -199,6 +203,19 @@ export function createAgentService(
     closed = false,
     scheduled = false;
   const modelConfigured = isModelConfigured(config.model);
+  const profileDto = (r: ProfileRow): AgentProfile => {
+    const revocation = profileRevocation(db, r.tenant_id, r.id);
+    return { ...baseProfileDto(r), ...(revocation ? { revocation } : {}) };
+  };
+  const runDto = (r: RunRow): AgentRun => {
+    const result = baseRunDto(r);
+    if (profileRevocation(db, r.tenant_id, r.profile_id)) {
+      delete result.result;
+      result.stale = true;
+      result.staleReason = "表达方案授权已撤回，历史结果停止使用。";
+    }
+    return result;
+  };
   const profile = (tenant: string, id: string): ProfileRow => {
     const row = findAgentProfilesByTenantIdAndId(db, tenant, id) as
       ProfileRow | undefined;
@@ -230,6 +247,7 @@ export function createAgentService(
   // Both single requests and evaluation batches use the same durable queue.
   // Callers hold one transaction for capacity, snapshots and job insertion.
   const reserve = (tenant: string, jobs: ReservedRun[]): string[] => {
+    for (const job of jobs) assertProfileActive(db, tenant, job.snapshot.profile.id);
     const global = (findAgentRuns(db) as { count: number }).count;
     const own = (findAgentRunsByTenantId(db, tenant) as { count: number })
       .count;
@@ -323,12 +341,15 @@ export function createAgentService(
       const job = next;
       const promise = (async () => {
         try {
-          const result = await Promise.resolve().then(() =>
-            execute(
+          assertProfileActive(db, job.tenant_id, job.profile_id);
+          const result = await Promise.resolve().then(() => {
+            assertProfileActive(db, job.tenant_id, job.profile_id);
+            return execute(
               JSON.parse(job.input_json) as AgentExecutionInput,
               config.model,
-            ),
-          );
+            );
+          });
+          if (!closed) assertProfileActive(db, job.tenant_id, job.profile_id);
           if (!closed)
             updateAgentRunsByTenantIdAndId2(
               db,
@@ -497,6 +518,7 @@ export function createAgentService(
     });
   });
   app.post("/v1/profiles/:id/versions", async (c) => {
+    assertProfileActive(db, c.get("tenantId"), c.req.param("id"));
     const content = promptSchema.parse(await c.req.json()),
       tenant = c.get("tenantId"),
       id = c.req.param("id");
@@ -524,6 +546,7 @@ export function createAgentService(
       id = c.req.param("id"),
       number = z.coerce.number().int().positive().parse(c.req.param("version"));
     profile(tenant, id);
+    assertProfileActive(db, tenant, id);
     version(tenant, id, number);
     updateAgentProfilesByTenantIdAndId2(db, number, tenant, id);
     return c.json({ profile: profileDto(profile(tenant, id)) });
@@ -625,6 +648,7 @@ export function createAgentService(
       .parse(await c.req.json());
     const tenant = c.get("tenantId"),
       p = profile(tenant, input.profileId || "standard");
+    assertProfileActive(db, tenant, p.id);
     return c.json(
       await runAgent({
         context: input.context,
@@ -639,7 +663,10 @@ export function createAgentService(
     digest,
     contextSchema,
     profile: (tenant, id) => profileDto(profile(tenant, id)),
-    version,
+    version: (tenant, id, number) => {
+      assertProfileActive(db, tenant, id);
+      return version(tenant, id, number);
+    },
     run: (tenant, id) => runDto(run(tenant, id)),
     reserve,
     schedule,
@@ -656,6 +683,28 @@ export function createAgentService(
     { global: config.queueLimit, tenant: config.tenantQueueLimit },
     clock,
   );
+  app.post("/v1/profiles/:id/revoke", async (c) => {
+    const tenant = c.get("tenantId"),
+      id = c.req.param("id");
+    const input = z
+      .object({
+        reason: z.string().trim().min(1).max(500),
+        actorId: z.string().trim().min(1).max(100),
+      })
+      .strict()
+      .parse(await c.req.json());
+    profile(tenant, id);
+    if (id === "standard")
+      throw new HTTPException(409, {
+        message: "通用方案不能撤回，请为真人主播建立独立方案。",
+      });
+    agentTransaction(db, () => {
+      if (profileRevocation(db, tenant, id)) return;
+      revokeProfile(db, tenant, id, input.reason, input.actorId, clock());
+    });
+    generation.abortProfile(tenant, id);
+    return c.json({ profile: profileDto(profile(tenant, id)) });
+  });
   if (options.autoStart !== false) start();
   return { app, start, close, status };
 }

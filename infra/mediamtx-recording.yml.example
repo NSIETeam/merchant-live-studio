@@ -1,0 +1,11 @@
+# Merge into the existing MediaMTX pathDefaults block; this is not a standalone configuration.
+# Directories must match recordings.env. Use epoch seconds to avoid time-zone ambiguity.
+pathDefaults:
+  record: true
+  recordPath: /var/lib/merchant-live-studio/recordings/%path/%s-%f
+  recordFormat: fmp4
+  recordPartDuration: 1s
+  recordMaxPartSize: 10M
+  recordSegmentDuration: 1m
+  recordDeleteAfter: 0s
+  runOnRecordSegmentComplete: /opt/merchant-live-studio/runtime/node/bin/node /opt/merchant-live-studio/current/dist/server/composition/recording-hook.js

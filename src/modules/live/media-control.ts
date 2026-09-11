@@ -38,6 +38,20 @@ export class MediaController {
     if (!response.ok) throw new Error("Media control request failed");
     return method === "GET" ? await response.json() : {};
   }
+  async readyForAdmission(): Promise<boolean> {
+    if (!this.configured) return false;
+    try {
+      const info = await this.request("/v3/info");
+      return Boolean(
+        info &&
+        typeof info.version === "string" &&
+        /^v?\d+\.\d+/.test(info.version) &&
+        typeof info.started === "string",
+      );
+    } catch {
+      return false;
+    }
+  }
   private path(roomId: string): Promise<MediaPath | null> {
     return this.request(
       "/v3/paths/get/" + encodeURIComponent("live/" + roomId),

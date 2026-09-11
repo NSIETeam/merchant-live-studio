@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import {
   BookOpen,
   FileCheck2,
@@ -6,23 +7,22 @@ import {
   Trash2,
   Upload,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
 import type { AgentProfile, PromptVersion } from "../../shared/agent";
+import type { Fact } from "../../shared/types";
 import type {
-  EvaluationCase,
-  EvaluationItem,
-  EvaluationReport,
-  EvaluationReview,
-  EvaluationSuite,
-  EvaluationVariant,
-  ExampleImportInput,
-  ExampleImportReceipt,
-  ExampleImportResult,
-  MaterialBatch,
   MaterialInput,
   MaterialPreview,
+  MaterialBatch,
+  ExampleImportInput,
+  ExampleImportResult,
+  ExampleImportReceipt,
+  EvaluationCase,
+  EvaluationSuite,
+  EvaluationVariant,
+  EvaluationReport,
+  EvaluationItem,
+  EvaluationReview,
 } from "../../shared/training";
-import type { Fact } from "../../shared/types";
 import { api } from "../shared/api";
 import "./TrainingWorkbench.css";
 
@@ -154,7 +154,8 @@ function TrainingRoom({
   }, [roomId]);
   return (
     <div className="tw-root">
-      <div className="tw-intro">
+      <details className="tw-intro">
+        <summary>资料与评测使用说明</summary>
         <div>
           <span className="eyebrow">PREPARE · COMPARE · REVIEW</span>
           <h2>让每一句话，都有来处</h2>
@@ -164,7 +165,7 @@ function TrainingRoom({
           </p>
         </div>
         <BookOpen size={30} />
-      </div>
+      </details>
       {basis?.contentBound && (
         <p className={basis.stale ? "tw-alert" : "tw-notice"}>
           {basis.stale
@@ -997,7 +998,8 @@ function VariantPicker({
   refreshToken: number;
 }) {
   const [versions, setVersions] = useState<PromptVersion[]>([]),
-    [error, setError] = useState("");
+    [error, setError] = useState(""),
+    [loading, setLoading] = useState(false);
   const changeRef = useRef(onChange);
   changeRef.current = onChange;
   const versionRef = useRef(value.version);
@@ -1006,6 +1008,7 @@ function VariantPicker({
     let cancelled = false;
     setVersions([]);
     setError("");
+    setLoading(Boolean(value.profileId));
     if (value.profileId)
       api<{ versions: PromptVersion[] }>(
         `${profilePath(value.profileId)}/versions`,
@@ -1021,6 +1024,9 @@ function VariantPicker({
         })
         .catch((e) => {
           if (!cancelled) setError(message(e));
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
         });
     return () => {
       cancelled = true;
@@ -1053,7 +1059,17 @@ function VariantPicker({
             onChange({ ...value, version: Number(e.target.value) })
           }
         >
-          {!versions.length && <option value={0}>正在读取版本…</option>}
+          {!versions.length && (
+            <option value={0}>
+              {!value.profileId
+                ? "请先选择表达风格"
+                : error
+                  ? "版本读取失败，请刷新重试"
+                  : loading
+                    ? "正在读取版本…"
+                    : "此风格尚无版本"}
+            </option>
+          )}
           {versions.map((v) => (
             <option key={v.version} value={v.version}>
               V{v.version}
@@ -1736,8 +1752,22 @@ function EvaluationResults({
         )}
       </details>
       {report.suite.cases.map((testCase) => (
-        <section className="tw-case-result" key={testCase.id}>
-          <h3>{testCase.title}</h3>
+        <details className="tw-case-result" key={`${report.id}:${testCase.id}`}>
+          <summary>
+            <strong>{testCase.title}</strong>
+            <span>
+              {report.variants
+                .map((_, index) => {
+                  const item = report.items.find(
+                    (item) =>
+                      item.caseId === testCase.id &&
+                      item.variantIndex === index,
+                  );
+                  return `${index === 0 ? "A" : "B"} · ${item?.outcome === "passed" ? "检查通过" : item?.outcome === "failed" ? "需调整" : "等待结果"}`;
+                })
+                .join(" / ")}
+            </span>
+          </summary>
           <div className="tw-case-input">
             <p>主播：{testCase.transcript}</p>
             {testCase.question && <p>观众：{testCase.question}</p>}
@@ -1847,7 +1877,7 @@ function EvaluationResults({
               );
             })}
           </div>
-        </section>
+        </details>
       ))}
       <p className="tw-footnote">
         通过检查只表示满足本场景的预设条件。人工评分不等于讲稿审核发布。评分保存在评测报告中；若准备应用提示词新版本，请前往“直播

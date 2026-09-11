@@ -25,6 +25,15 @@ const worker = setInterval(() => {
     );
   }
 }, 2000);
+let recordingJob: Promise<void> | null = null;
+const recordingWorker = setInterval(() => {
+  if (!recordingJob)
+    recordingJob = studio.processRecordingOutbox()
+      .catch(() => console.error("Recording queue unavailable"))
+      .finally(() => {
+        recordingJob = null;
+      });
+}, 10000);
 const server = serve(
   { fetch: app.fetch, hostname: config.host, port: config.port },
   () =>
@@ -34,9 +43,12 @@ const server = serve(
 );
 const shutdown = () => {
   clearInterval(worker);
+  clearInterval(recordingWorker);
   server.close(() => {
-    db.close();
-    process.exit(0);
+    void (recordingJob || Promise.resolve()).finally(() => {
+      db.close();
+      process.exit(0);
+    });
   });
 };
 process.on("SIGINT", shutdown);

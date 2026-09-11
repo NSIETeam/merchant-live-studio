@@ -1,11 +1,8 @@
 import { useEffect, useState } from "react";
-import type {
-  ScriptReviewRecord,
-  ScriptVersion,
-} from "../../shared/content.js";
+import type { ScriptVersion, ScriptReviewRecord } from "../../shared/content.js";
 import type { MerchantIdentity } from "../../shared/membership.js";
-import { api } from "../shared/api.js";
 import { ScriptSuggestions } from "./ScriptSuggestions.js";
+import { api } from "../shared/api.js";
 
 export function ScriptReviewPanel({
   script,

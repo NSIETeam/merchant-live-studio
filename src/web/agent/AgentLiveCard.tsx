@@ -1,5 +1,5 @@
-import { ArrowUpRight, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
+import { Sparkles, ArrowUpRight } from "lucide-react";
 import type { AgentRun } from "../../shared/agent.js";
 import { api } from "../shared/api.js";
 

@@ -1,3 +1,4 @@
+import { preparationCounts } from "./persistence/bindings-queries.js";
 import type { Hono } from "hono";
 import { z } from "zod";
 import {
@@ -62,6 +63,7 @@ export function createBindings(
     };
   }
   return {
+    preparationCounts: (tenant: string) => preparationCounts(db, tenant),
     getRoomContentBinding,
     roomOwned,
     attach(app: App) {

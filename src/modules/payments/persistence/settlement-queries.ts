@@ -32,10 +32,5 @@ export function updatePayoutJobsById(db: DB, ...values: SQLValue[]) {
     .run(...values);
 }
 
-export function listLedger(db: DB, ...values: SQLValue[]) {
-  return db
-    .prepare(
-      "SELECT id,campaign_id AS campaignId,claim_id AS claimId,debit,credit,amount_cents AS amountCents,created_at AS createdAt FROM ledger WHERE campaign_id IN (SELECT value FROM json_each(?)) ORDER BY created_at DESC LIMIT 200",
-    )
-    .all(...values);
-}
+export function findLedgerCursor(db:DB,campaigns:string,id:string) { return db.prepare("SELECT id,created_at FROM ledger WHERE id=? AND campaign_id IN (SELECT value FROM json_each(?))").get(id,campaigns); }
+export function listLedger(db:DB,campaigns:string,beforeTime:number,beforeId:string) { return db.prepare("SELECT id,campaign_id AS campaignId,claim_id AS claimId,debit,credit,amount_cents AS amountCents,created_at AS createdAt FROM ledger WHERE campaign_id IN (SELECT value FROM json_each(?)) AND (created_at < ? OR (created_at = ? AND id < ?)) ORDER BY created_at DESC,id DESC LIMIT 201").all(campaigns,beforeTime,beforeTime,beforeId); }

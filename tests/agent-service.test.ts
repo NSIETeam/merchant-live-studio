@@ -644,3 +644,221 @@ test("Execution and storage failures return safe errors without disclosing confi
   assert.equal(health.data.available, false);
   assert.ok(!JSON.stringify(health.data).includes(serviceToken));
 });
+
+test("presenter dossiers require explicit authorization and remain frozen in prompt and run snapshots", async () => {
+  const f = fixture();
+  try {
+    const presenter = {
+      displayName: "合成测试主播",
+      roleDescription: "验收讲解员",
+      speakingStyle: "短句，先解释再举例",
+      pace: "slow",
+      authorizationReference: "synthetic-consent-01，仅合成验收",
+      authorizationConfirmed: true,
+    };
+    assert.equal(
+      (
+        await f.call("/v1/profiles", "POST", {
+          ...content,
+          name: "获授权表达",
+          kind: "brand",
+          presenter: { ...presenter, authorizationConfirmed: false },
+        })
+      ).status,
+      400,
+    );
+    assert.equal(
+      (
+        await f.call("/v1/profiles", "POST", {
+          ...content,
+          name: "缺依据",
+          kind: "brand",
+          presenter: { ...presenter, authorizationReference: "" },
+        })
+      ).status,
+      400,
+    );
+    const created = await f.call("/v1/profiles", "POST", {
+      ...content,
+      name: "获授权表达",
+      kind: "brand",
+      presenter,
+    });
+    assert.equal(created.status, 201);
+    const id = created.data.profile.id;
+    const run = await f.call(
+      "/v1/runs",
+      "POST",
+      requestInput("presenter-snapshot", {
+        profileId: id,
+        mode: "rehearsal",
+        version: 1,
+      }),
+    );
+    assert.equal(run.status, 202);
+    const next = await f.call("/v1/profiles/" + id + "/versions", "POST", {
+      ...content,
+      presenter: {
+        ...presenter,
+        displayName: "另一位合成主播",
+        speakingStyle: "先提问再解释",
+      },
+    });
+    assert.equal(next.status, 201);
+    const snapshot = JSON.parse(
+      String(
+        f.db
+          .prepare("SELECT input_json FROM agent_runs WHERE id=?")
+          .get(run.data.run.id)!.input_json,
+      ),
+    );
+    assert.deepEqual(snapshot.prompt.presenter, presenter);
+    const versions = (await f.call("/v1/profiles/" + id + "/versions")).data
+      .versions;
+    assert.equal(versions[0].presenter.displayName, "另一位合成主播");
+    assert.deepEqual(versions[1].presenter, presenter);
+    assert.equal(
+      (
+        await f.call(
+          "/v1/profiles/" + id + "/versions",
+          "GET",
+          undefined,
+          "merchant-b",
+        )
+      ).status,
+      404,
+    );
+  } finally {
+    await f.dispose();
+  }
+});
+
+test("revoking a profile stops every prompt version and queued work while preserving audit history", async () => {
+  const f = fixture();
+  try {
+    const p = await f.brand();
+    await f.call("/v1/profiles/" + p.id + "/versions/1/publish", "POST", {});
+    const job = (
+      await f.call(
+        "/v1/runs",
+        "POST",
+        requestInput("revoked-queued", { profileId: p.id }),
+      )
+    ).data.run;
+    const payload = { actorId: "owner-a", reason: "合成测试：授权撤回" };
+    assert.equal(
+      (
+        await f.call(
+          "/v1/profiles/" + p.id + "/revoke",
+          "POST",
+          payload,
+          "merchant-b",
+        )
+      ).status,
+      404,
+    );
+    assert.equal(
+      (await f.call("/v1/profiles/" + p.id + "/revoke", "POST", payload))
+        .status,
+      200,
+    );
+    assert.equal(
+      (
+        await f.call("/v1/profiles/" + p.id + "/revoke", "POST", {
+          ...payload,
+          reason: "重复",
+        })
+      ).data.profile.revocation.reason,
+      payload.reason,
+    );
+    assert.equal(
+      (await f.call("/v1/runs/" + job.id)).data.run.status,
+      "failed",
+    );
+    assert.equal((await f.call("/v1/runs/" + job.id)).data.run.stale, true);
+    assert.equal(
+      (
+        await f.call(
+          "/v1/runs",
+          "POST",
+          requestInput("new-revoked", {
+            profileId: p.id,
+            mode: "rehearsal",
+            version: 1,
+          }),
+        )
+      ).status,
+      409,
+    );
+    assert.equal(
+      (await f.call("/v1/profiles/" + p.id + "/versions", "POST", content))
+        .status,
+      409,
+    );
+    assert.equal(
+      (await f.call("/v1/profiles/" + p.id + "/versions/1/publish", "POST", {}))
+        .status,
+      409,
+    );
+    assert.equal(
+      (await f.call("/v1/check", "POST", { profileId: p.id, context })).status,
+      409,
+    );
+    assert.equal(
+      (await f.call("/v1/profiles/" + p.id + "/versions")).data.versions.length,
+      1,
+    );
+    assert.throws(() => f.db.exec("DELETE FROM agent_profile_revocations"));
+    assert.equal(
+      (await f.call("/v1/profiles/standard/revoke", "POST", payload)).status,
+      409,
+    );
+  } finally {
+    await f.dispose();
+  }
+});
+test("late short-generation output is discarded when its profile is revoked during execution", async () => {
+  let resolve!: (r: AgentResult) => void;
+  let captured: AgentExecutionInput | undefined;
+  const f = fixture({
+    execute: (input) => {
+      captured = input;
+      return new Promise<AgentResult>((r) => {
+        resolve = r;
+      });
+    },
+  });
+  try {
+    const p = await f.brand();
+    const job = (
+      await f.call(
+        "/v1/runs",
+        "POST",
+        requestInput("in-flight-revoke", {
+          profileId: p.id,
+          mode: "rehearsal",
+        }),
+      )
+    ).data.run;
+    f.service.start();
+    await until(() => !!captured);
+    await f.call("/v1/profiles/" + p.id + "/revoke", "POST", {
+      actorId: "owner-a",
+      reason: "撤回测试",
+    });
+    resolve(resultFor(captured!));
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    const run = (await f.call("/v1/runs/" + job.id)).data.run;
+    assert.equal(run.status, "failed");
+    assert.equal(run.result, undefined);
+    assert.equal(run.stale, true);
+    assert.equal(
+      f.db.prepare("SELECT result_json FROM agent_runs WHERE id=?").get(job.id)!
+        .result_json,
+      null,
+    );
+  } finally {
+    if (captured) resolve(resultFor(captured));
+    await f.dispose();
+  }
+});

@@ -1,3 +1,9 @@
+import { GenerationPanel } from "../agent/GenerationPanel.js";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { ScriptComparison } from "./ScriptComparison.js";
+import { ReviewQueue } from "../review/ReviewQueue.js";
+import { ScriptReviewPanel } from "../review/ScriptReviewPanel.js";
+import type { MemberRole } from "../../shared/membership.js";
 import {
   BookOpen,
   Check,
@@ -6,32 +12,27 @@ import {
   Plus,
   Save,
   Trash2,
+  Upload,
 } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   CONTENT_LIMITS,
-  type ContentBinding,
-  type ContentCourse,
-  type ContentPlan,
   type ContentProduct,
-  type CourseDetail,
-  type CourseInput,
-  type PlanInput,
-  type ProductFactInput,
   type ProductInput,
   type ProductVersion,
-  type ScriptInput,
+  type ProductFactInput,
+  type ContentPlan,
+  type PlanInput,
+  type ContentCourse,
+  type CourseInput,
+  type CourseDetail,
   type ScriptParagraph,
+  type ScriptInput,
   type ScriptVersion,
+  type ContentBinding,
 } from "../../shared/content";
-import type { MemberRole } from "../../shared/membership.js";
 import type { Room } from "../../shared/types";
-import { GenerationPanel } from "../agent/GenerationPanel.js";
-import { ReviewQueue } from "../review/ReviewQueue.js";
-import { ScriptReviewPanel } from "../review/ScriptReviewPanel.js";
 import { api } from "../shared/api";
 import "./content.css";
-import { ScriptComparison } from "./ScriptComparison.js";
 
 const path = (route: string) => `/merchant/content${route}`;
 const esc = encodeURIComponent;
@@ -258,6 +259,16 @@ function ProductForm({
   onCancel: () => void;
   onSaved: (product: ContentProduct, version: ProductVersion) => void;
 }) {
+  const formPanel = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (window.matchMedia("(max-width: 700px)").matches) {
+      formPanel.current?.scrollIntoView({
+        block: "start",
+        behavior: "instant",
+      });
+      formPanel.current?.focus({ preventScroll: true });
+    }
+  }, []);
   const alive = useAlive();
   const [input, setInput] = useState<ProductInput>({
     name: version?.name || "",
@@ -303,7 +314,12 @@ function ProductForm({
     }
   }
   return (
-    <section className="cw-form-panel">
+    <section
+      className="cw-form-panel"
+      ref={formPanel}
+      tabIndex={-1}
+      aria-label="商品资料编辑"
+    >
       <div className="cw-section-header">
         <h2>{product ? "编辑商品资料" : "建立商品资料"}</h2>
         <small>
@@ -947,11 +963,11 @@ function ProductWorkspace({
                 )}
               </div>
             </main>
-            <aside className="cw-review-panel">
-              <div className="cw-panel-heading">
+            <details className="cw-review-panel cw-guidance">
+              <summary className="cw-panel-heading">
                 <h2>{view === "facts" ? "依据先行" : "制作进度"}</h2>
                 <BookOpen size={15} />
-              </div>
+              </summary>
               <div className="cw-panel-body">
                 <p className="cw-meta">
                   {view === "facts"
@@ -971,7 +987,7 @@ function ProductWorkspace({
                   </p>
                 </div>
               </div>
-            </aside>
+            </details>
           </>
         )}
       </div>
@@ -1930,7 +1946,8 @@ function CourseEditor({
             )}
             {selected?.stale && (
               <p className="cw-warning">
-                商品资料已变化。请对照当前资料保存新版本并重新复核。
+                {selected.authorizationIssue ||
+                  "商品资料已变化。请对照当前资料保存新版本并重新复核。"}
               </p>
             )}
           </div>
