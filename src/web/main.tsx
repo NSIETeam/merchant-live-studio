@@ -1,3 +1,4 @@
+import { RecordingHealth } from "./RecordingHealth.js";
 import { StudioVideo } from "./StudioVideo.js";
 import { DeferredPanel } from "./DeferredPanel.js";
 import { LedgerPanel } from "./LedgerPanel.js";
@@ -756,6 +757,9 @@ function Workspace({
                       </div>
                     </aside>
                   </div>
+                  {["owner", "reviewer"].includes(memberRole) && (
+                    <RecordingHealth />
+                  )}
                   <ModerationPanel
                     key={selected.id + "-moderation"}
                     onChanged={async () => {

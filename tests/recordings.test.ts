@@ -134,6 +134,23 @@ test("recording completion queue, immutable registry and verified downloads isol
       1,
     );
     assert.equal((await readdir(join(outbox, "failed"))).length, 1);
+    const healthPath = "/merchant/recordings/health";
+    assert.equal((await call(healthPath)).status, 401);
+    assert.equal(
+      (await call(healthPath, "GET", undefined, presenter)).status,
+      403,
+    );
+    const healthResponse = await call(healthPath, "GET", undefined, reviewer);
+    assert.equal(healthResponse.headers.get("cache-control"), "no-store");
+    const health = await healthResponse.json();
+    assert.equal(health.storage, "available");
+    assert.equal(health.ingestErrorCount, 1);
+    assert.equal(JSON.stringify(health).includes(folder), false);
+    const otherHealth = await (
+      await call(healthPath, "GET", undefined, other)
+    ).json();
+    assert.equal(otherHealth.ingestErrorCount, 0);
+
     assert.equal(
       (await call(path + "?after=not-a-record", "GET", undefined, owner))
         .status,

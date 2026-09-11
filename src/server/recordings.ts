@@ -1,3 +1,4 @@
+import { recordingStorageState } from "./recording-health.js";
 import type { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import {
@@ -128,6 +129,23 @@ export function attachRecordings(
   db: DB,
   config: Config,
 ) {
+  app.get("/api/merchant/recordings/health", async (c) => {
+    c.header("Cache-Control", "no-store");
+    return c.json({
+      storage: await recordingStorageState(
+        config.recordingsRoot,
+        config.recordingOutbox,
+      ),
+      ingestErrorCount: Number(
+        db
+          .prepare(
+            "SELECT count(*) AS n FROM recording_ingest_errors WHERE merchant_id=?",
+          )
+          .get(c.get("merchantId"))!.n,
+      ),
+      checkedAt: Date.now(),
+    });
+  });
   app.get("/api/merchant/rooms/:id/recordings", (c) => {
     const room = db
       .prepare("SELECT id FROM rooms WHERE id=? AND merchant_id=?")
