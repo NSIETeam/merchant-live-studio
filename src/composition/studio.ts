@@ -66,8 +66,9 @@ export function createStudio(
   content.content.attach(app);
   content.review.attach(app);
   content.live.attach(app);
-  attachLiveAssistance(
+  const speech = attachLiveAssistance(
     app,
+    db,
     config,
     live,
     engagement,
@@ -97,7 +98,9 @@ export function createStudio(
       identity.cleanup();
       engagement.expireCampaigns(clock());
       payments.processSimulationJobs(clock());
+      void speech.process();
     },
+    close: speech.close,
   };
 }
 export function createApp(

@@ -100,14 +100,26 @@ export function createIdentity(
           c.req.path.startsWith("/api/streams/") &&
           config.streamAuthSecret &&
           equalSecret(c.req.query("secret") || "", config.streamAuthSecret);
+        const speechAuthorization = c.req.header("authorization") || "";
+        const speechEngine =
+          c.req.path === "/api/streams/speech/segments" &&
+          config.speechProvider === "webhook" &&
+          config.speechIngestSecret &&
+          speechAuthorization.startsWith("Bearer ") &&
+          equalSecret(
+            speechAuthorization.slice("Bearer ".length),
+            config.speechIngestSecret,
+          );
         const identity =
           group === "merchant-auth"
             ? `login:${remote}`
-            : engine
-              ? "engine"
-              : session
-                ? `${role}:${session.id}`
-                : `anonymous:${remote}`;
+            : speechEngine
+              ? "speech-engine"
+              : engine
+                ? "engine"
+                : session
+                  ? `${role}:${session.id}`
+                  : `anonymous:${remote}`;
         const key = `${identity}:${group}`,
           now = clock();
         if (buckets.size > 10000)

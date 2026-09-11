@@ -47,7 +47,10 @@ const shutdown = () => {
   clearInterval(worker);
   clearInterval(recordingWorker);
   server.close(() => {
-    void (recordingJob || Promise.resolve()).finally(() => {
+    void Promise.all([
+      recordingJob || Promise.resolve(),
+      studio.close(),
+    ]).finally(() => {
       db.close();
       process.exit(0);
     });
