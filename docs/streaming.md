@@ -37,7 +37,7 @@
 | 本机 `STREAM_HLS_BASE`  | `http://localhost:8888/live` | `http://localhost:8080/live` |
 | 生成的播放路径尾部      | `/<roomId>/index.m3u8`       | `/<roomId>.m3u8`             |
 | 发布鉴权                | HTTP auth                    | on_publish 回调              |
-| 当前状态/强制断流       | MediaMTX Control API         | 尚未实现                     |
+| 当前状态/强制断流       | MediaMTX Control API         | SRS HTTP API                 |
 
 两种引擎默认占用同一 1935 端口，任选一个。切换 provider 时同步修改 HLS base，不会自动切端口。公开播放 URL 不含发布 token；房间 ID 不能充当推流密码。
 
@@ -58,12 +58,14 @@ STREAM_HLS_BASE=https://YOUR_SERVER/studio/media/live
 STREAM_AUTH_SECRET=REPLACE_WITH_RANDOM_SHARED_SECRET
 MEDIA_CONTROL_URL=http://127.0.0.1:18892
 MEDIA_CONTROL_TOKEN=
+MEDIA_CONTROL_USERNAME=
+MEDIA_CONTROL_PASSWORD=
 REQUIRE_PLAYBACK=true
 ```
 
 所有示例占位值必须在部署文件中替换，真实文件放在仓库外。生产配置未显式指定 `REQUIRE_PLAYBACK` 时默认为 true；从 `.env.example` 复制而来的 false 仍需手动改成 true。
 
-Control API 只留在回环或受控私网，不反代公网。当前单机模板将 `action: api` 排除 HTTP 鉴权，依赖仅回环监听；不能照搬到公网或不受控容器网络。`MEDIA_CONTROL_TOKEN` 会作为 Bearer 发给控制面，仅在控制面实际配置匹配认证时使用。
+Control API 只留在回环或受控私网，不反代公网。当前单机 MediaMTX 模板将 `action: api` 排除 HTTP 鉴权，依赖仅回环监听；不能照搬到公网或不受控容器网络。`MEDIA_CONTROL_TOKEN` 会作为 Bearer 发给控制面，仅在控制面实际配置匹配认证时使用。SRS 原生 HTTP API 可用 `MEDIA_CONTROL_USERNAME` 与 `MEDIA_CONTROL_PASSWORD` 发送 Basic 认证；生产环境配置 SRS 控制时必须使用这组凭据或受保护代理的 Bearer token，凭据不能写进 URL。
 
 ## 发布鉴权
 
@@ -84,13 +86,13 @@ http_hooks {
 }
 ```
 
-`api` 仅为容器网络服务名示例，须改成实际可达的私网应用地址。SRS 载荷含 `action:"on_publish"`、`app:"live"`、`stream` 和 `param:"?token=..."`；应用核验后返回 `{"code":0}`。SRS 没有接入 `on_unpublish`、控制面或强制断流；不能把其基础地址适配视为与 MediaMTX 功能完全相同。[SRS HTTP 回调](https://ossrs.io/lts/en-us/docs/v6/doc/http-callback)
+`api` 仅为容器网络服务名示例，须改成实际可达的私网应用地址。SRS 载荷含 `action:"on_publish"`、`app:"live"`、`stream` 和 `param:"?token=..."`；应用核验后返回 `{"code":0}`。本地 `infra/srs.conf` 另启用仅映射回环的 1985 控制端口。应用从 `/api/v1/streams` 精确选择 `app=live` 且名称等于房间 ID 的发布流，读取 `publish.cid` 后调用 `DELETE /api/v1/clients/{cid}`，并再次查询确认已经离线。[SRS HTTP 回调](https://ossrs.io/lts/en-us/docs/v6/doc/http-callback)、[SRS HTTP API](https://ossrs.io/lts/en-us/docs/v6/doc/http-api)
 
 token 与共享密钥可能出现在 URL，应避免进入访问日志或对外错误内容。远程 RTMP 明文传输需要受控网络或另外配置 RTMPS 等保护，当前模板未自动配置推流 TLS。
 
 ## 流状态、轮换与停止
 
-`GET /api/merchant/rooms/:id/signal` 读取 MediaMTX 路径，公开房间 DTO 同样包含 signal。返回 `configured`、`connected`、`checkedAt`、可选 `viewers/message`。查询约缓存 2.5 秒，请求超时为 3 秒；未知状态为 null，不会伪装在线。引擎 reader 数与业务可见页面人数是不同指标。
+`GET /api/merchant/rooms/:id/signal` 按当前 provider 读取 MediaMTX 路径或 SRS 流列表，公开房间 DTO 同样包含 signal。返回 `configured`、`connected`、`checkedAt`、可选 `viewers/message`。查询约缓存 2.5 秒，请求超时为 3 秒；响应最多 256 KiB，未知、畸形或 SRS 非零业务码均返回未知状态，不会伪装在线。引擎 reader/client 数与业务可见页面人数是不同指标。
 
 以下操作会尝试断流：
 
@@ -98,7 +100,7 @@ token 与共享密钥可能出现在 URL，应避免进入访问日志或对外�
 - 轮换房间推流密钥。
 - 调用 `POST /api/merchant/rooms/:id/stream/disconnect`。
 
-实现读取当前来源，使用 RTMP/RTMPS 对应 kick API，再次读取路径验证结果。未配置控制服务、协议不支持、请求出错或仍有在线来源时，返回 `disconnected:false` 和人工处理提示。客户端必须检查该字段，不能把 HTTP 200 或业务房间已结束当作推流已断开的证据。
+MediaMTX 实现读取当前来源，使用 RTMP/RTMPS 对应 kick API；SRS 实现读取发布端 `cid` 并删除该客户端。两者都再次读取引擎状态验证结果。未配置控制服务、协议/连接不支持、请求出错或仍有在线来源时，返回 `disconnected:false` 和人工处理提示。客户端必须检查该字段，不能把 HTTP 200 或业务房间已结束当作推流已断开的证据。
 
 轮换/结束先更新业务状态或密钥，断流失败不会回滚。轮换后更新 OBS 密钥；结束后新连接会被发布鉴权拒绝。独立断流接口不会结束房间或轮换密钥，因此原密钥仍可在 live 状态下重连；长期停播使用结束房间并停止 OBS。
 

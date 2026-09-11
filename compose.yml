@@ -18,6 +18,8 @@ services:
       REQUIRE_REVIEWED_LIVE: ${REQUIRE_REVIEWED_LIVE:-false}
       MEDIA_CONTROL_URL: ${MEDIA_CONTROL_URL:-}
       MEDIA_CONTROL_TOKEN: ${MEDIA_CONTROL_TOKEN:-}
+      MEDIA_CONTROL_USERNAME: ${MEDIA_CONTROL_USERNAME:-}
+      MEDIA_CONTROL_PASSWORD: ${MEDIA_CONTROL_PASSWORD:-}
       PAYMENT_PROVIDER: simulation
       STREAM_PROVIDER: ${STREAM_PROVIDER:-mediamtx}
       STREAM_RTMP_BASE: ${STREAM_RTMP_BASE:-rtmp://localhost:1935/live}
@@ -85,6 +87,7 @@ services:
     ports:
       - "127.0.0.1:1935:1935"
       - "127.0.0.1:8080:8080"
+      - "127.0.0.1:1985:1985"
     volumes:
       - ./infra/srs.conf:/usr/local/srs/conf/studio.conf:ro
     command: ["./objs/srs", "-c", "conf/studio.conf"]

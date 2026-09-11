@@ -72,7 +72,7 @@ import type {
   StreamConfig,
   StreamState,
 } from "../../shared/types";
-import { api, duration, money } from "../shared/api";
+import { api, AUTH_REQUIRED_EVENT, duration, money } from "../shared/api";
 import "./styles.css";
 import "./merchant-density.css";
 import "./live-stage.css";
@@ -104,6 +104,17 @@ function Merchant() {
     api<{ merchantId: string | null; demoMode: boolean }>("/auth/me")
       .then(setAuth)
       .catch((e) => setError(e.message));
+  }, []);
+  useEffect(() => {
+    const requireAuthentication = () => {
+      setAuth((current) =>
+        current ? { ...current, merchantId: null } : current,
+      );
+      setError("登录状态已失效，请重新登录。");
+    };
+    window.addEventListener(AUTH_REQUIRED_EVENT, requireAuthentication);
+    return () =>
+      window.removeEventListener(AUTH_REQUIRED_EVENT, requireAuthentication);
   }, []);
   async function login(demo: boolean) {
     setBusy(true);

@@ -662,3 +662,132 @@ test("media control reports failed kicks without claiming an active stream was d
     globalThis.fetch = nativeFetch;
   }
 });
+
+test("SRS control reports the exact room and verifies publisher removal", async () => {
+  const nativeFetch = globalThis.fetch;
+  const config = loadConfig({
+    STREAM_PROVIDER: "srs",
+    MEDIA_CONTROL_URL: "http://srs-control.test",
+    MEDIA_CONTROL_USERNAME: "operator",
+    MEDIA_CONTROL_PASSWORD: "private-test-password",
+    DEMO_MODE: "false",
+  });
+  const expectedAuth = `Basic ${Buffer.from("operator:private-test-password").toString("base64")}`;
+  try {
+    const calls: Array<{ url: string; method: string; auth: string }> = [];
+    let disconnected = false;
+    globalThis.fetch = async (input, init) => {
+      const url = String(input);
+      calls.push({
+        url,
+        method: init?.method || "GET",
+        auth: new Headers(init?.headers).get("authorization") || "",
+      });
+      if (url.endsWith("/api/v1/versions"))
+        return Response.json({ code: 0, version: "6.0.191" });
+      if (url.includes("/api/v1/clients/cid-42")) {
+        disconnected = true;
+        return Response.json({ code: 0 });
+      }
+      return Response.json({
+        code: 0,
+        streams: disconnected
+          ? []
+          : [
+              {
+                app: "live",
+                name: "other-room",
+                clients: 9,
+                publish: { active: true, cid: "cid-41" },
+              },
+              {
+                app: "live",
+                name: "target-room",
+                clients: 3,
+                publish: { active: true, cid: "cid-42" },
+              },
+            ],
+      });
+    };
+
+    const controller = new MediaController(config);
+    assert.equal(await controller.readyForAdmission(), true);
+    const state = await controller.status("target-room");
+    assert.equal(state.configured, true);
+    assert.equal(state.connected, true);
+    assert.equal(state.viewers, 2);
+    assert.equal(typeof state.checkedAt, "number");
+    assert.deepEqual(await controller.disconnect("target-room"), {
+      disconnected: true,
+    });
+    assert.ok(
+      calls.some(
+        (call) =>
+          call.method === "DELETE" &&
+          call.url.endsWith("/api/v1/clients/cid-42") &&
+          call.auth === expectedAuth,
+      ),
+    );
+    assert.ok(calls.every((call) => call.auth === expectedAuth));
+  } finally {
+    globalThis.fetch = nativeFetch;
+  }
+});
+
+test("SRS control configuration and responses fail closed", async () => {
+  assert.throws(
+    () =>
+      loadConfig({
+        MEDIA_CONTROL_URL: "http://user:password@srs-control.test",
+      }),
+    /without credentials/,
+  );
+  assert.throws(
+    () =>
+      loadConfig({
+        MEDIA_CONTROL_USERNAME: "operator",
+      }),
+    /Configure both/,
+  );
+  assert.throws(
+    () =>
+      loadConfig({
+        NODE_ENV: "production",
+        DEMO_MODE: "false",
+        APP_ORIGIN: "https://example.test",
+        SESSION_SECRET: "srs-production-session-secret-at-least-32",
+        MERCHANT_CREDENTIALS: JSON.stringify({
+          owner: "srs-production-owner-secret-at-least-24",
+        }),
+        STREAM_PROVIDER: "srs",
+        MEDIA_CONTROL_URL: "https://public-control.example",
+        MEDIA_CONTROL_USERNAME: "operator",
+        MEDIA_CONTROL_PASSWORD: "private-test-password",
+      }),
+    /private host/,
+  );
+  const nativeFetch = globalThis.fetch;
+  const config = loadConfig({
+    STREAM_PROVIDER: "srs",
+    MEDIA_CONTROL_URL: "http://srs-control.test",
+    DEMO_MODE: "false",
+  });
+  try {
+    globalThis.fetch = async () =>
+      Response.json({ code: 1061, data: { streams: [] } });
+    const state = await new MediaController(config).status("target-room");
+    assert.equal(state.connected, null);
+    assert.match(state.message || "", /暂时无法读取/);
+    const result = await new MediaController(config).disconnect("target-room");
+    assert.equal(result.disconnected, false);
+    assert.ok(result.message);
+    globalThis.fetch = async () =>
+      new Response("{}", {
+        headers: { "Content-Length": String(256 * 1024 + 1) },
+      });
+    const oversized = await new MediaController(config).status("target-room");
+    assert.equal(oversized.connected, null);
+  } finally {
+    globalThis.fetch = nativeFetch;
+  }
+});

@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { isIP } from "node:net";
 import { z } from "zod";
 import type { Membership } from "../../shared/membership.js";
 import type {
@@ -31,6 +32,8 @@ export interface Config {
   requirePlayback: boolean;
   trustedProxyIps: string[];
   mediaControlToken: string;
+  mediaControlUsername: string;
+  mediaControlPassword: string;
   basePath: string;
   agentServiceUrl: string;
   agentServiceToken: string;
@@ -61,6 +64,24 @@ export function readReleaseRevision(path = "REVISION") {
   if (!/^[a-f0-9]{40}$/i.test(revision))
     throw new Error("REVISION must contain a complete Git commit SHA");
   return revision.toLowerCase();
+}
+function isPrivateControlHost(hostname: string) {
+  const host = hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  if (host === "localhost" || !host.includes(".")) return true;
+  if (host.endsWith(".local") || host.endsWith(".internal")) return true;
+  if (isIP(host) === 4) {
+    const parts = host.split(".").map(Number);
+    return (
+      parts[0] === 10 ||
+      parts[0] === 127 ||
+      (parts[0] === 169 && parts[1] === 254) ||
+      (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) ||
+      (parts[0] === 192 && parts[1] === 168)
+    );
+  }
+  if (isIP(host) === 6)
+    return host === "::1" || /^f[cd]/.test(host) || /^fe[89ab]/.test(host);
+  return false;
 }
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const production = env.NODE_ENV === "production";
@@ -286,6 +307,40 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     .min(1)
     .max(16)
     .parse(env.SPEECH_DISPATCH_CONCURRENCY || 2);
+  const mediaControlUrl = (env.MEDIA_CONTROL_URL || "").replace(/\/$/, "");
+  if (mediaControlUrl) {
+    const parsed = new URL(mediaControlUrl);
+    if (
+      !["http:", "https:"].includes(parsed.protocol) ||
+      parsed.username ||
+      parsed.password ||
+      parsed.search ||
+      parsed.hash
+    )
+      throw new Error(
+        "MEDIA_CONTROL_URL must be an HTTP(S) URL without credentials, query or fragment",
+      );
+    if (production && !isPrivateControlHost(parsed.hostname))
+      throw new Error(
+        "Production MEDIA_CONTROL_URL must stay on a private host",
+      );
+  }
+  const mediaControlUsername = env.MEDIA_CONTROL_USERNAME || "";
+  const mediaControlPassword = env.MEDIA_CONTROL_PASSWORD || "";
+  if (Boolean(mediaControlUsername) !== Boolean(mediaControlPassword))
+    throw new Error(
+      "Configure both MEDIA_CONTROL_USERNAME and MEDIA_CONTROL_PASSWORD",
+    );
+  if (
+    production &&
+    mediaControlUrl &&
+    (env.STREAM_PROVIDER || "mediamtx") === "srs" &&
+    !mediaControlUsername &&
+    !env.MEDIA_CONTROL_TOKEN
+  )
+    throw new Error(
+      "Production SRS control requires Basic credentials or a private proxy token",
+    );
   const requestConcurrencyMax = z.coerce
     .number()
     .int()
@@ -330,8 +385,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     speechIngestSecret,
     speechAgentProfileId,
     speechDispatchConcurrency,
-    mediaControlUrl: env.MEDIA_CONTROL_URL || "",
+    mediaControlUrl,
     mediaControlToken: env.MEDIA_CONTROL_TOKEN || "",
+    mediaControlUsername,
+    mediaControlPassword,
     basePath,
     requirePlayback:
       (env.REQUIRE_PLAYBACK ?? (production ? "true" : "false")) === "true",

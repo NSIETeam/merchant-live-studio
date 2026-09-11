@@ -1,3 +1,18 @@
+export const AUTH_REQUIRED_EVENT = "kaopu:auth-required";
+
+function notifyAuthenticationRequired() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT));
+  }
+}
+
+function basePath() {
+  return (
+    (import.meta as ImportMeta & { env?: { BASE_URL?: string } }).env
+      ?.BASE_URL || "/"
+  );
+}
+
 export async function api<T>(
   path: string,
   method = "GET",
@@ -6,7 +21,7 @@ export async function api<T>(
 ): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(`${import.meta.env.BASE_URL}api${path}`, {
+    res = await fetch(`${basePath()}api${path}`, {
       method,
       signal: options?.signal,
       credentials: "same-origin",
@@ -17,6 +32,7 @@ export async function api<T>(
   } catch {
     throw new Error("网络连接暂时不可用，请检查网络后重试。");
   }
+  if (res.status === 401) notifyAuthenticationRequired();
   const fallback =
     res.status === 401
       ? "登录状态已失效，请重新登录。"
