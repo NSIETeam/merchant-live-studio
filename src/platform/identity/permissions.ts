@@ -11,7 +11,11 @@ declare module "hono" {
     requireIndependentReview: boolean;
   }
 }
-export function requiresIndependentReview(config: Config, merchantId: string, db?: DB) {
+export function requiresIndependentReview(
+  config: Config,
+  merchantId: string,
+  db?: DB,
+) {
   return (
     config.production ||
     Boolean(db && listManagedAccounts(db, merchantId).length) ||
@@ -27,7 +31,11 @@ export function merchantIdentity(
   db?: DB,
 ): MerchantIdentity {
   const account = managedAccount(db, config, actorId);
-  const member = config.merchantMemberships?.[actorId] || (account ? {merchantId: account.merchant_id, role: account.role} : undefined);
+  const member = Object.hasOwn(config.merchantMemberships || {}, actorId)
+    ? config.merchantMemberships![actorId]
+    : account
+      ? { merchantId: account.merchant_id, role: account.role }
+      : undefined;
   const access =
     member && db
       ? findRoleOverride(db, actorId, member.merchantId, member.role)
@@ -63,8 +71,14 @@ export function memberMayAccess(
     )
   )
     return role === "reviewer" && method === "GET";
-  if (/^\/api\/merchant\/rooms\/[^/]+\/moderation\/\d+\/results(?:\/export)?$/.test(path))
-    return ["reviewer", "presenter", "editor"].includes(role) && method === "GET";
+  if (
+    /^\/api\/merchant\/rooms\/[^/]+\/moderation\/\d+\/results(?:\/export)?$/.test(
+      path,
+    )
+  )
+    return (
+      ["reviewer", "presenter", "editor"].includes(role) && method === "GET"
+    );
   if (/^\/api\/merchant\/rooms\/[^/]+\/moderation(?:\/\d+\/retry)?$/.test(path))
     return (
       (role === "reviewer" && (method === "POST" || method === "GET")) ||

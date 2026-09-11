@@ -38,29 +38,45 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     throw new Error("DEMO_MODE must be false in production");
   if ((env.PAYMENT_PROVIDER ?? "simulation") !== "simulation")
     throw new Error("Real payment provider is not implemented; use simulation");
+  const accountId = z
+    .string()
+    .regex(/^[a-zA-Z0-9_-]{1,50}$/)
+    .refine(
+      (id) => !Object.hasOwn(Object.prototype, id),
+      "Reserved account identifier",
+    );
+  const rejectReservedKeys = (value: unknown) => {
+    if (
+      value &&
+      typeof value === "object" &&
+      Object.keys(value).some((id) => Object.hasOwn(Object.prototype, id))
+    )
+      throw new Error("Reserved account identifier");
+    return value;
+  };
   const merchantCredentials = z
-    .record(z.string().regex(/^[a-zA-Z0-9_-]{1,50}$/), z.string().min(24))
-    .parse(JSON.parse(env.MERCHANT_CREDENTIALS || "{}"));
+    .record(accountId, z.string().min(24))
+    .parse(rejectReservedKeys(JSON.parse(env.MERCHANT_CREDENTIALS || "{}")));
   if (production && !Object.keys(merchantCredentials).length)
     throw new Error("MERCHANT_CREDENTIALS is required in production");
   const merchantMemberships = z
     .record(
-      z.string().regex(/^[a-zA-Z0-9_-]{1,50}$/),
+      accountId,
       z
         .object({
-          merchantId: z.string().regex(/^[a-zA-Z0-9_-]{1,50}$/),
+          merchantId: accountId,
           role: z.enum(["editor", "reviewer", "presenter", "analyst"]),
         })
         .strict(),
     )
-    .parse(JSON.parse(env.MERCHANT_MEMBERSHIPS || "{}"));
+    .parse(rejectReservedKeys(JSON.parse(env.MERCHANT_MEMBERSHIPS || "{}")));
   for (const [actor, member] of Object.entries(merchantMemberships)) {
     if (
       actor === "demo" ||
-      !merchantCredentials[actor] ||
+      !Object.hasOwn(merchantCredentials, actor) ||
       actor === member.merchantId ||
-      merchantMemberships[member.merchantId] ||
-      (!merchantCredentials[member.merchantId] &&
+      Object.hasOwn(merchantMemberships, member.merchantId) ||
+      (!Object.hasOwn(merchantCredentials, member.merchantId) &&
         !(demoMode && member.merchantId === "demo"))
     )
       throw new Error(
