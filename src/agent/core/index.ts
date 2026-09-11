@@ -1,3 +1,4 @@
+import { normalizeRiskText } from "../../shared/risk-text.js";
 import { presenterForModel } from "../../shared/agent.js";
 import { isIP } from "node:net";
 import { z } from "zod";
@@ -134,14 +135,22 @@ const riskRules: {
 ];
 
 function inspect(text: string): AgentAlert[] {
+  text = normalizeRiskText(text);
   const alerts: AgentAlert[] = [];
   for (const rule of riskRules) {
     for (const match of text.matchAll(rule.pattern)) {
+      const ordinal =
+        match[0] === "第一" &&
+        /^第一(?:步|页|章|节)(?=[：:，,。.!！？?\s]|$)/u.test(
+          text.slice(match.index),
+        );
       alerts.push({
-        level: rule.level,
+        level: ordinal ? "review" : rule.level,
         category: rule.category,
         phrase: match[0].slice(0, 100),
-        reason: rule.reason,
+        reason: ordinal
+          ? "这里可能是步骤或章节序号，需结合完整上下文核对，不直接视为优越性承诺；本提示不是合规认定。"
+          : rule.reason,
       });
       if (alerts.length >= 30) return alerts;
     }

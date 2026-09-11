@@ -451,6 +451,9 @@ test("Finite manuscript checks block risky claims and unsupported references whi
   for (const text of [
     "这款产品是行业第一。",
     "这款产品无出其右。",
+    "这款产品无\u200b出其右。",
+    "这款产品无 出 其 右。",
+    "１００％有效。",
     "这款产品保障有效。",
     "这款产品治疗糖尿病。",
     "所有人都会想起妈妈的味道。",
