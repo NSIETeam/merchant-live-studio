@@ -31,12 +31,19 @@ import {
   insertRevokedSessions,
 } from "./persistence/http-queries.js";
 import { attachWeChatIdentity } from "./wechat.js";
+import type { createWeChatRecipientVault } from "./wechat-recipient-vault.js";
 type App = Hono<{ Variables: { merchantId: string; viewerId: string } }>;
+type RecipientVault = ReturnType<typeof createWeChatRecipientVault>;
 export function createIdentity(
   db: DB,
   config: Config,
   clock: () => number = Date.now,
   wechat: WeChatOAuthPort = new HttpWeChatOAuthAdapter(config),
+  payment: {
+    merchantForRoom?: (roomId: string) => string;
+    configuredFor?: (merchantId: string) => boolean;
+    recipientVault?: RecipientVault;
+  } = {},
 ) {
   const accounts = createAccountStore(db);
   for (const id of Object.keys(config.merchantCredentials)) {
@@ -55,9 +62,12 @@ export function createIdentity(
       app.use("*", secureHeaders());
       app.use("/api/*", (c, next) =>
         bodyLimit({
-          maxSize: c.req.path.startsWith("/api/merchant/content/")
-            ? 128 * 1024
-            : 32 * 1024,
+          maxSize:
+            c.req.path === "/api/payments/wechat/notify"
+              ? 1_100_000
+              : c.req.path.startsWith("/api/merchant/content/")
+                ? 128 * 1024
+                : 32 * 1024,
           onError: (c) => c.json({ error: "请求内容过大" }, 413),
         })(c, next),
       );
@@ -93,11 +103,13 @@ export function createIdentity(
         const group =
           c.req.path === "/api/auth/viewer"
             ? "viewer-auth"
-            : c.req.path.startsWith("/api/auth/")
-              ? "merchant-auth"
-              : c.req.method === "GET"
-                ? "read"
-                : "write";
+            : c.req.path === "/api/payments/wechat/notify"
+              ? "payment-notify"
+              : c.req.path.startsWith("/api/auth/")
+                ? "merchant-auth"
+                : c.req.method === "GET"
+                  ? "read"
+                  : "write";
         const role = c.req.path.startsWith("/api/merchant/")
           ? "merchant"
           : "viewer";
@@ -119,13 +131,15 @@ export function createIdentity(
         const identity =
           group === "merchant-auth"
             ? `login:${remote}`
-            : speechEngine
-              ? "speech-engine"
-              : engine
-                ? "engine"
-                : session
-                  ? `${role}:${session.id}`
-                  : `anonymous:${remote}`;
+            : group === "payment-notify"
+              ? `payment-provider:${remote}`
+              : speechEngine
+                ? "speech-engine"
+                : engine
+                  ? "engine"
+                  : session
+                    ? `${role}:${session.id}`
+                    : `anonymous:${remote}`;
         const key = `${identity}:${group}`,
           now = clock();
         if (buckets.size > 10000)
@@ -138,11 +152,13 @@ export function createIdentity(
         const limit =
           group === "merchant-auth"
             ? 60
-            : group === "viewer-auth"
-              ? 600
-              : group === "read"
-                ? 1200
-                : 300;
+            : group === "payment-notify"
+              ? 1200
+              : group === "viewer-auth"
+                ? 600
+                : group === "read"
+                  ? 1200
+                  : 300;
         if (++b.count > limit) {
           c.header("Retry-After", "60");
           return c.json({ error: "请求过于频繁，请稍后重试" }, 429);
@@ -169,7 +185,21 @@ export function createIdentity(
         );
         return c.json({ error: "服务暂时不可用" }, 500);
       });
-      attachWeChatIdentity(app, config, wechat, clock);
+      attachWeChatIdentity(
+        app,
+        config,
+        wechat,
+        clock,
+        ({ viewerId, roomId, subject }) => {
+          const merchantId = payment.merchantForRoom?.(roomId);
+          if (
+            merchantId &&
+            payment.configuredFor?.(merchantId) &&
+            payment.recipientVault
+          )
+            payment.recipientVault.stage(viewerId, merchantId, subject);
+        },
+      );
       app.use("/api/merchant/*", async (c, next) => {
         const session = readSession(c, config, "merchant", db);
         if (!session)
@@ -191,6 +221,71 @@ export function createIdentity(
           });
         c.set("viewerId", session.id);
         await next();
+      });
+      const paymentRecipientContext = (roomId: string) => {
+        const merchantId = payment.merchantForRoom?.(roomId);
+        if (!merchantId)
+          throw new HTTPException(404, { message: "直播间不存在" });
+        return {
+          merchantId,
+          configured: Boolean(
+            payment.recipientVault && payment.configuredFor?.(merchantId),
+          ),
+        };
+      };
+      app.get("/api/viewer/rooms/:id/payment-recipient", (c) => {
+        const context = paymentRecipientContext(c.req.param("id"));
+        const viewerId = c.get("viewerId");
+        const status =
+          context.configured && payment.recipientVault
+            ? payment.recipientVault.status(viewerId, context.merchantId)
+            : { authorized: false, authorizedAt: null, staged: false };
+        return c.json({
+          configured: context.configured,
+          identity: viewerId.startsWith("wechat_") ? "wechat" : "anonymous",
+          ...status,
+        });
+      });
+      app.post("/api/viewer/rooms/:id/payment-recipient/authorize", (c) => {
+        const context = paymentRecipientContext(c.req.param("id"));
+        const viewerId = c.get("viewerId");
+        if (!context.configured || !payment.recipientVault)
+          throw new HTTPException(503, {
+            message: "该商家的微信转账尚未配置",
+          });
+        if (!viewerId.startsWith("wechat_"))
+          throw new HTTPException(403, {
+            message: "请先完成微信身份验证",
+          });
+        try {
+          const result = payment.recipientVault.authorize(
+            viewerId,
+            context.merchantId,
+          );
+          return c.json({
+            configured: true,
+            authorized: true,
+            replayed: result.replayed,
+          });
+        } catch {
+          throw new HTTPException(409, {
+            message: "微信身份验证已失效，请重新验证后授权",
+          });
+        }
+      });
+      app.post("/api/viewer/rooms/:id/payment-recipient/revoke", (c) => {
+        const context = paymentRecipientContext(c.req.param("id"));
+        const viewerId = c.get("viewerId");
+        if (!context.configured || !payment.recipientVault)
+          throw new HTTPException(503, {
+            message: "该商家的微信转账尚未配置",
+          });
+        if (!viewerId.startsWith("wechat_"))
+          throw new HTTPException(403, {
+            message: "请先完成微信身份验证",
+          });
+        payment.recipientVault.revoke(viewerId, context.merchantId);
+        return c.json({ configured: true, authorized: false, revoked: true });
       });
       app.get("/api/auth/me", (c) =>
         c.json({

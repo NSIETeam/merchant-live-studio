@@ -108,7 +108,7 @@ export function listCampaignsByRoomId3(db: DB, ...values: SQLValue[]) {
 export function insertCampaigns(db: DB, ...values: SQLValue[]) {
   return db
     .prepare(
-      "INSERT INTO campaigns(id,room_id,total_cents,count,remaining_cents,remaining_count,min_watch_seconds,opens_at,expires_at) VALUES(?,?,?,?,?,?,?,?,?)",
+      "INSERT INTO campaigns(id,room_id,total_cents,count,remaining_cents,remaining_count,min_watch_seconds,opens_at,expires_at,payment_mode) VALUES(?,?,?,?,?,?,?,?,?,?)",
     )
     .run(...values);
 }

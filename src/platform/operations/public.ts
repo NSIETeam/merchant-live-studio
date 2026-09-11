@@ -27,7 +27,7 @@ export function attachOperations(
       status: "ok",
       revision: config.releaseRevision,
       demoMode: config.demoMode,
-      payments: "simulation",
+      payments: config.paymentProvider,
       copilot: "agent-service",
       agentIndependent: true,
       streamProvider: config.streamProvider,
@@ -46,6 +46,7 @@ export function attachOperations(
       channels: configuredChannelCapabilities(
         Boolean(config.wechatOAuth),
         wechatSharing.configured,
+        config.paymentProvider === "wechat",
       ),
     }),
   );
@@ -59,7 +60,9 @@ export function attachOperations(
         "普通观看会建立最长 12 小时的浏览器会话，用于区分本次观看与互动。",
         "提问、投诉、活动资格及领取记录会与该观看会话关联；请勿填写身份证、银行卡等敏感信息。",
         "商家工作台使用账号会话和角色权限；直播录像仅在服务器明确配置录像存储后生成。",
-        "微信身份与签名分享按当前渠道能力单独配置；身份验证不等于付款授权，演示红包不会发生实际转账。",
+        config.paymentProvider === "wechat"
+          ? "微信身份验证与收款授权分开记录；收款身份加密保存，撤回授权会阻止后续领取，已有付款义务仍按原单处理。"
+          : "微信身份与签名分享按当前渠道能力单独配置；身份验证不等于付款授权，演示红包不会发生实际转账。",
       ],
       retention: {
         configured: Boolean(config.retentionPolicy),

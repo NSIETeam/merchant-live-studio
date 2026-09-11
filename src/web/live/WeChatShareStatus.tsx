@@ -1,57 +1,7 @@
 import { useEffect, useState } from "react";
 import type { WeChatShareSignature } from "../../shared/channels.js";
 import { api } from "../shared/api.js";
-
-type WeChatSdk = {
-  config(input: WeChatShareSignature & { debug: false }): void;
-  ready(callback: () => void): void;
-  error(callback: (error: unknown) => void): void;
-  updateAppMessageShareData(input: {
-    title: string;
-    desc: string;
-    link: string;
-  }): void;
-  updateTimelineShareData(input: { title: string; link: string }): void;
-};
-
-declare global {
-  interface Window {
-    wx?: WeChatSdk;
-  }
-}
-
-let sdkRequest: Promise<WeChatSdk> | undefined;
-function loadSdk() {
-  if (window.wx) return Promise.resolve(window.wx);
-  if (!sdkRequest) {
-    sdkRequest = new Promise<WeChatSdk>((resolve, reject) => {
-      const previous = document.querySelector<HTMLScriptElement>(
-        'script[data-wechat-js-sdk="true"]',
-      );
-      const script = previous || document.createElement("script");
-      const finish = () =>
-        window.wx
-          ? resolve(window.wx)
-          : reject(new Error("微信 JS-SDK 未就绪"));
-      script.addEventListener("load", finish, { once: true });
-      script.addEventListener(
-        "error",
-        () => reject(new Error("微信 JS-SDK 加载失败")),
-        { once: true },
-      );
-      if (!previous) {
-        script.src = "https://res.wx.qq.com/open/js/jweixin-1.6.0.js";
-        script.async = true;
-        script.dataset.wechatJsSdk = "true";
-        document.head.append(script);
-      }
-    }).catch((error) => {
-      sdkRequest = undefined;
-      throw error;
-    });
-  }
-  return sdkRequest;
-}
+import { loadWeChatSdk } from "../shared/wechat-sdk.js";
 
 export function WeChatShareStatus({
   roomId,
@@ -82,7 +32,7 @@ export function WeChatShareStatus({
       api<WeChatShareSignature>(
         `/channels/wechat/share-signature?roomId=${encodeURIComponent(roomId)}&url=${encodeURIComponent(signedUrl)}`,
       ),
-      loadSdk(),
+      loadWeChatSdk(),
     ])
       .then(([signature, wx]) => {
         if (!active) return;

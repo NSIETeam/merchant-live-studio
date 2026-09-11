@@ -150,7 +150,7 @@ VITE_BASE_PATH=/studio/ npm run build
 
 默认 Agent 使用 `grounded-rules`，不采集麦克风、不调用远程模型。语气可以温暖，但不替主播虚构童年、家庭亲历或商品功效；“妈妈的味道”等只能保留主观感受边界。“第一”换成“无出其右”仍表达相近的优越性主张，不能以同义替换视为合规。规则会显示主张类型、完整语境、所需依据和处理方向，并区分“第一步”等顺序词。提示词、品牌样例和用户文本都是受固定证据规则约束的数据，风险未命中不代表合法保证。
 
-模型 provider 接口已支持显式配置的兼容 HTTP 服务，当前输出为受约束的事实片段 JSON，而非任意自由话术；事实与出处由本地映射。设置方法及准确边界见[Agent 说明](docs/agent.md)。渠道另设身份/分享适配契约，`GET /api/channels` 按实际配置报告能力。公众号 OAuth 关闭时明确不可用；启用后只建立不透明的已验证观众身份，不保存 access token、不等于付款授权，也不会启用真实收款。`WECHAT_IDENTITY_SECRET` 必须独立生成并长期保持稳定，否则历史观众关联会改变。微信 JS-SDK 签名分享使用额外开关，只签署本站对应直播间地址；公众号 access token 与 ticket 仅在服务端短时缓存。红包 provider 只能为 `simulation`，微信通知接口固定返回 501，接入要求见[微信身份](docs/wechat-channel-identity.md)、[微信签名分享](docs/wechat-signed-sharing.md)和[支付说明](docs/payments.md)。
+模型 provider 接口已支持显式配置的兼容 HTTP 服务，当前输出为受约束的事实片段 JSON，而非任意自由话术；事实与出处由本地映射。设置方法及准确边界见[Agent 说明](docs/agent.md)。渠道另设身份/分享适配契约，`GET /api/channels` 按实际配置报告能力。公众号 OAuth 关闭时明确不可用；启用后只建立不透明的已验证观众身份，不保存 access token、不等于付款授权，也不会启用真实收款。`WECHAT_IDENTITY_SECRET` 必须独立生成并长期保持稳定，否则历史观众关联会改变。微信 JS-SDK 签名分享使用额外开关，只签署本站对应直播间地址；公众号 access token 与 ticket 仅在服务端短时缓存。红包默认使用 `simulation`；显式启用 `wechat` 后，系统按商家读取私有配置，要求观众另行授权加密保存的收款身份，并通过持久任务、验签通知或原单查询确认最终状态。该实现仍须用获批商户、备案域名和微信客户端完成真实资金验收，接入要求见[微信身份](docs/wechat-channel-identity.md)、[微信签名分享](docs/wechat-signed-sharing.md)和[支付说明](docs/payments.md)。
 
 ## 资料与评测
 

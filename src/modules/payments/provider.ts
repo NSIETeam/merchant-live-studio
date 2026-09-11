@@ -243,6 +243,7 @@ export class WeChatPaymentProvider implements PaymentProvider {
     if (
       serial !== config.wechatPaySerial ||
       !/^[0-9]{10,13}$/.test(timestamp) ||
+      Math.abs(Math.floor(this.clock() / 1000) - Number(timestamp)) > 300 ||
       !/^[A-Za-z0-9_-]{1,64}$/.test(nonce) ||
       signature.startsWith("WECHATPAY/SIGNTEST/")
     )

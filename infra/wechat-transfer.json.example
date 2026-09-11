@@ -1,0 +1,24 @@
+{
+  "merchants": [
+    {
+      "merchantId": "internal-merchant-id",
+      "appId": "wx0000000000000000",
+      "mchId": "1234567890",
+      "apiV3Key": "replace-with-exactly-32-byte-key",
+      "merchantSerialNo": "AABBCCDDEEFF0011",
+      "merchantPrivateKeyPath": "/etc/merchant-live-studio/secrets/merchant-private-key.pem",
+      "wechatPaySerial": "PUB_KEY_ID_0000000001",
+      "wechatPayPublicKeyPath": "/etc/merchant-live-studio/secrets/wechat-pay-public-key.pem",
+      "transferSceneId": "1000",
+      "notifyUrl": "https://studio.example.com/studio/api/payments/wechat/notify",
+      "transferRemark": "直播互动红包",
+      "sceneReportInfos": [
+        {
+          "infoType": "活动名称",
+          "infoContent": "直播互动"
+        }
+      ],
+      "userReceiveStyle": "RED_PACKET"
+    }
+  ]
+}

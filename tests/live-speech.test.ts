@@ -633,14 +633,14 @@ test("v21 speech segments migrate into the durable dispatch queue and survive re
     );
     await first.studio.close();
     first.db.exec(
-      "DROP TABLE wechat_recipient_authorization_events; DROP TABLE payment_notification_receipts; DROP TABLE payment_transfer_events; DROP TABLE payment_transfers; DROP TABLE speech_relay_status; DROP TABLE recording_deletion_events; DROP TABLE recording_deletion_requests; DROP TABLE recording_retention_hold_events; DROP TABLE recording_retention_holds; DROP TABLE speech_analysis_jobs; DELETE FROM schema_migrations WHERE version>=22",
+      "ALTER TABLE campaigns DROP COLUMN payment_mode; DROP TABLE wechat_recipient_authorization_events; DROP TABLE payment_notification_receipts; DROP TABLE payment_transfer_events; DROP TABLE payment_transfers; DROP TABLE speech_relay_status; DROP TABLE recording_deletion_events; DROP TABLE recording_deletion_requests; DROP TABLE recording_retention_hold_events; DROP TABLE recording_retention_holds; DROP TABLE speech_analysis_jobs; DELETE FROM schema_migrations WHERE version>=22",
     );
     first.db.close();
 
     const migrated = openDatabase(path);
     assert.equal(
       migrated.prepare("SELECT max(version) v FROM schema_migrations").get()!.v,
-      26,
+      27,
     );
     assert.equal(
       migrated.prepare("SELECT state FROM speech_analysis_jobs").get()!.state,

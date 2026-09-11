@@ -40,15 +40,18 @@ export interface CampaignRow {
   opens_at: number;
   expires_at: number;
   status: string;
+  payment_mode: "simulation" | "wechat";
 }
 export interface ClaimRow {
   id: string;
   campaign_id: string;
+  viewer_id: string;
   amount_cents: number;
   status: "reserved" | "simulated";
   created_at: number;
 }
 export interface EngagementPort {
+  paymentModeFor(merchantId: string): "simulation" | "wechat";
   active(room: string, now: number): Campaign[];
   nextCampaign(room: string, now: number): CampaignRow | undefined;
   campaignIds(room: string): string[];
@@ -63,7 +66,30 @@ export interface EngagementPort {
   };
 }
 export interface PaymentPort {
-  budget(campaign: string, amount: number, now: number): void;
-  reserve(campaign: string, claim: string, amount: number, now: number): void;
-  returnBudget(campaign: string, amount: number, now: number): void;
+  modeFor(merchantId: string): "simulation" | "wechat";
+  budget(
+    campaign: string,
+    merchantId: string,
+    amount: number,
+    paymentMode: "simulation" | "wechat",
+    now: number,
+  ): void;
+  reserve(
+    input: {
+      campaignId: string;
+      claimId: string;
+      viewerId: string;
+      merchantId: string;
+      amountCents: number;
+      paymentMode: "simulation" | "wechat";
+    },
+    now: number,
+  ): void;
+  returnBudget(
+    campaign: string,
+    merchantId: string,
+    amount: number,
+    paymentMode: "simulation" | "wechat",
+    now: number,
+  ): void;
 }

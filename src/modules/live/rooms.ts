@@ -404,7 +404,7 @@ app.get("/api/merchant/rooms/:id/admissions", (c) => {
           requirePlayback: config.requirePlayback,
           campaigns,
           serverTime: clock(),
-          paymentMode: "simulation",
+          paymentMode: ports.engagement().paymentModeFor(r.merchant_id),
         });
       });
       app.post("/api/viewer/rooms/:id/heartbeat", async (c) => {

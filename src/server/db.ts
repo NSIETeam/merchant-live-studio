@@ -604,6 +604,16 @@ export function openDatabase(path: string) {
         Date.now(),
       );
     });
+  if (version < 27)
+    transaction(db, () => {
+      db.exec(
+        "ALTER TABLE campaigns ADD COLUMN payment_mode TEXT NOT NULL DEFAULT 'simulation' CHECK(payment_mode IN('simulation','wechat'))",
+      );
+      db.prepare("INSERT INTO schema_migrations VALUES(?,?)").run(
+        27,
+        Date.now(),
+      );
+    });
   return db;
 }
 export type DB = ReturnType<typeof openDatabase>;

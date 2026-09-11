@@ -34,12 +34,13 @@
 | 商家   | `PATCH /merchant/facts/:id`                                         | `{approved:boolean}`，人工审核                                |
 | 商家   | `POST /merchant/rooms/:id/copilot`                                  | `{transcript,question?}`，经私有 Agent 服务进行本地规则检查   |
 | 商家   | `GET /merchant/rooms/:id/campaigns`                                 | 活动列表与 serverTime                                         |
-| 商家   | `POST /merchant/rooms/:id/campaigns`                                | 创建演示活动                                                  |
-| 商家   | `POST /merchant/campaigns/:id/close`                                | 幂等关闭，返回演示余量                                        |
+| 商家   | `POST /merchant/rooms/:id/campaigns`                                | 创建活动并快照当前支付模式                                    |
+| 商家   | `POST /merchant/campaigns/:id/close`                                | 幂等关闭，返回未领取余量                                      |
 | 商家   | `GET /merchant/rooms/:id/ledger`                                    | 最近 200 笔账本                                               |
+| 商家   | `GET /merchant/rooms/:id/transfers`                                 | 本房间最近微信出款状态                                        |
 | 商家   | `GET /merchant/rooms/:id/analytics`                                 | 房间累计访问、停留、问题与领取分析                            |
 | 商家   | `GET /merchant/rooms/:id/questions`                                 | 按文本精确聚合的前 20 类问题                                  |
-| 商家   | `GET /merchant/rooms/:id/speech/status`                             | 语音供应方、中继运行、最近最终分段及 Agent 入队状态            |
+| 商家   | `GET /merchant/rooms/:id/speech/status`                             | 语音供应方、中继运行、最近最终分段及 Agent 入队状态           |
 | 商家   | `GET /merchant/rooms/:id/recordings`                                | 已登记录像片段、校验信息和删除状态                            |
 | 商家   | `GET /merchant/recordings/:id/download`                             | 再次校验后下载；已复核删除返回 410                            |
 | 商家   | `GET /merchant/recordings/:id/retention`                            | 保存期限、争议、保留及删除复核历史                            |
@@ -50,13 +51,17 @@
 | 公开   | `GET /public/rooms/:id`                                             | 房间及 signal、活动、serverTime、requirePlayback、paymentMode |
 | 观众   | `POST /viewer/rooms/:id/heartbeat`                                  | `{visible,playing}`，返回本场/累计时长及计时状态              |
 | 观众   | `POST /viewer/rooms/:id/questions`                                  | `{text}`，直播中可提问，每会话每房间至少间隔 5 秒             |
-| 观众   | `POST /viewer/campaigns/:id/claim`                                  | 幂等领取，返回 claim 与 simulation 模式                       |
+| 观众   | `POST /viewer/campaigns/:id/claim`                                  | 幂等领取，返回 claim 与活动快照的支付模式                     |
 | 观众   | `GET /viewer/rooms/:id/claims`                                      | 当前观众在该房间的历史领取记录                                |
+| 观众   | `GET /viewer/rooms/:id/payment-recipient`                           | 查询本商家收款身份授权状态                                    |
+| 观众   | `POST /viewer/rooms/:id/payment-recipient/authorize`                | 明确授权保存当前微信收款身份                                  |
+| 观众   | `POST /viewer/rooms/:id/payment-recipient/revoke`                   | 撤销本商家收款身份授权                                        |
+| 观众   | `GET /viewer/claims/:id/transfer`                                   | 查询本人领取对应的出款与确认参数                              |
 | 引擎   | `POST /streams/mediamtx/auth?secret=...`                            | 引擎原生发布/观看鉴权载荷                                     |
 | 引擎   | `POST /streams/srs/publish?secret=...`                              | SRS on_publish 回调                                           |
 | 语音方 | `POST /streams/speech/segments`                                     | Bearer 鉴权的最终转写分段 webhook；幂等接入                   |
-| 语音方 | `POST /streams/speech/relay-status`                                 | Bearer 鉴权的本场中继启动、流转、降级与停止状态                |
-| 未实现 | `POST /payments/wechat/notify`                                      | 固定 501，不更新状态                                          |
+| 语音方 | `POST /streams/speech/relay-status`                                 | Bearer 鉴权的本场中继启动、流转、降级与停止状态               |
+| 微信   | `POST /payments/wechat/notify`                                      | 微信模式下验签、解密并幂等更新匹配出款                        |
 
 ## 会话与限流
 
@@ -64,7 +69,7 @@
 
 商家会话有独立 `sid`，注销后重放原 Cookie 仍返回 401；同商家的其他有效登录不受影响。凭据删除或轮换使旧凭据版本失效，部署环境配置需重启后生效。Cookie 为 HttpOnly / SameSite=Strict，生产为 Secure，Path 为 `APP_BASE_PATH`。
 
-观众建会话返回 `viewerId`、`identity`、`channel`、`verified`、`canReceiveRealMoney:false`。默认身份是匿名网页会话；公众号 OAuth 成功后为不透明且稳定的 `wechat` 会话。原始 OpenID 与 access token 不进入浏览器，身份验证也不等于收款授权。公开房间和 HLS 不依赖 Cookie；只有提问、心跳、领取及领取历史需要观众身份。
+观众建会话返回 `viewerId`、`identity`、`channel`、`verified` 和当前能力。默认身份是匿名网页会话；公众号 OAuth 成功后为不透明且稳定的 `wechat` 会话。原始 OpenID 与 access token 不进入浏览器；真实收款还要求观众对当前商家明确授权，加密保存的 OpenID 可撤销。公开房间和 HLS 不依赖 Cookie；只有提问、心跳、领取及领取历史需要观众身份。
 
 商家鉴权每分钟 60 次、观众建会话每分钟 600 次，预算独立。读取和写入限额分别为每分钟 1200、300 次；已验证业务会话单独计数，商家登录预算按可信客户端地址计数。超额返回 429 与 `Retry-After: 60`。仅 `TRUSTED_PROXY_IPS` 中的代理可提供有效 `X-Real-IP`，不能用观众 Cookie 或任意代理头绕过商家登录预算。
 
@@ -122,13 +127,13 @@ MediaMTX 支持 RTMP/RTMPS 踢连接后再次查询。未配置、协议不支�
 
 只累计相邻有效心跳间大于零且不超过 20 秒的服务端时间，隐藏、暂停、断线及无信号不补算。领取还要求最近 30 秒内有效心跳和 active 状态、当前场次时长达标、活动可领以及房间 live；严格模式额外要求当前信号在线。失败返回 403/409。
 
-服务端对同一活动和匿名会话只创建一个 claim；严格模式下断线可阻止重复领取入口，历史结果应通过 `/claims` 查询。金额和账本只属于模拟流程，`reserved → simulated` 不表示真实到账。
+服务端对同一活动和匿名会话只创建一个 claim；严格模式下断线可阻止重复领取入口，历史结果应通过 `/claims` 查询。模拟活动的 `reserved → simulated` 不表示真实到账。微信活动会建立唯一出款单，并以经过验签的通知或服务端原单查询进入终态；前端拉起确认页也不等于到账。
 
 ## 错误与后续接口
 
-无有效会话为 401；跨站操作或资格不足为 403；无权访问另一商家资源统一为 404；状态、窗口和信号冲突通常为 409；格式验证为 400；超限为 429。微信通知能力未接入，返回 501 并保持支付状态不变。
+无有效会话为 401；跨站操作或资格不足为 403；无权访问另一商家资源统一为 404；状态、窗口和信号冲突通常为 409；格式验证为 400；超限为 429。模拟模式下微信通知返回 501；微信模式下无效签名或正文返回 400，无法安全应用的有效事件返回错误以触发微信重试。
 
-当前契约由共享 DTO、Zod 与回归测试维护，尚未生成 OpenAPI。后续需增加 API 版本化、分页、稳定错误码与审计。微信 OAuth/支付尚未接入；实时转写已有供应方无关的 webhook 边界，但尚未配置真实 ASR 服务。模型 HTTP 适配已实现但真实模型按用户选择保持未配置，见[Agent 说明](agent.md)、[架构](architecture.md)与[支付说明](payments.md)。
+当前契约由共享 DTO、Zod 与回归测试维护，尚未生成 OpenAPI。后续需增加 API 版本化、分页、稳定错误码与审计。微信 OAuth、签名分享和商家转账均有可选适配，但仍需获批主体与微信客户端完成真实验收；实时转写已有供应方无关的 webhook 边界，但尚未配置真实 ASR 服务。模型 HTTP 适配已实现但真实模型按用户选择保持未配置，见[Agent 说明](agent.md)、[架构](architecture.md)与[支付说明](payments.md)。
 
 ## 实时语音分段
 

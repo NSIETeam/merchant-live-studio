@@ -20,6 +20,10 @@ import {
 import type { Campaign, Claim, Room } from "../../shared/types.js";
 import type { ChannelCapabilities } from "../../shared/channels.js";
 import { api, duration, money } from "../shared/api.js";
+import {
+  WeChatTransferConfirmation,
+  type WeChatTransferConfirmationData,
+} from "../payments/WeChatTransferConfirmation.js";
 import { Player } from "./Player.js";
 import { WeChatShareStatus } from "./WeChatShareStatus.js";
 import "./audience.css";
@@ -29,6 +33,7 @@ type RoomData = {
   campaigns: Campaign[];
   serverTime: number;
   requirePlayback: boolean;
+  paymentMode: "simulation" | "wechat";
 };
 type Heartbeat = { watchSeconds: number; counting: boolean };
 type ViewerIdentity = {
@@ -36,6 +41,27 @@ type ViewerIdentity = {
   channel: "web" | "wechat";
   verified: boolean;
   canReceiveRealMoney: boolean;
+};
+type RecipientStatus = {
+  configured: boolean;
+  identity: "anonymous" | "wechat";
+  authorized: boolean;
+  authorizedAt: number | null;
+  staged: boolean;
+};
+type ViewerTransfer = {
+  outBillNo: string;
+  amountCents: number;
+  state:
+    | "queued"
+    | "create_unknown"
+    | "pending"
+    | "wait_user_confirm"
+    | "paid"
+    | "failed"
+    | "cancelled";
+  confirmation: WeChatTransferConfirmationData | null;
+  updatedAt: number;
 };
 type Panel =
   "questions" | "rewards" | "information" | "complaints" | "disclosure";
@@ -72,6 +98,19 @@ function roomStatus(room: Room) {
   return "直播间开放";
 }
 
+function transferStatus(transfer: ViewerTransfer | null | undefined) {
+  if (!transfer) return "正在建立转账单";
+  return {
+    queued: "等待发起",
+    create_unknown: "正在核对微信受理结果",
+    pending: "微信处理中",
+    wait_user_confirm: "等待你确认收款",
+    paid: "已到账",
+    failed: "转账失败",
+    cancelled: "转账已取消",
+  }[transfer.state];
+}
+
 // A room change creates a fresh player, session view and polling lifecycle.
 export function Audience({ id }: { id: string }) {
   return <AudienceRoom key={id} id={id} />;
@@ -99,6 +138,11 @@ function AudienceRoom({ id }: { id: string }) {
   const [wechatAvailable, setWechatAvailable] = useState(false);
   const [wechatShareAvailable, setWechatShareAvailable] = useState(false);
   const [wechatConnecting, setWechatConnecting] = useState(false);
+  const [recipient, setRecipient] = useState<RecipientStatus | null>(null);
+  const [recipientBusy, setRecipientBusy] = useState(false);
+  const [transfers, setTransfers] = useState<
+    Record<string, ViewerTransfer | null>
+  >({});
   const [offset, setOffset] = useState(0);
   const [panel, setPanel] = useState<Panel | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -184,6 +228,54 @@ function AudienceRoom({ id }: { id: string }) {
       setWechatConnecting(false);
     }
   };
+
+  const refreshRecipient = useCallback(async () => {
+    const status = await api<RecipientStatus>(
+      `/viewer/rooms/${id}/payment-recipient`,
+    );
+    if (mounted.current) setRecipient(status);
+    return status;
+  }, [id]);
+
+  useEffect(() => {
+    if (!ready || data?.paymentMode !== "wechat") {
+      setRecipient(null);
+      return;
+    }
+    void refreshRecipient().catch((nextError) => {
+      if (mounted.current) setInteractionError((nextError as Error).message);
+    });
+  }, [ready, data?.paymentMode, refreshRecipient]);
+
+  async function authorizeRecipient() {
+    if (recipientBusy) return;
+    setRecipientBusy(true);
+    setError("");
+    try {
+      await api(`/viewer/rooms/${id}/payment-recipient/authorize`, "POST", {});
+      await refreshRecipient();
+      setNotice("已授权本商家使用当前微信身份接收本场现金红包。");
+    } catch (nextError) {
+      setError((nextError as Error).message);
+    } finally {
+      setRecipientBusy(false);
+    }
+  }
+
+  async function revokeRecipient() {
+    if (recipientBusy) return;
+    setRecipientBusy(true);
+    setError("");
+    try {
+      await api(`/viewer/rooms/${id}/payment-recipient/revoke`, "POST", {});
+      await refreshRecipient();
+      setNotice("已撤回后续红包收款授权；已有转账仍按原单处理。");
+    } catch (nextError) {
+      setError((nextError as Error).message);
+    } finally {
+      setRecipientBusy(false);
+    }
+  }
 
   const refresh = useCallback(async () => {
     const next = await api<RoomData>(`/public/rooms/${id}`);
@@ -321,6 +413,37 @@ function AudienceRoom({ id }: { id: string }) {
     };
   }, [ready, id]);
 
+  const claimIds = claims.map((claim) => claim.id).join(",");
+  useEffect(() => {
+    if (!ready || data?.paymentMode !== "wechat" || !claims.length) {
+      setTransfers({});
+      return;
+    }
+    let active = true;
+    const poll = async () => {
+      try {
+        const results = await Promise.all(
+          claims.map(async (claim) => {
+            const result = await api<{
+              mode: "wechat";
+              transfer: ViewerTransfer | null;
+            }>(`/viewer/claims/${claim.id}/transfer`);
+            return [claim.id, result.transfer] as const;
+          }),
+        );
+        if (active) setTransfers(Object.fromEntries(results));
+      } catch (nextError) {
+        if (active) setInteractionError((nextError as Error).message);
+      }
+    };
+    void poll();
+    const timer = setInterval(poll, 3000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [ready, data?.paymentMode, claimIds]);
+
   const onPlayback = useCallback((value: boolean) => {
     playing.current = value;
     setIsPlaying(value);
@@ -371,18 +494,19 @@ function AudienceRoom({ id }: { id: string }) {
     setPending(campaign.id);
     setError("");
     try {
-      const result = await api<{ claim: Claim }>(
-        `/viewer/campaigns/${campaign.id}/claim`,
-        "POST",
-        {},
-      );
+      const result = await api<{
+        claim: Claim;
+        paymentMode: "simulation" | "wechat";
+      }>(`/viewer/campaigns/${campaign.id}/claim`, "POST", {});
       if (!mounted.current) return;
       setClaims((previous) => [
         ...previous.filter((item) => item.campaignId !== campaign.id),
         result.claim,
       ]);
       setNotice(
-        `已领取演示红包 ${money(result.claim.amountCents)}，不发生真实转账。`,
+        result.paymentMode === "wechat"
+          ? `已获得 ${money(result.claim.amountCents)}，转账单正在处理，请查看领取记录。`
+          : `已领取演示红包 ${money(result.claim.amountCents)}，不发生真实转账。`,
       );
       await refresh();
       const records = await api<{ claims: Claim[] }>(
@@ -610,9 +734,61 @@ function AudienceRoom({ id }: { id: string }) {
                       counting={counting}
                     />
                   )}
+                  {data?.paymentMode === "wechat" && (
+                    <div className="audience-payment-authorization">
+                      <strong>微信现金红包</strong>
+                      {!viewerIdentity?.verified ? (
+                        <>
+                          <p>领取前需要在微信内完成身份验证。</p>
+                          <button
+                            className="audience-action audience-secondary"
+                            type="button"
+                            disabled={!inWechat || wechatConnecting}
+                            onClick={() => void connectWechat()}
+                          >
+                            {wechatConnecting
+                              ? "正在前往微信验证…"
+                              : inWechat
+                                ? "验证微信身份"
+                                : "请在微信内打开"}
+                          </button>
+                        </>
+                      ) : recipient?.authorized ? (
+                        <>
+                          <p>当前微信身份已授权，可领取本商家的现金红包。</p>
+                          <button
+                            className="audience-action audience-secondary"
+                            type="button"
+                            disabled={recipientBusy}
+                            onClick={() => void revokeRecipient()}
+                          >
+                            {recipientBusy ? "处理中…" : "撤回后续收款授权"}
+                          </button>
+                        </>
+                      ) : recipient?.staged ? (
+                        <>
+                          <p>
+                            微信身份已经验证。请明确授权本商家用于红包收款。
+                          </p>
+                          <button
+                            className="audience-action audience-secondary"
+                            type="button"
+                            disabled={recipientBusy}
+                            onClick={() => void authorizeRecipient()}
+                          >
+                            {recipientBusy ? "授权中…" : "授权接收红包"}
+                          </button>
+                        </>
+                      ) : (
+                        <p>请重新验证微信身份后授权红包收款。</p>
+                      )}
+                    </div>
+                  )}
                   <p className="audience-help">
                     本场有效观看 <strong>{duration(watch)}</strong>
-                    。红包为演示，不发生真实转账。
+                    {data?.paymentMode === "wechat"
+                      ? "。现金红包由微信支付处理，到账以微信最终状态为准。"
+                      : "。红包为演示，不发生真实转账。"}
                   </p>
                   {data?.campaigns.length ? (
                     data.campaigns.map((campaign) => {
@@ -642,7 +818,12 @@ function AudienceRoom({ id }: { id: string }) {
                                         ? "等待观看资格确认"
                                         : !eligible
                                           ? `还需观看 ${duration(campaign.minWatchSeconds - watch)}`
-                                          : "领取演示红包";
+                                          : campaign.mode === "wechat" &&
+                                              !recipient?.authorized
+                                            ? "请先授权微信收款"
+                                            : campaign.mode === "wechat"
+                                              ? "领取现金红包"
+                                              : "领取演示红包";
                       return (
                         <article
                           className="audience-reward-card"
@@ -650,7 +831,11 @@ function AudienceRoom({ id }: { id: string }) {
                         >
                           <div className="audience-reward-total">
                             <Gift size={22} aria-hidden="true" />
-                            <span>演示红包总额</span>
+                            <span>
+                              {campaign.mode === "wechat"
+                                ? "现金红包额度"
+                                : "演示红包总额"}
+                            </span>
                             <strong>{money(campaign.totalCents)}</strong>
                           </div>
                           <p>
@@ -689,13 +874,19 @@ function AudienceRoom({ id }: { id: string }) {
                               waiting ||
                               expired ||
                               !eligible ||
+                              (campaign.mode === "wechat" &&
+                                !recipient?.authorized) ||
                               campaign.remainingCount === 0
                             }
                             onClick={() => void claim(campaign)}
                           >
                             {label}
                           </button>
-                          <small>演示记录不会进入微信零钱。</small>
+                          <small>
+                            {campaign.mode === "wechat"
+                              ? "领取后可在下方查看微信转账状态。"
+                              : "演示记录不会进入微信零钱。"}
+                          </small>
                         </article>
                       );
                     })
@@ -707,17 +898,34 @@ function AudienceRoom({ id }: { id: string }) {
                   )}
                   {claims.length > 0 && (
                     <details className="audience-records">
-                      <summary>我的演示记录（{claims.length}）</summary>
-                      {claims.map((record) => (
-                        <div className="audience-claim-record" key={record.id}>
-                          <strong>{money(record.amountCents)}</strong>
-                          <span>
-                            {record.status === "simulated"
-                              ? "演示处理完成"
-                              : "等待演示处理"}
-                          </span>
-                        </div>
-                      ))}
+                      <summary>
+                        我的{data?.paymentMode === "wechat" ? "领取" : "演示"}
+                        记录（{claims.length}）
+                      </summary>
+                      {claims.map((record) => {
+                        const transfer = transfers[record.id];
+                        return (
+                          <div
+                            className="audience-claim-record"
+                            key={record.id}
+                          >
+                            <strong>{money(record.amountCents)}</strong>
+                            <span>
+                              {data?.paymentMode === "wechat"
+                                ? transferStatus(transfer)
+                                : record.status === "simulated"
+                                  ? "演示处理完成"
+                                  : "等待演示处理"}
+                            </span>
+                            {transfer?.confirmation && (
+                              <WeChatTransferConfirmation
+                                roomId={id}
+                                confirmation={transfer.confirmation}
+                              />
+                            )}
+                          </div>
+                        );
+                      })}
                     </details>
                   )}
                 </>
@@ -785,9 +993,13 @@ function AudienceRoom({ id }: { id: string }) {
                     configured={wechatShareAvailable}
                   />
                   <p className="audience-help">
-                    {viewerIdentity?.verified
-                      ? "本页已使用微信身份记录互动。身份验证不等于收款授权，当前仍不能用于真实提现。"
-                      : "本页使用匿名浏览器身份记录互动，仅用于演示，不能用于真实提现。"}
+                    {data?.paymentMode === "wechat"
+                      ? recipient?.authorized
+                        ? "本页已使用微信身份记录互动，并已授权本商家用于红包收款。你可以随时在活动区撤回后续收款授权。"
+                        : "身份验证与收款授权是两个步骤；领取现金红包前仍需在活动区明确授权。"
+                      : viewerIdentity?.verified
+                        ? "本页已使用微信身份记录互动。当前活动仍为演示，不发生真实转账。"
+                        : "本页使用匿名浏览器身份记录互动，仅用于演示。"}
                   </p>
                 </>
               )}

@@ -21,7 +21,7 @@ const worker = setInterval(() => {
     studio.tick();
   } catch (error) {
     console.error(
-      "Simulation worker failed",
+      "Background worker failed",
       error instanceof Error ? error.message : "unknown",
     );
   }
@@ -40,7 +40,7 @@ const server = serve(
   { fetch: app.fetch, hostname: config.host, port: config.port },
   () =>
     console.log(
-      `Live Studio API ready at http://${config.host}:${config.port}; payment=simulation; agent=separate-service`,
+      `Live Studio API ready at http://${config.host}:${config.port}; payment=${config.paymentProvider}; agent=separate-service`,
     ),
 );
 const shutdown = () => {

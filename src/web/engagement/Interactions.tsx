@@ -1,7 +1,30 @@
 import { Notice } from "../shared/Notice.js";
 import React, { useCallback, useEffect, useState } from "react";
-import { Activity, ArrowUpRight, Check, ChevronDown, Copy, Gift, Link, MessageCircle, Radio, RefreshCw, Settings, Users, Video, X } from "lucide-react";
-import type { Analytics, Campaign, Claim, Question, Room, StreamConfig, StreamState } from "../../shared/types.js";
+import {
+  Activity,
+  ArrowUpRight,
+  Check,
+  ChevronDown,
+  Copy,
+  Gift,
+  Link,
+  MessageCircle,
+  Radio,
+  RefreshCw,
+  Settings,
+  Users,
+  Video,
+  X,
+} from "lucide-react";
+import type {
+  Analytics,
+  Campaign,
+  Claim,
+  Question,
+  Room,
+  StreamConfig,
+  StreamState,
+} from "../../shared/types.js";
 import { api, duration, money } from "../shared/api.js";
 import { useClock } from "../shared/useClock.js";
 import { LedgerPanel } from "../payments/LedgerPanel.js";
@@ -69,6 +92,9 @@ export function Rewards({
   onError: (m: string) => void;
 }) {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]),
+    [paymentMode, setPaymentMode] = useState<"simulation" | "wechat">(
+      "simulation",
+    ),
     [total, setTotal] = useState("100"),
     [count, setCount] = useState(20),
     [watch, setWatch] = useState(10),
@@ -78,10 +104,13 @@ export function Rewards({
   const [clockOffset, setClockOffset] = useState(0);
   const now = useClock() + clockOffset;
   const refresh = useCallback(async () => {
-    const c = await api<{ campaigns: Campaign[]; serverTime: number }>(
-      `/merchant/rooms/${room.id}/campaigns`,
-    );
+    const c = await api<{
+      campaigns: Campaign[];
+      serverTime: number;
+      paymentMode: "simulation" | "wechat";
+    }>(`/merchant/rooms/${room.id}/campaigns`);
     setCampaigns(c.campaigns);
+    setPaymentMode(c.paymentMode);
     setClockOffset(c.serverTime - Date.now());
   }, [room.id]);
   useEffect(() => {
@@ -125,9 +154,15 @@ export function Rewards({
       <div className="simulation-banner">
         <Gift size={21} />
         <div>
-          <strong>演示红包 · 不发生真实转账</strong>
+          <strong>
+            {paymentMode === "wechat"
+              ? "微信现金红包 · 按实际元结算"
+              : "演示红包 · 不发生真实转账"}
+          </strong>
           <p>
-            验证活动规则、领取资格和账本。正式发放需另行接入获批的微信支付能力。
+            {paymentMode === "wechat"
+              ? "活动额度是商户转账上限，不代表资金已托管。观众需完成微信身份验证和明确授权，最终到账以微信回调为准。"
+              : "验证活动规则、领取资格和账本。正式发放需另行接入获批的微信支付能力。"}
           </p>
         </div>
       </div>
@@ -196,14 +231,20 @@ export function Rewards({
               </label>
             </div>
             <p className="fine-print">
-              随机分配 · 每个浏览器会话限领一次 · 未领完的演示金额结束后自动退回
+              随机分配 · 每个身份限领一次 · 未领完的
+              {paymentMode === "wechat" ? "活动额度" : "演示金额"}
+              结束后自动释放
             </p>
             <button
               className="primary full"
               disabled={busy || room.status === "ended"}
             >
               <Gift size={17} />
-              {busy ? "创建中…" : "创建演示活动"}
+              {busy
+                ? "创建中…"
+                : paymentMode === "wechat"
+                  ? "创建现金红包"
+                  : "创建演示活动"}
             </button>
           </form>
         </section>
@@ -221,7 +262,9 @@ export function Rewards({
             campaigns.map((c) => (
               <article className="campaign card" key={c.id}>
                 <div>
-                  <span className="eyebrow">DEMO REWARD</span>
+                  <span className="eyebrow">
+                    {c.mode === "wechat" ? "WECHAT TRANSFER" : "DEMO REWARD"}
+                  </span>
                   <strong>{money(c.totalCents)}</strong>
                   <p>
                     {c.count} 个随机红包 · 观看满 {c.minWatchSeconds} 秒

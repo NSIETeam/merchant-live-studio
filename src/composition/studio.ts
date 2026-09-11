@@ -22,12 +22,22 @@ import {
   attachRecordings,
   processRecordingOutbox as ingestRecordings,
 } from "../modules/live/public.js";
-import { createPayments } from "../modules/payments/public.js";
+import {
+  createPayments,
+  disabledPaymentProviderRegistry,
+  loadPaymentProviderRegistry,
+  type PaymentProviderRegistry,
+} from "../modules/payments/public.js";
 import {
   HttpAgentBridge,
   type AgentBridge,
+  type WeChatOAuthPort,
 } from "../platform/adapters/public.js";
-import { attachHome, createIdentity } from "../platform/identity/public.js";
+import {
+  attachHome,
+  createIdentity,
+  createWeChatRecipientVault,
+} from "../platform/identity/public.js";
 import {
   loadConfig,
   createRecordingStorage,
@@ -45,6 +55,8 @@ export function createStudio(
   config: Config,
   clock: () => number = Date.now,
   agentBridge: AgentBridge = new HttpAgentBridge(config),
+  injectedPaymentRegistry?: PaymentProviderRegistry,
+  wechatOAuth?: WeChatOAuthPort,
 ) {
   const app = new Hono<{
     Variables: { merchantId: string; viewerId: string };
@@ -54,9 +66,31 @@ export function createStudio(
     config.recordingOutbox,
   );
   const capacity = attachCapacityGuard(app, config);
-  const identity = createIdentity(db, config, clock);
-  const content = createContentSystem(db, clock, agentBridge);
+  const paymentRegistry =
+    injectedPaymentRegistry ||
+    (config.paymentProvider === "wechat"
+      ? loadPaymentProviderRegistry(
+          config.wechatTransferConfigPath,
+          config.production,
+          config.wechatOAuth!.appId,
+        )
+      : disabledPaymentProviderRegistry());
+  const recipientVault =
+    config.paymentProvider === "wechat"
+      ? createWeChatRecipientVault(
+          db,
+          config.wechatRecipientEncryptionKey,
+          clock,
+        )
+      : undefined;
   let live: ReturnType<typeof createLive>;
+  const identity = createIdentity(db, config, clock, wechatOAuth, {
+    merchantForRoom: (roomId) => live.room(roomId).merchant_id,
+    configuredFor: (merchantId) =>
+      Boolean(paymentRegistry.providerFor(merchantId)),
+    recipientVault,
+  });
+  const content = createContentSystem(db, clock, agentBridge);
   let engagement: ReturnType<typeof createEngagement>;
   let payments: ReturnType<typeof createPayments>;
   const customers = createCustomers(
@@ -80,7 +114,18 @@ export function createStudio(
     clock,
   );
   engagement = createEngagement(db, live, () => payments, clock);
-  payments = createPayments(db, engagement, live, clock);
+  payments = createPayments(
+    db,
+    engagement,
+    live,
+    {
+      registry: paymentRegistry,
+      recipientFor: (viewerId, merchantId) =>
+        recipientVault?.resolve(viewerId, merchantId) || null,
+      mode: config.paymentProvider,
+    },
+    clock,
+  );
   identity.attach(app);
   app.use("/api/merchant/*", async (c, next) => {
     if (
@@ -148,10 +193,14 @@ export function createStudio(
       ingestRecordings(db, config, recordingStorage),
     expireCampaigns: engagement.expireCampaigns,
     processSimulationJobs: payments.processSimulationJobs,
+    processTransferJobs: payments.processTransferJobs,
     tick() {
       identity.cleanup();
       engagement.expireCampaigns(clock());
       payments.processSimulationJobs(clock());
+      void payments
+        .processTransferJobs()
+        .catch(() => console.error("Payment reconciliation unavailable"));
       void speech.process();
     },
     close: speech.close,
@@ -162,8 +211,11 @@ export function createApp(
   config: Config,
   clock: () => number = Date.now,
   bridge?: AgentBridge,
+  paymentRegistry?: PaymentProviderRegistry,
+  wechatOAuth?: WeChatOAuthPort,
 ) {
-  return createStudio(db, config, clock, bridge).app;
+  return createStudio(db, config, clock, bridge, paymentRegistry, wechatOAuth)
+    .app;
 }
 export function seedDemo(db: DB, now = Date.now()) {
   createStudio(db, loadConfig(), () => now).seedDemo(now);

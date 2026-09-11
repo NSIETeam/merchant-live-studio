@@ -45,6 +45,9 @@ export interface Config {
     redirectUri: string;
   } | null;
   wechatJsSdkEnabled: boolean;
+  paymentProvider: "simulation" | "wechat";
+  wechatTransferConfigPath: string;
+  wechatRecipientEncryptionKey: string;
   releaseRevision: string | null;
 }
 export function readReleaseRevision(path = "REVISION") {
@@ -70,8 +73,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     throw new Error("SESSION_SECRET must contain at least 32 characters");
   if (production && demoMode)
     throw new Error("DEMO_MODE must be false in production");
-  if ((env.PAYMENT_PROVIDER ?? "simulation") !== "simulation")
-    throw new Error("Real payment provider is not implemented; use simulation");
+  const paymentProvider = z
+    .enum(["simulation", "wechat"])
+    .parse(env.PAYMENT_PROVIDER || "simulation");
   const accountId = z
     .string()
     .regex(/^[a-zA-Z0-9_-]{1,50}$/)
@@ -166,6 +170,27 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
         "WECHAT_OAUTH_REDIRECT_URI must be the current HTTPS application callback",
       );
     wechatOAuth = { appId, appSecret, identitySecret, redirectUri };
+  }
+  const wechatTransferConfigPath = env.WECHAT_TRANSFER_CONFIG_PATH || "";
+  const wechatRecipientEncryptionKey =
+    env.WECHAT_RECIPIENT_ENCRYPTION_KEY || "";
+  if (paymentProvider === "wechat") {
+    if (demoMode)
+      throw new Error("Real WeChat payment cannot run while DEMO_MODE is true");
+    if (!wechatOAuth)
+      throw new Error("Real WeChat payment requires WeChat OAuth");
+    if (!wechatJsSdkEnabled)
+      throw new Error(
+        "Real WeChat payment requires WECHAT_JS_SDK_ENABLED for H5 confirmation",
+      );
+    if (!wechatTransferConfigPath.startsWith("/"))
+      throw new Error(
+        "WECHAT_TRANSFER_CONFIG_PATH must be an absolute private file path",
+      );
+    if (!/^[a-fA-F0-9]{64}$/.test(wechatRecipientEncryptionKey))
+      throw new Error(
+        "WECHAT_RECIPIENT_ENCRYPTION_KEY must be 64 hexadecimal characters",
+      );
   }
   const policyUrl = z
     .url()
@@ -322,6 +347,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     audienceConcurrencyMax,
     wechatOAuth,
     wechatJsSdkEnabled,
+    paymentProvider,
+    wechatTransferConfigPath,
+    wechatRecipientEncryptionKey,
     releaseRevision,
   };
 }

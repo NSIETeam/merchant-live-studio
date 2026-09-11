@@ -63,7 +63,7 @@ export function createEngagement(
     opensAt: r.opens_at,
     expiresAt: r.expires_at,
     status: r.status,
-    mode: "simulation",
+    mode: r.payment_mode,
   });
   const claimDto = (r: ClaimRow): Claim => ({
     id: r.id,
@@ -122,7 +122,17 @@ export function createEngagement(
       const claimId = randomUUID();
       updateCampaignsById(db, amount, campaignId);
       insertClaims(db, claimId, campaignId, viewerId, amount, now);
-      payments().reserve(campaignId, claimId, amount, now);
+      payments().reserve(
+        {
+          campaignId,
+          claimId,
+          viewerId,
+          merchantId: live.room(row.room_id).merchant_id,
+          amountCents: amount,
+          paymentMode: row.payment_mode,
+        },
+        now,
+      );
 
       return {
         id: claimId,
@@ -138,7 +148,13 @@ export function createEngagement(
       const row = findCampaignsById(db, campaignId) as unknown as CampaignRow;
       if (row.status === "closed") return;
       if (row.remaining_cents > 0)
-        payments().returnBudget(campaignId, row.remaining_cents, now);
+        payments().returnBudget(
+          campaignId,
+          live.room(row.room_id).merchant_id,
+          row.remaining_cents,
+          row.payment_mode,
+          now,
+        );
       updateCampaignsById2(db, campaignId);
     });
   }
@@ -173,6 +189,7 @@ export function createEngagement(
     return { ...claims, questions: Number(findQuestionsByRoomId(db, id)!.n) };
   };
   return {
+    paymentModeFor: (merchantId: string) => payments().modeFor(merchantId),
     active,
     nextCampaign,
     campaignIds,
@@ -185,9 +202,10 @@ export function createEngagement(
     expireCampaigns,
     attach(app: App, config: Config) {
       app.get("/api/merchant/rooms/:id/campaigns", (c) => {
-        owned(c.req.param("id"), c.get("merchantId"));
+        const r = owned(c.req.param("id"), c.get("merchantId"));
         return c.json({
           serverTime: clock(),
+          paymentMode: payments().modeFor(r.merchant_id),
           campaigns: (
             listCampaignsByRoomId3(
               db,
@@ -213,7 +231,8 @@ export function createEngagement(
           })
           .parse(await c.req.json());
         const id = randomUUID(),
-          opens = clock() + input.delaySeconds * 1000;
+          opens = clock() + input.delaySeconds * 1000,
+          paymentMode = payments().modeFor(r.merchant_id);
         transaction(db, () => {
           insertCampaigns(
             db,
@@ -226,8 +245,15 @@ export function createEngagement(
             input.minWatchSeconds,
             opens,
             opens + input.durationSeconds * 1000,
+            paymentMode,
           );
-          payments().budget(id, input.totalCents, clock());
+          payments().budget(
+            id,
+            r.merchant_id,
+            input.totalCents,
+            paymentMode,
+            clock(),
+          );
         });
         return c.json(
           {
@@ -274,9 +300,9 @@ export function createEngagement(
         return c.json({ ok: true }, 201);
       });
       app.post("/api/viewer/campaigns/:id/claim", async (c) => {
+        const campaign = findCampaignsById2(db, c.req.param("id")) as
+          { room_id: string } | undefined;
         if (config.requirePlayback) {
-          const campaign = findCampaignsById2(db, c.req.param("id")) as
-            { room_id: string } | undefined;
           if (
             campaign &&
             (await live.signal(campaign.room_id)).connected !== true
@@ -285,9 +311,16 @@ export function createEngagement(
               message: "当前没有有效直播信号，请等待主播恢复推流",
             });
         }
+        const claim = reserveClaim(
+          c.req.param("id"),
+          c.get("viewerId"),
+          clock(),
+        );
         return c.json({
-          claim: reserveClaim(c.req.param("id"), c.get("viewerId"), clock()),
-          paymentMode: "simulation",
+          claim,
+          paymentMode: (
+            findCampaignsById(db, claim.campaignId) as unknown as CampaignRow
+          ).payment_mode,
         });
       });
       app.get("/api/viewer/rooms/:id/claims", (c) => {

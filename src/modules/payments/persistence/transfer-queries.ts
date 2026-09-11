@@ -63,6 +63,41 @@ export function dueTransfers(db: DB, ...values: SQLValue[]) {
     .all(...values);
 }
 
+export function terminalTransfers(db: DB, ...values: SQLValue[]) {
+  return db
+    .prepare(
+      `SELECT out_bill_no AS outBillNo,claim_id AS claimId,
+        campaign_id AS campaignId,merchant_id AS merchantId,
+        recipient_digest AS recipientDigest,amount_cents AS amountCents,
+        state,provider_id AS providerId,confirmation_package AS confirmationPackage,
+        attempts,next_attempt_at AS nextAttemptAt,last_error_code AS lastErrorCode,
+        created_at AS createdAt,updated_at AS updatedAt
+       FROM payment_transfers t
+       WHERE state IN('paid','failed','cancelled')
+         AND NOT EXISTS (
+           SELECT 1 FROM ledger l
+           WHERE l.id='wechat:' || t.out_bill_no || ':' || t.state
+         )
+       ORDER BY updated_at LIMIT ?`,
+    )
+    .all(...values);
+}
+
+export function transfersForCampaigns(db: DB, ...values: SQLValue[]) {
+  return db
+    .prepare(
+      `SELECT out_bill_no AS outBillNo,claim_id AS claimId,
+        campaign_id AS campaignId,amount_cents AS amountCents,state,
+        provider_id AS providerId,confirmation_package AS confirmationPackage,
+        attempts,last_error_code AS lastErrorCode,created_at AS createdAt,
+        updated_at AS updatedAt
+       FROM payment_transfers
+       WHERE campaign_id IN (SELECT value FROM json_each(?))
+       ORDER BY created_at DESC,out_bill_no DESC LIMIT 500`,
+    )
+    .all(...values);
+}
+
 export function recordTransferAttempt(db: DB, ...values: SQLValue[]) {
   return db
     .prepare(

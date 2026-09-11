@@ -114,6 +114,7 @@ export function createWeChatRecipientVault(
     },
     status(viewerId: string, merchantId: string) {
       validateIds(viewerId, merchantId);
+      clean();
       const row = current(viewerId, merchantId);
       return {
         authorized: row?.state === "authorized",

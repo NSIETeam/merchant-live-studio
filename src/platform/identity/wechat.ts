@@ -15,6 +15,11 @@ export function attachWeChatIdentity(
   config: Config,
   adapter: WeChatOAuthPort,
   clock: () => number = Date.now,
+  onVerified?: (input: {
+    viewerId: string;
+    roomId: string;
+    subject: string;
+  }) => void | Promise<void>,
 ) {
   const pending = new Map<string, { roomId: string; expiresAt: number }>();
   const sign = (payload: string) =>
@@ -107,6 +112,18 @@ export function attachWeChatIdentity(
       .update(`wechat-subject:${identity.subject}`)
       .digest("base64url")
       .slice(0, 32)}`;
+    try {
+      await onVerified?.({
+        viewerId,
+        roomId: state.roomId,
+        subject: identity.subject,
+      });
+    } catch {
+      return c.json(
+        { error: "微信收款身份暂时无法保存，请重新发起身份验证" },
+        503,
+      );
+    }
     issueSession(c, config, "viewer", viewerId);
     return c.redirect(
       `${config.basePath}watch/${encodeURIComponent(state.roomId)}?channel=wechat`,

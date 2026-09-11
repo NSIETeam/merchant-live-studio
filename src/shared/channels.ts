@@ -59,6 +59,7 @@ export const channelCapabilities: ChannelCapabilities[] = [
 export function configuredChannelCapabilities(
   wechatIdentity: boolean,
   wechatSignedSharing = false,
+  wechatRealPayment = false,
 ) {
   return channelCapabilities.map((capability) =>
     capability.channel === "wechat"
@@ -69,6 +70,7 @@ export function configuredChannelCapabilities(
             : ("not-configured" as const),
           verifiedIdentity: wechatIdentity,
           signedSharing: wechatSignedSharing,
+          realPayment: wechatRealPayment,
         }
       : capability,
   );

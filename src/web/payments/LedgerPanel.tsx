@@ -7,13 +7,41 @@ const labels: Record<string, string> = {
   claim_reserved: "领取预留",
   simulation_settled: "演示处理",
   simulation_budget_returned: "演示退回",
+  merchant_transfer_limit: "商户转账额度",
+  merchant_transfer_limit_returned: "未使用额度",
+  wechat_settled: "微信已到账",
+  wechat_failed_returned: "微信失败退回",
+  wechat_cancelled_returned: "微信取消退回",
 };
-type Page = { entries: LedgerEntry[]; nextBefore: string | null };
+type Page = {
+  entries: LedgerEntry[];
+  nextBefore: string | null;
+  mode?: "simulation" | "wechat";
+};
+type Transfer = {
+  outBillNo: string;
+  claimId: string;
+  amountCents: number;
+  state: string;
+  attempts: number;
+  lastErrorCode: string;
+  updatedAt: number;
+};
+const transferLabels: Record<string, string> = {
+  queued: "等待发起",
+  create_unknown: "等待原单核对",
+  pending: "微信处理中",
+  wait_user_confirm: "等待观众确认",
+  paid: "已到账",
+  failed: "失败",
+  cancelled: "已取消",
+};
 export function LedgerPanel({ roomId }: { roomId: string }) {
   const [cursors, setCursors] = useState<string[]>([]);
   const [page, setPage] = useState<Page>({ entries: [], nextBefore: null });
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState("");
+  const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [revision, setRevision] = useState(0);
   const before = cursors.at(-1);
   useEffect(() => {
@@ -22,11 +50,15 @@ export function LedgerPanel({ roomId }: { roomId: string }) {
     const load = async () => {
       setBusy(true);
       try {
-        const data = await api<Page>(
-          `/merchant/rooms/${roomId}/ledger${before ? `?before=${encodeURIComponent(before)}` : ""}`,
-        );
+        const [data, transferData] = await Promise.all([
+          api<Page>(
+            `/merchant/rooms/${roomId}/ledger${before ? `?before=${encodeURIComponent(before)}` : ""}`,
+          ),
+          api<{ transfers: Transfer[] }>(`/merchant/rooms/${roomId}/transfers`),
+        ]);
         if (active) {
           setPage(data);
+          setTransfers(transferData.transfers);
           setError("");
         }
       } catch (e) {
@@ -50,9 +82,12 @@ export function LedgerPanel({ roomId }: { roomId: string }) {
     setCursors(next);
   }
   return (
-    <section className="card ledger" aria-label="演示账本">
+    <section
+      className="card ledger"
+      aria-label={page.mode === "wechat" ? "现金账本" : "演示账本"}
+    >
       <div className="section-title">
-        <h2>演示账本</h2>
+        <h2>{page.mode === "wechat" ? "现金账本" : "演示账本"}</h2>
         <span className="muted">
           第 {cursors.length + 1} 页 · 每页最多 200 笔
         </span>
@@ -90,7 +125,7 @@ export function LedgerPanel({ roomId }: { roomId: string }) {
             <tr>
               <th>时间</th>
               <th>记录编号</th>
-              <th>资金流向（演示）</th>
+              <th>资金流向{page.mode === "wechat" ? "" : "（演示）"}</th>
               <th>金额</th>
             </tr>
           </thead>
@@ -117,6 +152,49 @@ export function LedgerPanel({ roomId }: { roomId: string }) {
           </p>
         )}
       </div>
+      {page.mode === "wechat" && (
+        <div className="payment-transfers">
+          <div className="section-title">
+            <h3>微信转账单</h3>
+            <span className="muted">{transfers.length} 笔</span>
+          </div>
+          {transfers.length ? (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>更新时间</th>
+                    <th>商户单号</th>
+                    <th>状态</th>
+                    <th>金额</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {transfers.map((transfer) => (
+                    <tr key={transfer.outBillNo}>
+                      <td>
+                        {new Date(transfer.updatedAt).toLocaleString("zh-CN")}
+                      </td>
+                      <td title={transfer.outBillNo}>
+                        {transfer.outBillNo.slice(0, 12)}
+                      </td>
+                      <td>
+                        {transferLabels[transfer.state] || transfer.state}
+                        {transfer.lastErrorCode
+                          ? ` · 重试中（${transfer.attempts}）`
+                          : ""}
+                      </td>
+                      <td>¥{(transfer.amountCents / 100).toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="empty-copy">暂无微信转账单。</p>
+          )}
+        </div>
+      )}
     </section>
   );
 }

@@ -215,7 +215,9 @@ test("schema v24 migrates payment state without changing existing claims", () =>
     `INSERT INTO claims(id,campaign_id,viewer_id,amount_cents,status,created_at)
      VALUES('legacy-claim','campaign','legacy-viewer',10,'reserved',2)`,
   ).run();
-  db.exec("DELETE FROM schema_migrations WHERE version>=25");
+  db.exec(
+    "ALTER TABLE campaigns DROP COLUMN payment_mode; DELETE FROM schema_migrations WHERE version>=25",
+  );
   db.exec("DROP TABLE wechat_recipient_authorization_events");
   db.exec("DROP TABLE payment_notification_receipts");
   db.exec("DROP TABLE payment_transfer_events");
@@ -232,7 +234,7 @@ test("schema v24 migrates payment state without changing existing claims", () =>
     assert.equal(
       migrated.prepare("SELECT max(version) AS v FROM schema_migrations").get()!
         .v,
-      26,
+      27,
     );
     assert.equal(
       migrated.prepare("SELECT count(*) AS n FROM payment_transfers").get()!.n,

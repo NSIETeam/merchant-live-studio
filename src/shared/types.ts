@@ -41,7 +41,7 @@ export interface Campaign {
   opensAt: number;
   expiresAt: number;
   status: string;
-  mode: "simulation";
+  mode: "simulation" | "wechat";
 }
 export interface Claim {
   id: string;

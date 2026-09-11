@@ -362,6 +362,26 @@
   margin-bottom: 14px;
   overflow-wrap: anywhere;
 }
+.audience-payment-authorization {
+  border: 1px solid #59616f;
+  background: #24262c;
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 16px;
+}
+.audience-payment-authorization strong {
+  display: block;
+  color: #f1f2f5;
+  margin-bottom: 6px;
+}
+.audience-payment-authorization p {
+  color: #c5d0d7;
+  line-height: 1.55;
+  margin: 0 0 10px;
+}
+.audience-payment-authorization .audience-secondary {
+  margin-bottom: 0;
+}
 .audience-panel-empty {
   display: flex;
   flex-direction: column;
@@ -465,6 +485,15 @@
 .audience-claim-record span {
   color: var(--audience-muted);
   font-size: 14px;
+}
+.audience-claim-record > div {
+  width: 100%;
+}
+.audience-transfer-message {
+  display: block;
+  color: #c5d0d7;
+  line-height: 1.5;
+  margin-top: 8px;
 }
 .audience-information {
   margin: 0 0 20px;

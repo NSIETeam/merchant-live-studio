@@ -96,6 +96,10 @@ function validateOrder(input: {
 }
 
 export function createTransferStore(db: DB) {
+  const atomic = <T>(action: () => T) =>
+    (db as DB & { isTransaction?: boolean }).isTransaction
+      ? action()
+      : transaction(db, action);
   const byBill = (outBillNo: string) =>
     transferByBill(db, outBillNo) as unknown as TransferRow | undefined;
   const byClaim = (claimId: string) =>
@@ -177,7 +181,7 @@ export function createTransferStore(db: DB) {
       now: number,
     ) {
       validateOrder(input);
-      return transaction(db, () => {
+      return atomic(() => {
         const previous = byClaim(input.claimId);
         if (previous) {
           if (!sameOrder(previous, input))
@@ -210,7 +214,7 @@ export function createTransferStore(db: DB) {
       });
     },
     markCreateAttempt(outBillNo: string, now: number) {
-      return transaction(db, () => {
+      return atomic(() => {
         const current = byBill(outBillNo);
         if (!current) throw new Error("Transfer bill does not exist");
         if (current.state === "create_unknown") return current;
@@ -243,7 +247,7 @@ export function createTransferStore(db: DB) {
       return dueTransfers(db, now, limit) as unknown as TransferRow[];
     },
     markQueryAttempt(outBillNo: string, now: number) {
-      return transaction(db, () => {
+      return atomic(() => {
         const current = byBill(outBillNo);
         if (
           !current ||
@@ -268,7 +272,7 @@ export function createTransferStore(db: DB) {
     recordFailure(outBillNo: string, code: string, now: number) {
       if (!/^[a-z_]{1,40}$/.test(code))
         throw new Error("Invalid transfer failure code");
-      return transaction(db, () => {
+      return atomic(() => {
         const current = byBill(outBillNo);
         if (!current || terminal.has(current.state)) return current;
         const delay = Math.min(
@@ -285,7 +289,7 @@ export function createTransferStore(db: DB) {
       source: "create" | "query",
       now: number,
     ) {
-      return transaction(db, () => apply(outBillNo, receipt, source, now));
+      return atomic(() => apply(outBillNo, receipt, source, now));
     },
     applyNotification(
       event: VerifiedTransferEvent,
@@ -295,7 +299,7 @@ export function createTransferStore(db: DB) {
     ) {
       if (!/^[a-f0-9]{64}$/.test(payloadSha256))
         throw new Error("Invalid notification digest");
-      return transaction(db, () => {
+      return atomic(() => {
         const previous = notificationReceipt(db, event.eventId) as
           { payloadSha256: string; outBillNo: string } | undefined;
         if (previous) {

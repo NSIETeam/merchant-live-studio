@@ -138,7 +138,11 @@ test("WeChat provider queries the original bill and rejects mismatched or unsign
     if (mode === "bad-signature") headers["Wechatpay-Signature"] = "invalid";
     return new Response(body, { status: 200, headers });
   }) as typeof fetch;
-  const provider = new WeChatPaymentProvider(config, fetchImpl);
+  const provider = new WeChatPaymentProvider(
+    config,
+    fetchImpl,
+    () => 1_800_000_000_000,
+  );
   assert.equal(
     (await provider.queryTransfer("demo", "Bill202609120001")).state,
     "paid",
@@ -196,7 +200,11 @@ test("WeChat provider verifies and decrypts only matching terminal notifications
     create_time: "2026-09-12T08:00:00+08:00",
     update_time: "2026-09-12T08:01:00+08:00",
   };
-  const provider = new WeChatPaymentProvider(config);
+  const provider = new WeChatPaymentProvider(
+    config,
+    fetch,
+    () => 1_800_000_000_000,
+  );
   const notification = encryptedNotification(base);
   assert.deepEqual(
     await provider.verifyAndDecodeNotification(
@@ -235,6 +243,17 @@ test("WeChat provider verifies and decrypts only matching terminal notifications
   await assert.rejects(
     provider.verifyAndDecodeNotification(
       { ...notification.headers, "Wechatpay-Signature": "invalid" },
+      Buffer.from(notification.body),
+    ),
+  );
+  const staleProvider = new WeChatPaymentProvider(
+    config,
+    fetch,
+    () => 1_800_000_301_000,
+  );
+  await assert.rejects(
+    staleProvider.verifyAndDecodeNotification(
+      notification.headers,
       Buffer.from(notification.body),
     ),
   );
