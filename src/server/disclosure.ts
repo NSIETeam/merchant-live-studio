@@ -1,0 +1,155 @@
+import type { Hono } from "hono";
+import { HTTPException } from "hono/http-exception";
+import { z } from "zod";
+import { disclosureSchema } from "../shared/disclosure.js";
+import { transaction, type DB } from "./db.js";
+export function attachDisclosure(
+  app: Hono<{ Variables: { merchantId: string; viewerId: string } }>,
+  db: DB,
+  clock = Date.now,
+) {
+  const base = "/api/merchant/disclosure";
+  const latest = (merchant: string) =>
+    db
+      .prepare(
+        "SELECT version,data_json,evidence_reference AS evidenceReference,author_id AS authorId,created_at AS createdAt FROM disclosure_versions WHERE merchant_id=? ORDER BY version DESC LIMIT 1",
+      )
+      .get(merchant);
+  const event = (merchant: string) =>
+    db
+      .prepare(
+        "SELECT id,version,action,actor_id AS actorId,note,created_at AS createdAt FROM disclosure_events WHERE merchant_id=? ORDER BY id DESC LIMIT 1",
+      )
+      .get(merchant);
+  const dto = (row: Record<string, any>) => ({
+    version: row.version,
+    data: JSON.parse(row.data_json),
+    evidenceReference: row.evidenceReference,
+    authorId: row.authorId,
+    createdAt: row.createdAt,
+  });
+  app.get(base, (c) => {
+    const merchant = c.get("merchantId"),
+      row = latest(merchant);
+    return c.json({
+      latest: row ? dto(row) : null,
+      publication: event(merchant) || null,
+      events: db
+        .prepare(
+          "SELECT id,version,action,actor_id AS actorId,note,created_at AS createdAt FROM disclosure_events WHERE merchant_id=? ORDER BY id DESC LIMIT 100",
+        )
+        .all(merchant),
+    });
+  });
+  app.post(base, async (c) => {
+    const input = z
+      .object({
+        previousVersion: z.number().int().nonnegative(),
+        data: disclosureSchema,
+        evidenceReference: z.string().trim().min(5).max(1000),
+      })
+      .strict()
+      .parse(await c.req.json());
+    return c.json(
+      transaction(db, () => {
+        const merchant = c.get("merchantId"),
+          previous = latest(merchant);
+        if (Number(previous?.version || 0) !== input.previousVersion)
+          throw new HTTPException(409, {
+            message: "公示资料已更新，请刷新后保存",
+          });
+        db.prepare("INSERT INTO disclosure_versions VALUES(?,?,?,?,?,?,?)").run(
+          merchant,
+          input.previousVersion + 1,
+          JSON.stringify(input.data),
+          input.evidenceReference,
+          c.get("actorId"),
+          clock(),
+          "enterprise",
+        );
+        return { latest: dto(latest(merchant)!) };
+      }),
+      201,
+    );
+  });
+  app.post(base + "/:version/review", async (c) => {
+    const version = z.coerce
+      .number()
+      .int()
+      .positive()
+      .parse(c.req.param("version"));
+    const input = z
+      .object({
+        action: z.enum(["publish", "withdraw"]),
+        note: z.string().trim().min(5).max(1000),
+        acknowledged: z.literal(true),
+      })
+      .strict()
+      .parse(await c.req.json());
+    return c.json(
+      transaction(db, () => {
+        const merchant = c.get("merchantId"),
+          current = event(merchant),
+          draft = latest(merchant);
+        if (input.action === "publish") {
+          if (!draft || draft.version !== version)
+            throw new HTTPException(409, { message: "只能复核发布最新版本" });
+          if (draft.authorId === c.get("actorId"))
+            throw new HTTPException(403, {
+              message: "请由另一账号核对依据后发布",
+            });
+          if (
+            db
+              .prepare(
+                "SELECT 1 FROM disclosure_events WHERE merchant_id=? AND version=?",
+              )
+              .get(merchant, version)
+          )
+            throw new HTTPException(409, {
+              message: "此版本已有发布记录；更正或重新发布请保存新版本",
+            });
+        } else if (
+          !current ||
+          current.action !== "publish" ||
+          current.version !== version
+        )
+          throw new HTTPException(409, {
+            message: "公示状态已变化，请刷新后撤回",
+          });
+        db.prepare(
+          "INSERT INTO disclosure_events(merchant_id,version,action,actor_id,note,created_at) VALUES(?,?,?,?,?,?)",
+        ).run(
+          merchant,
+          version,
+          input.action,
+          c.get("actorId"),
+          input.note,
+          clock(),
+        );
+        return { publication: event(merchant) };
+      }),
+    );
+  });
+  app.get("/api/public/rooms/:id/disclosure", (c) => {
+    const room = db
+      .prepare("SELECT merchant_id FROM rooms WHERE id=?")
+      .get(c.req.param("id"));
+    if (!room) throw new HTTPException(404);
+    c.header("Cache-Control", "no-store");
+    const current = event(String(room.merchant_id));
+    if (!current || current.action !== "publish")
+      return c.json({ disclosure: null });
+    const version = db
+      .prepare(
+        "SELECT data_json FROM disclosure_versions WHERE merchant_id=? AND version=?",
+      )
+      .get(room.merchant_id, current.version)!;
+    return c.json({
+      disclosure: {
+        version: current.version,
+        publishedAt: current.createdAt,
+        data: JSON.parse(String(version.data_json)),
+      },
+    });
+  });
+}

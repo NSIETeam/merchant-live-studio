@@ -601,3 +601,27 @@
     right: 8px;
   }
 }
+
+.audience-topbar {
+  flex-wrap: wrap;
+}
+.disclosure-panel {
+  overflow-wrap: anywhere;
+}
+.disclosure-panel label {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0;
+}
+.disclosure-panel dd {
+  margin: 4px 0 12px;
+}
+@media (max-width: 600px) {
+  .audience-topbar h1 {
+    flex-basis: 40%;
+  }
+  .audience-topbar > button {
+    font-size: 12px;
+    padding: 6px 10px;
+  }
+}

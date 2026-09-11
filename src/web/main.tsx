@@ -1,3 +1,4 @@
+import { MerchantDisclosure } from "./DisclosurePanel.js";
 import { ComplaintsPanel } from "./ComplaintsPanel.js";
 import { MerchantEngagement } from "./EngagementPanel.js";
 import { AttributionPanel } from "./AttributionPanel.js";
@@ -409,6 +410,13 @@ function Workspace({
           <span className="env-badge">MVP · 演示支付</span>
         </header>
         <div className="content">
+          {tab === "content" && (
+            <MerchantDisclosure
+              key={actorId}
+              actorId={actorId}
+              role={memberRole}
+            />
+          )}
           <div className="page-heading">
             <div>
               <span className="eyebrow">

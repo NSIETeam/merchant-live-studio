@@ -1,3 +1,4 @@
+import { PublicDisclosurePanel } from "./DisclosurePanel.js";
 import { ComplaintsPanel } from "./ComplaintsPanel.js";
 import { ViewerEngagement } from "./EngagementPanel.js";
 import {
@@ -28,9 +29,11 @@ type RoomData = {
   requirePlayback: boolean;
 };
 type Heartbeat = { watchSeconds: number; counting: boolean };
-type Panel = "questions" | "rewards" | "information" | "complaints";
+type Panel =
+  "questions" | "rewards" | "information" | "complaints" | "disclosure";
 const panelNames: Record<Panel, string> = {
   complaints: "投诉举报",
+  disclosure: "经营者信息",
   questions: "向主播提问",
   rewards: "签到与互动活动",
   information: "观看信息",
@@ -388,6 +391,7 @@ function AudienceRoom({ id }: { id: string }) {
             {roomStatus(data.room)}
           </span>
         )}
+        <button onClick={() => setPanel("disclosure")}>经营者信息</button>
         <button onClick={() => setPanel("complaints")}>投诉举报</button>
       </header>
 
@@ -478,6 +482,9 @@ function AudienceRoom({ id }: { id: string }) {
               </button>
             </div>
             <div className="audience-drawer-body">
+              {panel === "disclosure" && (
+                <PublicDisclosurePanel key={id} roomId={id} />
+              )}
               {panel === "complaints" && (
                 <ComplaintsPanel key={id} roomId={id} />
               )}

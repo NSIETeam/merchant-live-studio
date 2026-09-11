@@ -38,6 +38,19 @@ export function memberMayAccess(
   path: string,
 ) {
   if (role === "owner") return true;
+  if (
+    path === "/api/merchant/disclosure" ||
+    path.startsWith("/api/merchant/disclosure/")
+  )
+    return (
+      ["GET", "HEAD"].includes(method) ||
+      (role === "editor" &&
+        method === "POST" &&
+        path === "/api/merchant/disclosure") ||
+      (role === "reviewer" &&
+        method === "POST" &&
+        /^\/api\/merchant\/disclosure\/\d+\/review$/.test(path))
+    );
   if (path.startsWith("/api/merchant/complaints")) return false;
   if (
     path.startsWith("/api/merchant/attribution") ||

@@ -1,3 +1,4 @@
+import { attachDisclosure } from "./disclosure.js";
 import { attachComplaints } from "./complaints.js";
 import {
   createContentAuthorizationSync,
@@ -432,6 +433,7 @@ export function createApp(
   attachAttribution(app, db, owned, clock);
   attachEngagement(app, db, clock);
   attachComplaints(app, db, clock);
+  attachDisclosure(app, db, clock);
   const agentBasis = (roomId: string, tenant: string) => {
     const r = owned(roomId, tenant);
     const binding = getRoomContentBinding(

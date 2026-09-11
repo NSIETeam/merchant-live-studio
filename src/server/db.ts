@@ -314,6 +314,20 @@ export function openDatabase(path: string) {
         Date.now(),
       );
     });
+  if (version < 13)
+    transaction(db, () => {
+      db.exec(`CREATE TABLE disclosure_versions(merchant_id TEXT NOT NULL,version INTEGER NOT NULL,data_json TEXT NOT NULL,evidence_reference TEXT NOT NULL,author_id TEXT NOT NULL,created_at INTEGER NOT NULL,entity_type TEXT NOT NULL CHECK(entity_type='enterprise'),PRIMARY KEY(merchant_id,version));
+      CREATE TABLE disclosure_events(id INTEGER PRIMARY KEY AUTOINCREMENT,merchant_id TEXT NOT NULL,version INTEGER NOT NULL,action TEXT NOT NULL CHECK(action IN('publish','withdraw')),actor_id TEXT NOT NULL,note TEXT NOT NULL,created_at INTEGER NOT NULL,FOREIGN KEY(merchant_id,version) REFERENCES disclosure_versions(merchant_id,version));
+      CREATE INDEX disclosure_events_owner ON disclosure_events(merchant_id,id);`);
+      for (const table of ["disclosure_versions", "disclosure_events"])
+        db.exec(
+          `CREATE TRIGGER ${table}_immutable_update BEFORE UPDATE ON ${table} BEGIN SELECT RAISE(ABORT,'immutable'); END; CREATE TRIGGER ${table}_immutable_delete BEFORE DELETE ON ${table} BEGIN SELECT RAISE(ABORT,'immutable'); END;`,
+        );
+      db.prepare("INSERT INTO schema_migrations VALUES(?,?)").run(
+        13,
+        Date.now(),
+      );
+    });
   return db;
 }
 export type DB = ReturnType<typeof openDatabase>;
