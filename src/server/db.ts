@@ -459,6 +459,65 @@ export function openDatabase(path: string) {
         Date.now(),
       );
     });
+  if (version < 23)
+    transaction(db, () => {
+      db.exec(`CREATE TABLE recording_retention_holds(
+        id TEXT PRIMARY KEY,
+        recording_id TEXT NOT NULL REFERENCES recordings(id),
+        merchant_id TEXT NOT NULL,
+        kind TEXT NOT NULL CHECK(kind IN('dispute','regulatory','business')),
+        reason TEXT NOT NULL,
+        idempotency_key TEXT NOT NULL,
+        created_by TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        UNIQUE(merchant_id,idempotency_key)
+      );
+      CREATE INDEX recording_retention_holds_recording ON recording_retention_holds(recording_id,created_at);
+      CREATE TABLE recording_retention_hold_events(
+        hold_id TEXT NOT NULL REFERENCES recording_retention_holds(id),
+        version INTEGER NOT NULL CHECK(version>0),
+        state TEXT NOT NULL CHECK(state IN('active','released')),
+        note TEXT NOT NULL,
+        actor_id TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        PRIMARY KEY(hold_id,version)
+      );
+      CREATE TABLE recording_deletion_requests(
+        id TEXT PRIMARY KEY,
+        recording_id TEXT NOT NULL REFERENCES recordings(id),
+        merchant_id TEXT NOT NULL,
+        reason TEXT NOT NULL,
+        idempotency_key TEXT NOT NULL,
+        requested_by TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        UNIQUE(merchant_id,idempotency_key)
+      );
+      CREATE INDEX recording_deletion_requests_recording ON recording_deletion_requests(recording_id,created_at);
+      CREATE TABLE recording_deletion_events(
+        request_id TEXT NOT NULL REFERENCES recording_deletion_requests(id),
+        version INTEGER NOT NULL CHECK(version>0),
+        state TEXT NOT NULL CHECK(state IN('requested','approved','rejected','deleting','deleted','failed')),
+        note TEXT NOT NULL,
+        actor_id TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        PRIMARY KEY(request_id,version)
+      );
+      CREATE INDEX recording_deletion_events_state ON recording_deletion_events(state,created_at);
+      `);
+      for (const table of [
+        "recording_retention_holds",
+        "recording_retention_hold_events",
+        "recording_deletion_requests",
+        "recording_deletion_events",
+      ])
+        db.exec(
+          `CREATE TRIGGER ${table}_immutable_update BEFORE UPDATE ON ${table} BEGIN SELECT RAISE(ABORT,'immutable'); END; CREATE TRIGGER ${table}_immutable_delete BEFORE DELETE ON ${table} BEGIN SELECT RAISE(ABORT,'immutable'); END;`,
+        );
+      db.prepare("INSERT INTO schema_migrations VALUES(?,?)").run(
+        23,
+        Date.now(),
+      );
+    });
   return db;
 }
 export type DB = ReturnType<typeof openDatabase>;

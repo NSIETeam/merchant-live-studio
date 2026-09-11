@@ -236,7 +236,7 @@ test("material migration and receipts survive database reopening without reimpor
     try {
       assert.equal(
         db.prepare("SELECT max(version) AS v FROM schema_migrations").get()!.v,
-        22,
+        23,
       );
       assert.equal(
         db.prepare("SELECT id FROM material_imports").get()!.id,

@@ -1,4 +1,8 @@
-import { contentAuthorizationIssue, createContentAuthorizationSync, recordProfileRevocation } from "./content-authorization.js";
+import {
+  contentAuthorizationIssue,
+  createContentAuthorizationSync,
+  recordProfileRevocation,
+} from "./content-authorization.js";
 import type { AgentProfile } from "../../shared/agent.js";
 import type { AgentBridge } from "../../platform/adapters/public.js";
 import type { Hono } from "hono";
@@ -13,6 +17,7 @@ import { checkScript, CONTENT_RULE_VERSION } from "./content-check.js";
 import { findContentScriptConfirmationsByCourseIdAndScriptVersion } from "./persistence/public-queries.js";
 import { attachScriptReview, readScriptReview } from "./script-review.js";
 import { attachScriptSuggestions } from "./script-suggestions.js";
+import { openComplaintDisputeCount } from "./persistence/complaint-queries.js";
 export { checkScript, CONTENT_RULE_VERSION } from "./content-check.js";
 export function createReview(
   db: DB,
@@ -21,7 +26,8 @@ export function createReview(
   bridge?: AgentBridge,
 ) {
   const review: ReviewPort = {
-    authorizationIssue: (tenant, course, version, now = clock()) => contentAuthorizationIssue(db, tenant, course, version, now, content),
+    authorizationIssue: (tenant, course, version, now = clock()) =>
+      contentAuthorizationIssue(db, tenant, course, version, now, content),
     readScriptReview: (id, version) =>
       readScriptReview(db, id, version, content),
     readConfirmation: (id, version) =>
@@ -35,8 +41,11 @@ export function createReview(
   };
   return {
     ...review,
-    syncAuthorization: bridge ? createContentAuthorizationSync(db, bridge, clock, content) : async (_tenant: string) => {},
-    recordProfileRevocation: (tenant: string, profile: AgentProfile) => recordProfileRevocation(db, tenant, profile),
+    syncAuthorization: bridge
+      ? createContentAuthorizationSync(db, bridge, clock, content)
+      : async (_tenant: string) => {},
+    recordProfileRevocation: (tenant: string, profile: AgentProfile) =>
+      recordProfileRevocation(db, tenant, profile),
     attach(app: Hono<{ Variables: { merchantId: string; viewerId: string } }>) {
       attachScriptSuggestions(
         app,
@@ -54,3 +63,10 @@ export function createReview(
 
 export { attachDisclosure, disclosureState } from "./disclosure.js";
 export { attachComplaints } from "./complaints.js";
+export function hasOpenComplaintDispute(
+  db: DB,
+  merchantId: string,
+  roomId: string,
+) {
+  return Number(openComplaintDisputeCount(db, roomId, merchantId)?.n || 0) > 0;
+}

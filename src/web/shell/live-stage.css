@@ -69,6 +69,66 @@
   color: #3b404a;
   font-weight: 600;
 }
+
+.recording-retention {
+  margin-top: 12px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
+.recording-retention-body {
+  display: grid;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.recording-retention-body h4 {
+  margin: 6px 0 0;
+}
+
+.retention-entry,
+.retention-form {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.retention-entry p,
+.recording-retention-body p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.retention-form label,
+.recording-retention-body > label {
+  display: grid;
+  gap: 6px;
+}
+
+.retention-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+@media (max-width: 520px) {
+  .recording-retention-body {
+    padding: 10px;
+  }
+
+  .retention-actions > button,
+  .retention-form > button {
+    width: 100%;
+  }
+}
 .workspace.live-workspace .bound-paragraph {
   max-height: 42dvh;
   font-size: 21px;

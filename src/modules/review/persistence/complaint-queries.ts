@@ -105,3 +105,18 @@ export function insertComplaintAppealEvent(db: DB, ...values: SQLValue[]) {
     .prepare("INSERT INTO complaint_appeal_events VALUES(?,?,?,?,?,?)")
     .run(...values);
 }
+export function openComplaintDisputeCount(db: DB, ...values: SQLValue[]) {
+  return db
+    .prepare(
+      `SELECT count(*) AS n FROM complaints c
+       WHERE c.room_id=? AND c.merchant_id=? AND (
+         (SELECT state FROM complaint_events e WHERE e.complaint_id=c.id ORDER BY version DESC LIMIT 1)<>'resolved'
+         OR EXISTS(
+           SELECT 1 FROM complaint_appeals a
+           WHERE a.complaint_id=c.id AND
+             (SELECT state FROM complaint_appeal_events ae WHERE ae.appeal_id=a.id ORDER BY version DESC LIMIT 1)<>'resolved'
+         )
+       )`,
+    )
+    .get(...values);
+}
