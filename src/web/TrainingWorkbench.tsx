@@ -998,7 +998,8 @@ function VariantPicker({
   refreshToken: number;
 }) {
   const [versions, setVersions] = useState<PromptVersion[]>([]),
-    [error, setError] = useState("");
+    [error, setError] = useState(""),
+    [loading, setLoading] = useState(false);
   const changeRef = useRef(onChange);
   changeRef.current = onChange;
   const versionRef = useRef(value.version);
@@ -1007,6 +1008,7 @@ function VariantPicker({
     let cancelled = false;
     setVersions([]);
     setError("");
+    setLoading(Boolean(value.profileId));
     if (value.profileId)
       api<{ versions: PromptVersion[] }>(
         `${profilePath(value.profileId)}/versions`,
@@ -1022,6 +1024,9 @@ function VariantPicker({
         })
         .catch((e) => {
           if (!cancelled) setError(message(e));
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
         });
     return () => {
       cancelled = true;
@@ -1054,7 +1059,17 @@ function VariantPicker({
             onChange({ ...value, version: Number(e.target.value) })
           }
         >
-          {!versions.length && <option value={0}>正在读取版本…</option>}
+          {!versions.length && (
+            <option value={0}>
+              {!value.profileId
+                ? "请先选择表达风格"
+                : error
+                  ? "版本读取失败，请刷新重试"
+                  : loading
+                    ? "正在读取版本…"
+                    : "此风格尚无版本"}
+            </option>
+          )}
           {versions.map((v) => (
             <option key={v.version} value={v.version}>
               V{v.version}

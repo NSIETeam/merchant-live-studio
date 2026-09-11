@@ -654,15 +654,19 @@ export function AgentWorkbench({
         <span>
           {!service && !serviceError
             ? "正在读取模型配置…"
-            : service?.modelConfigured
-              ? "已配置生成模型"
-              : "生成模型尚未配置 · 可先调试提示词与事实规则"}
+            : !service?.available
+              ? "模型配置暂无法核实"
+              : service.modelConfigured
+                ? "已配置生成模型"
+                : "生成模型尚未配置 · 可先调试提示词与事实规则"}
         </span>
       </div>
       {(serviceError || service?.message) && (
-        <p className="aw-service-note">
-          {serviceError || service?.message}；当前话术快检仍可单独使用。
-        </p>
+        <details className="aw-service-note">
+          <summary>连接详情</summary>
+          <p>{serviceError || service?.message}</p>
+          <p>话术快检是否可用，以本次检查结果为准。</p>
+        </details>
       )}
       {profile?.revocation && (
         <p className="aw-inline-error" role="alert">
