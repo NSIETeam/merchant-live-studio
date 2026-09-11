@@ -73,6 +73,7 @@ export function createStudio(
     engagement,
     agentBridge,
     {
+      requiresIndependentReview: identity.requiresIndependentReview,
       binding: content.live.getRoomContentBinding,
       factsFor: knowledge.factsFor,
       onRevocation: content.review.recordProfileRevocation,
