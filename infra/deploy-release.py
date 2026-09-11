@@ -48,6 +48,13 @@ def extract(archive, target):
         if not (target / name).is_file():
             raise ValueError('Artifact missing required files')
 
+def file_sha256(path):
+    digest=hashlib.sha256()
+    with Path(path).open('rb') as source:
+        for block in iter(lambda: source.read(1024*1024),b''):
+            digest.update(block)
+    return digest.hexdigest()
+
 def run(*args, **kwargs):
     return subprocess.run(list(args), check=True, timeout=180, **kwargs)
 
@@ -94,6 +101,8 @@ def deploy_locked(revision):
                 if size > 64*1024*1024:
                     raise ValueError('Compressed artifact exceeds limit')
                 out.write(chunk)
+        if MAINTENANCE.exists():
+            raise RuntimeError('Previous maintenance requires operator recovery before another deployment')
         old = (ROOT/'current').resolve(strict=True)
         if (old/'REVISION').read_text().strip() == revision:
             ready(old)
@@ -130,6 +139,8 @@ def deploy_locked(revision):
             time.sleep(2)
             stopped=False
             backups_complete=False
+            backup_hashes={}
+            safe_to_resume=False
             try:
                 stopped=True
                 run('systemctl','stop',*SERVICES)
@@ -137,6 +148,14 @@ def deploy_locked(revision):
                 for name,path,_ in DATABASES:
                     with closing(sqlite3.connect(path)) as source, closing(sqlite3.connect(backup/(name+'.sqlite'))) as dest:
                         source.backup(dest)
+                        if dest.execute('PRAGMA integrity_check').fetchall()!=[('ok',)]:
+                            raise RuntimeError('Database backup integrity check failed')
+                    snapshot=backup/(name+'.sqlite')
+                    snapshot.chmod(0o600)
+                    backup_hashes[name]=file_sha256(snapshot)
+                manifest=backup/'database-sha256.json'
+                manifest.write_text(json.dumps(backup_hashes,sort_keys=True,indent=2))
+                manifest.chmod(0o600)
                 backups_complete=True
                 point_to(release)
                 run('systemctl','start','merchant-live-agent','merchant-live-studio')
@@ -144,29 +163,33 @@ def deploy_locked(revision):
                 # Record only non-secret deployment evidence.
                 (ROOT/'automatic-deployment.json').write_text(json.dumps({
                     'revision':revision,'previousRevision':(old/'REVISION').read_text().strip(),
-                    'artifactSha256':hashlib.sha256(archive.read_bytes()).hexdigest(),
+                    'artifactSha256':file_sha256(archive),
                     'backup':str(backup),'deployedAt':int(time.time())},indent=2))
+                safe_to_resume=True
             except Exception:
                 if stopped:
                     run('systemctl','stop',*SERVICES)
                     point_to(old)
                     if backups_complete:
+                        # Validate every snapshot before restoring any database.
+                        for name,_,_ in DATABASES:
+                            if file_sha256(backup/(name+'.sqlite'))!=backup_hashes[name]:
+                                raise RuntimeError('Database backup changed; manual recovery required')
                         for name,path,owner in DATABASES:
                             for suffix in ('-wal','-shm'):
                                 Path(str(path)+suffix).unlink(missing_ok=True)
                             shutil.copy2(backup/(name+'.sqlite'),path)
+                            if file_sha256(path)!=backup_hashes[name]:
+                                raise RuntimeError('Database restore verification failed')
                             shutil.chown(path,owner,owner)
                             path.chmod(0o600)
                     run('systemctl','start','merchant-live-agent','merchant-live-studio')
                     ready(old)
+                    safe_to_resume=True
                 raise
             finally:
-                # Leave maintenance in place if both new and rollback health failed.
-                try:
-                    ready((ROOT/'current').resolve())
-                except Exception:
-                    pass
-                else:
+                # Only a completed deployment or completed rollback may reopen traffic.
+                if safe_to_resume:
                     MAINTENANCE.unlink(missing_ok=True)
         except Exception:
             if (ROOT/'current').resolve()!=release:
