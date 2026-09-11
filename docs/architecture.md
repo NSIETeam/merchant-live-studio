@@ -32,7 +32,7 @@ flowchart LR
 
 默认两个 Node 进程和两个 SQLite 文件：直播 API 使用 `studio.sqlite`，独立 Agent 使用 `agent.sqlite`，流媒体另行运行。视频分片不经过业务 API，Agent 不读写直播数据库、推流配置或账本。
 
-`src/server` 管理直播业务，`src/agent/core` 为可独立调用的建议生成库，`src/agent` 管理 Agent 私有 HTTP、存储与任务，`src/shared/agent.ts` 是二者消息契约。直播只通过 `AgentBridge` 请求 Agent，不加载其模型实现或数据库。浏览器只访问直播 API，商家身份、房间归属与上下文组装在直播网关完成。
+当前业务代码已按 [模块迁移记录](module-migration.md) 分配：`src/modules/` 管理所属业务，`src/platform/` 提供公共能力，`src/composition/` 装配业务服务。Agent 实现在 `src/modules/agent/`，`src/shared/agent.ts` 保留消息契约；原 `src/server`、`src/agent` 仅保留部署入口及历史初始化。直播只通过 `AgentBridge` 请求 Agent，不加载其模型实现或数据库。浏览器只访问业务 API，商家身份、房间归属与上下文组装保持在可信服务端。
 
 `npm run dev` 并行启动直播 8787、Agent 8788 和 Vite 5173；`dev:agent`、`start:agent` 可单独启动 Agent。构建后直播进程同源提供网页与 API。各进程按单实例设计，未实现跨副本队列协调、水平扩容或大规模争抢。
 
@@ -121,7 +121,7 @@ HLS 使用独立 `/studio/media/` 转发，Control API 和发布鉴权回调不�
 
 ## 内容域与直播、Agent 的衔接（0.5）
 
-`src/server/content.ts` 独立实现商品、营销周期、课程、讲稿版本与定稿绑定，`content-check.ts` 做有限的逐段规则预检。内容表位于业务 SQLite 的独立命名空间，不依赖 Agent 数据库、模型或任务队列；Agent 不可用时商品编辑、定稿读取和直播仍可运行。
+商品、营销周期、课程讲稿、审核与直播绑定现已分别归属 knowledge、marketing、content、review、live；review 中的 `content-check.ts` 做有限的逐段规则预检。现有表名保持兼容，表的所有权以 `architecture/table-owners.json` 为准；业务数据不依赖 Agent 数据库、模型或任务队列，Agent 不可用时商品编辑、定稿读取和直播仍可运行。
 
 商品含 SKU、明确类别和有来源的事实；每次保存建立新证据版本。讲稿保存正文段落、引用、当时商品快照、规则版本与检查结果。更新商品证据后，旧稿按当前版本比对返回 `needs_review`；历史正文和人工记录仍保留。定稿是当前商家账号的人工确认，不是多人职责分离审批。只有无阻断项、证据仍新鲜且已人工确认的版本可以绑定直播间。
 

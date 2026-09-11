@@ -17,6 +17,7 @@
 - [ ] 已遵循 AGENTS.md 和 docs/module-development.md
 - [ ] 涉及存储时已遵循 docs/storage-architecture.md，并验证变更涉及的授权、版本、失败恢复及清理/备份边界；无涉及为不适用
 - [ ] 新功能进入所属模块，没有新增跨模块私有依赖或跨模块数据库操作
+- [ ] SQL 留在所属 persistence，使用的表已登记唯一所有者；启动连接没有通过业务接口暴露
 - [ ] 未通过扩张遗留清单、豁免或关闭检查绕过门禁
 - [ ] npm run check 通过，关键业务边界已有适当验证
 

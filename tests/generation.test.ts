@@ -1,17 +1,17 @@
-import test from "node:test";
 import assert from "node:assert/strict";
-import { createServer } from "node:http";
 import { once } from "node:events";
 import { mkdtempSync, rmSync } from "node:fs";
+import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createAgentService } from "../src/agent/app.js";
-import { openAgentDatabase } from "../src/agent/db.js";
-import { loadAgentConfig } from "../src/agent/config.js";
+import test from "node:test";
+import { createAgentService } from "../src/modules/agent/app.js";
+import { loadAgentConfig } from "../src/modules/agent/config.js";
 import {
   createGenerationProvider,
   type GenerationProvider,
-} from "../src/agent/generation-provider.js";
+} from "../src/modules/agent/generation-provider.js";
+import { openAgentDatabase } from "../src/modules/agent/persistence/database.js";
 const config = loadAgentConfig({});
 const input = {
   courseId: "course",

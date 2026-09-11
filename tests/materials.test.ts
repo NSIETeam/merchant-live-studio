@@ -1,12 +1,12 @@
-import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { test } from "node:test";
+import { createApp, seedDemo } from "../src/composition/studio.js";
+import { parseMaterials } from "../src/modules/knowledge/public.js";
+import { loadConfig } from "../src/platform/infrastructure/public.js";
 import { openDatabase } from "../src/server/db.js";
-import { createApp, seedDemo } from "../src/server/app.js";
-import { loadConfig } from "../src/server/config.js";
-import { parseMaterials } from "../src/server/materials.js";
 
 async function fixture(path = ":memory:") {
   const db = openDatabase(path);

@@ -9,3 +9,5 @@ var
 *.log
 work
 tests
+__pycache__
+*.pyc

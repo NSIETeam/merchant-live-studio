@@ -1,9 +1,9 @@
-import test from "node:test";
 import assert from "node:assert/strict";
-import { loadConfig } from "../src/server/config.js";
+import test from "node:test";
+import { createApp, seedDemo } from "../src/composition/studio.js";
+import { memberMayAccess } from "../src/platform/identity/public.js";
+import { loadConfig } from "../src/platform/infrastructure/public.js";
 import { openDatabase } from "../src/server/db.js";
-import { createApp, seedDemo } from "../src/server/app.js";
-import { memberMayAccess } from "../src/server/permissions.js";
 
 function fixture() {
   const credentials = Object.fromEntries(

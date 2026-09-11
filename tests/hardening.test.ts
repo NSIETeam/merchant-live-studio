@@ -1,15 +1,17 @@
-import { test } from "node:test";
 import assert from "node:assert/strict";
-import { DatabaseSync } from "node:sqlite";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
+import { test } from "node:test";
+import {
+  createApp,
+  processSimulationJobs,
+  seedDemo,
+} from "../src/composition/studio.js";
+import { MediaController, recordPresence } from "../src/modules/live/public.js";
+import { loadConfig } from "../src/platform/infrastructure/public.js";
 import { openDatabase } from "../src/server/db.js";
-import { createApp, seedDemo } from "../src/server/app.js";
-import { loadConfig } from "../src/server/config.js";
-import { recordPresence } from "../src/server/services/presence.js";
-import { MediaController } from "../src/server/services/media-control.js";
-import { processSimulationJobs } from "../src/server/services/payments.js";
 
 const originalToken = "hardening-test-only-merchant-secret";
 const replacementToken = "hardening-test-only-rotated-secret";

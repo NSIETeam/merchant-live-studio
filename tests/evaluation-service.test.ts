@@ -1,15 +1,18 @@
-import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import test from "node:test";
 import {
   createAgentService,
   type AgentServiceOptions,
-} from "../src/agent/app.js";
-import { loadAgentConfig, type AgentConfig } from "../src/agent/config.js";
-import { openAgentDatabase } from "../src/agent/db.js";
-import { runAgent } from "../src/agent/core/index.js";
+} from "../src/modules/agent/app.js";
+import {
+  loadAgentConfig,
+  type AgentConfig,
+} from "../src/modules/agent/config.js";
+import { runAgent } from "../src/modules/agent/core/index.js";
+import { openAgentDatabase } from "../src/modules/agent/persistence/database.js";
 import type {
   AgentContext,
   AgentExecutionInput,

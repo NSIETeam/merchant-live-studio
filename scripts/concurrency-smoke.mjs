@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { access, mkdtemp, rm } from "node:fs/promises";
+import { access, mkdtemp, rm, realpath } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { performance } from "node:perf_hooks";
 
@@ -505,8 +505,12 @@ try {
   clearTimeout(deadline);
   await releasePorts();
   await Promise.all(children.map(stop));
-  if (temporaryDirectory)
-    await rm(temporaryDirectory, { recursive: true, force: true });
+  if (temporaryDirectory) {
+    const target = await realpath(temporaryDirectory);
+    assert.equal(dirname(target), await realpath(tmpdir()));
+    assert.ok(basename(target).startsWith("merchant-live-concurrency-"));
+    await rm(target, { recursive: true, force: true });
+  }
   const samples = requests
     .filter((r) => !r.startup)
     .map((r) => r.elapsedMs)
