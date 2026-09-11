@@ -158,3 +158,13 @@ export const CONTENT_LIMITS = {
   facts: 40,
   requestBytes: 128 * 1024,
 } as const;
+
+export interface ReviewQueueItem {
+  courseId: string;
+  courseTitle: string;
+  productName: string;
+  version: number;
+  submittedBy: string;
+  submittedAt: number;
+  note: string;
+}

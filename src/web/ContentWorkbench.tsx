@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ScriptComparison } from "./ScriptComparison.js";
+import { ReviewQueue } from "./ReviewQueue.js";
 import { ScriptReviewPanel } from "./ScriptReviewPanel.js";
 import type { MemberRole } from "../shared/membership.js";
 import {
@@ -154,6 +155,7 @@ export function ContentWorkbench({
   const product = products.find((item) => item.id === productId);
   return (
     <div className="cw-root">
+      {["owner", "reviewer"].includes(memberRole) && <ReviewQueue />}
       <div className="cw-toolbar">
         <label>
           当前商品

@@ -40,6 +40,47 @@ export function attachScriptReview(
   read: (course: string, version: number, merchant: string) => ScriptVersion,
   clock: () => number,
 ) {
+  // Keyset pagination remains stable when another reviewer removes a pending row.
+  app.get("/api/merchant/content/review-queue", (c) => {
+    const after = z.string().max(200).optional().parse(c.req.query("after"));
+    const limit = z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(50)
+      .default(20)
+      .parse(c.req.query("limit"));
+    const rows = db
+      .prepare(
+        `
+      SELECT c.id AS courseId,c.title AS courseTitle,p.name AS productName,
+        r.script_version AS version,r.submitted_by AS submittedBy,
+        r.submitted_at AS submittedAt,r.note
+      FROM content_review_requests r
+      JOIN content_courses c ON c.id=r.course_id AND c.latest_script_version=r.script_version
+      JOIN content_plans plan ON plan.id=c.plan_id
+      JOIN content_products p ON p.id=plan.product_id
+      LEFT JOIN content_review_decisions d ON d.course_id=r.course_id AND d.script_version=r.script_version
+      WHERE p.merchant_id=? AND d.course_id IS NULL AND c.id>?
+      ORDER BY c.id LIMIT ?
+    `,
+      )
+      .all(c.get("merchantId"), after ?? "", limit + 1);
+    const items = rows.slice(0, limit);
+    return c.json({
+      items,
+      nextAfter: rows.length > limit ? items.at(-1)!.courseId : null,
+    });
+  });
+  app.get("/api/merchant/content/courses/:id/scripts/:version", (c) => {
+    return c.json({
+      script: read(
+        c.req.param("id"),
+        versionFor(c.req.param("version")),
+        c.get("merchantId"),
+      ),
+    });
+  });
   const versionFor = (value: string) =>
     z.coerce.number().int().positive().parse(value);
   const noteSchema = z

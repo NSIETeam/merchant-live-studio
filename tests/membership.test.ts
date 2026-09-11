@@ -578,3 +578,159 @@ test("a newer draft prevents approval of an obsolete pending version and foreign
     f.db.close();
   }
 });
+
+test("review queue isolates tenants, removes superseded or decided submissions and keeps history readable", async () => {
+  const f = await reviewFixture();
+  try {
+    await f.save();
+    await f.request(f.base + "/scripts/1/submit", "POST", { note: "待审核" });
+    const queue = () => f.request("/review-queue", "GET", undefined, f.checker);
+    const pending = await queue();
+    assert.equal(pending.status, 200);
+    assert.equal(pending.data.items.length, 1);
+    assert.equal(pending.data.items[0].courseId, f.course.id);
+    assert.equal(pending.data.items[0].submittedBy, "writer");
+    const foreign = await f.login("foreign");
+    assert.deepEqual(
+      (await f.request("/review-queue", "GET", undefined, foreign)).data.items,
+      [],
+    );
+    assert.equal(
+      (await f.request(f.base + "/scripts/1", "GET", undefined, foreign))
+        .status,
+      404,
+    );
+    assert.equal(
+      (
+        await f.request(
+          "/review-queue",
+          "GET",
+          undefined,
+          await f.login("metrics"),
+        )
+      ).status,
+      403,
+    );
+    assert.equal(
+      (await f.request("/review-queue?limit=0", "GET", undefined, f.checker))
+        .status,
+      400,
+    );
+    await f.save(1);
+    assert.deepEqual((await queue()).data.items, []);
+    assert.equal(
+      (
+        await f.request(
+          f.base + "/scripts/1/review",
+          "GET",
+          undefined,
+          f.checker,
+        )
+      ).data.review.submission.note,
+      "待审核",
+    );
+    await f.request(f.base + "/scripts/2/submit", "POST", { note: "新版待审" });
+    assert.equal((await queue()).data.items[0].version, 2);
+    const approved = await f.request(
+      f.base + "/scripts/2/review",
+      "POST",
+      { decision: "approved", note: "已核对", acknowledged: true },
+      f.checker,
+    );
+    assert.equal(approved.status, 200);
+    assert.deepEqual((await queue()).data.items, []);
+    const detail = await f.request(
+      f.base + "/scripts/2",
+      "GET",
+      undefined,
+      f.checker,
+    );
+    assert.equal(detail.data.script.confirmation.confirmedBy, "checker");
+  } finally {
+    f.db.close();
+  }
+});
+
+test("review queue cursor does not skip remaining submissions when the previous page is reviewed", async () => {
+  const f = await reviewFixture();
+  try {
+    const plan = f.db
+      .prepare("SELECT plan_id FROM content_courses WHERE id=?")
+      .get(f.course.id)!.plan_id;
+    for (let index = 0; index < 3; index++) {
+      const course = (
+        await f.request(`/plans/${plan}/courses`, "POST", {
+          title: `分页课${index}`,
+          dayIndex: index + 2,
+          objective: "分页测试",
+        })
+      ).data.course;
+      const base = `/courses/${course.id}/scripts`;
+      assert.equal(
+        (
+          await f.request(base, "POST", {
+            baseVersion: 0,
+            productVersion: 1,
+            paragraphs: [
+              {
+                id: "p",
+                kind: "transition",
+                text: "欢迎来到测试课堂。",
+                factIds: [],
+              },
+            ],
+            changeNote: "测试",
+          })
+        ).status,
+        201,
+      );
+      assert.equal(
+        (await f.request(base + "/1/submit", "POST", { note: "待审" })).status,
+        200,
+      );
+    }
+    const page1 = (
+      await f.request("/review-queue?limit=1", "GET", undefined, f.checker)
+    ).data;
+    assert.equal(page1.items.length, 1);
+    assert.ok(page1.nextAfter);
+    assert.equal(
+      (
+        await f.request(
+          `/courses/${page1.items[0].courseId}/scripts/1/review`,
+          "POST",
+          { decision: "changes_requested", note: "修改", acknowledged: true },
+          f.checker,
+        )
+      ).status,
+      200,
+    );
+    const page2 = (
+      await f.request(
+        `/review-queue?limit=1&after=${encodeURIComponent(page1.nextAfter)}`,
+        "GET",
+        undefined,
+        f.checker,
+      )
+    ).data;
+    const page3 = (
+      await f.request(
+        `/review-queue?limit=1&after=${encodeURIComponent(page2.nextAfter)}`,
+        "GET",
+        undefined,
+        f.checker,
+      )
+    ).data;
+    assert.equal(
+      new Set(
+        [...page1.items, ...page2.items, ...page3.items].map(
+          (item) => item.courseId,
+        ),
+      ).size,
+      3,
+    );
+    assert.equal(page3.nextAfter, null);
+  } finally {
+    f.db.close();
+  }
+});

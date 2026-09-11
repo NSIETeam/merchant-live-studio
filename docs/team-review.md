@@ -50,3 +50,11 @@ MERCHANT_MEMBERSHIPS={"writer":{"merchantId":"owner","role":"editor"},"checker":
 | POST | `/courses/:id/scripts/:version/review` | `{ "decision": "approved", "note": "审核意见", "acknowledged": true }`；退回用 `changes_requested` |
 
 `/api/auth/me` 和正常账号登录返回 `merchantId`、`actorId`、`memberRole`、`requiresIndependentReview`。定稿仍不等于法律结论，审核人员需要核查真实材料和实际表达语境。
+
+## 集中待审工作台
+
+管理员和审核账号可在「商品与课程」顶部展开「待审核工作台」，查看本商家各课程最新、尚无审核决定的已提交版本。打开条目后展示全文、引用依据、逐段规则提示，并沿用独立审核权限作出批准或退回决定。每次操作仍由服务端重新校验最新版本和证据状态。
+
+`GET /api/merchant/content/review-queue?limit=20&after=<courseId>` 返回 `items` 和 `nextAfter`；limit 为 1–50，按课程 ID 使用游标翻页，避免其他审核人处理前页后导致后页跳项。新提交可刷新首页查看。旧提交被新稿替代后不再进入待审列表，历史记录仍保留在课程版本中。
+
+`GET /api/merchant/content/courses/:id/scripts/:version` 返回指定版本的讲稿快照与当前失效状态，受商家隔离和成员权限保护。该入口不是公开观众接口。
