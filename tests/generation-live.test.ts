@@ -163,6 +163,7 @@ async function setup(configured = true) {
   return {
     db,
     agentDB,
+    call,
     request,
     writer,
     checker,
@@ -315,6 +316,67 @@ test("Live exposes waiting configuration without fabricated paragraphs and rejec
       (await f.request(f.base + `/generation/${id}/cancel`, "POST", {})).data
         .job.status,
       "cancelled",
+    );
+  } finally {
+    await f.close();
+  }
+});
+
+test("completed long manuscripts cannot be newly imported after their expression authorization is revoked", async () => {
+  const f = await setup();
+  try {
+    const owner = (await f.call("/auth/demo", "POST", {})).cookie;
+    const p = (
+      await f.call(
+        "/merchant/agent/profiles",
+        "POST",
+        {
+          name: "合成授权方案",
+          kind: "brand",
+          systemPrompt: "事实优先",
+          styleGuide: "短句",
+          audience: "验收人员",
+          examples: [],
+        },
+        owner,
+      )
+    ).data.profile;
+    const id = (
+      await f.request(f.base + "/generation", "POST", {
+        profileId: p.id,
+        promptVersion: 1,
+        targetCharacters: 500,
+        chapterCount: 2,
+        idempotencyKey: "revoked-long-import",
+      })
+    ).data.job.id;
+    await f.complete(id);
+    assert.equal(
+      (
+        await f.call(
+          "/merchant/agent/profiles/" + p.id + "/revoke",
+          "POST",
+          { reason: "合成测试撤回" },
+          owner,
+        )
+      ).status,
+      200,
+    );
+    assert.equal(
+      (await f.request(f.base + "/generation/" + id)).data.job
+        .authorizationRevoked,
+      true,
+    );
+    assert.equal(
+      (await f.request(f.base + "/generation/" + id + "/import", "POST", {}))
+        .status,
+      409,
+    );
+    assert.equal(
+      f.db
+        .prepare("SELECT count(*) AS n FROM content_generation_imports")
+        .get()!.n,
+      0,
     );
   } finally {
     await f.close();

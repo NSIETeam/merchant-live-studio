@@ -50,6 +50,20 @@ export function attachAgentGateway(
   app.get("/api/merchant/agent/profiles", async (c) =>
     c.json(await bridge.request(c.get("merchantId"), "/v1/profiles")),
   );
+  app.post("/api/merchant/agent/profiles/:id/revoke", async (c) => {
+    const input = z
+      .object({ reason: z.string().trim().min(1).max(500) })
+      .strict()
+      .parse(await c.req.json());
+    return c.json(
+      await bridge.request(
+        c.get("merchantId"),
+        `/v1/profiles/${id(c.req.param("id"))}/revoke`,
+        "POST",
+        { ...input, actorId: c.get("actorId") },
+      ),
+    );
+  });
   app.post("/api/merchant/agent/profiles", async (c) => {
     const body = prompt
       .extend({

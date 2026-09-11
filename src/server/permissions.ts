@@ -73,7 +73,8 @@ export function memberMayAccess(
       );
     return (
       method === "POST" &&
-      ((/\/agent\/profiles(?:\/|$)/.test(path) && !/\/publish$/.test(path)) ||
+      ((/\/agent\/profiles(?:\/|$)/.test(path) &&
+        !/\/(publish|revoke)$/.test(path)) ||
         /\/materials\/(preview|import)$/.test(path) ||
         /\/rooms\/[^/]+\/agent\/(runs|suites|evaluations)$/.test(path))
     );

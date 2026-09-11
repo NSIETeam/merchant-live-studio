@@ -96,7 +96,8 @@ export function GenerationPanel({
       } else {
         if (action === "create") {
           const profile = profiles.find((p) => p.id === profileId);
-          if (!profile) throw new Error("请选择可用的提示词方案。");
+          if (!profile || profile.revocation)
+            throw new Error("请选择未撤回授权的提示词方案。");
           await api(base, "POST", {
             profileId,
             promptVersion: profile.latestVersion,
@@ -167,11 +168,13 @@ export function GenerationPanel({
                     setKey(crypto.randomUUID());
                   }}
                 >
-                  {profiles.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} · 最新保存 V{p.latestVersion}
-                    </option>
-                  ))}
+                  {profiles
+                    .filter((p) => !p.revocation)
+                    .map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} · 最新保存 V{p.latestVersion}
+                      </option>
+                    ))}
                 </select>
               </label>
               <label>
@@ -235,7 +238,9 @@ export function GenerationPanel({
                     ) && (
                       <button
                         className="secondary"
-                        disabled={busy || !page.configured}
+                        disabled={
+                          busy || !page.configured || job.authorizationRevoked
+                        }
                         onClick={() => void act("resume", job.id)}
                       >
                         继续生成
@@ -254,7 +259,7 @@ export function GenerationPanel({
                   {canEdit && job.status === "completed" && !receipt && (
                     <button
                       className="primary"
-                      disabled={busy || dirty}
+                      disabled={busy || dirty || job.authorizationRevoked}
                       onClick={() => void act("import", job.id)}
                     >
                       导入为待审核草稿
@@ -290,6 +295,11 @@ export function GenerationPanel({
           {preview && (
             <article aria-label="生成结果预览">
               <h3>生成结果预览 · {labels[preview.status]}</h3>
+              {preview.authorizationRevoked && (
+                <p role="alert">
+                  此任务使用的表达方案已撤回授权。历史资料仅供审计，不得继续使用或导入。
+                </p>
+              )}
               <p>
                 主播：
                 {preview.input.prompt.presenter?.displayName || "通用表达"} ·

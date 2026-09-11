@@ -1,3 +1,4 @@
+import { assertProfileActive, profileRevocation } from "./profile-lifecycle.js";
 import type { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { createHash, randomUUID } from "node:crypto";
@@ -91,7 +92,7 @@ type Row = {
   updated_at: number;
   digest: string;
 };
-const dto = (r: Row): GenerationJob => ({
+const baseDto = (r: Row): GenerationJob => ({
   id: r.id,
   courseId: r.course_id,
   status: r.status,
@@ -147,6 +148,17 @@ export function registerGeneration(
     controller: AbortController;
     promise: Promise<void>;
   } | null = null;
+  function dto(job: Row) {
+    const result = baseDto(job);
+    return {
+      ...result,
+      authorizationRevoked: !!profileRevocation(
+        db,
+        job.tenant_id,
+        result.input.profileId,
+      ),
+    };
+  }
   function row(tenant: string, job: string) {
     const value = db
       .prepare("SELECT * FROM agent_generation_jobs WHERE tenant_id=? AND id=?")
@@ -194,8 +206,10 @@ export function registerGeneration(
     const chapters: GeneratedChapter[] = JSON.parse(job.chapters_json),
       stage = outline ? chapters.length + 1 : 0;
     try {
+      assertProfileActive(db, job.tenant_id, input.profileId);
       const raw = await provider.execute(input, outline, chapters, signal);
       if (closed || signal.aborted) return;
+      assertProfileActive(db, job.tenant_id, input.profileId);
       let newOutline = outline;
       if (!outline) {
         newOutline = outlineSchema.parse(raw);
@@ -313,6 +327,7 @@ export function registerGeneration(
         return prior.id;
       }
       roomForQueue(tenant);
+      assertProfileActive(db, tenant, input.profileId);
       const snapshot: GenerationSnapshot = {
         ...input,
         prompt: prompt(tenant, input.profileId, input.promptVersion),
@@ -354,20 +369,23 @@ export function registerGeneration(
         before ?? Number.MAX_SAFE_INTEGER,
       ) as (Row & { cursor: number })[];
     return c.json({
-      jobs: rows
-        .slice(0, 20)
-        .map((r) => ({
-          id: r.id,
-          courseId: r.course_id,
-          status: r.status,
-          error: r.error,
-          completedChapters: (JSON.parse(r.chapters_json) as GeneratedChapter[])
-            .length,
-          chapterCount: (JSON.parse(r.input_json) as GenerationSnapshot)
-            .chapterCount,
-          createdAt: r.created_at,
-          updatedAt: r.updated_at,
-        })),
+      jobs: rows.slice(0, 20).map((r) => ({
+        authorizationRevoked: !!profileRevocation(
+          db,
+          r.tenant_id,
+          JSON.parse(r.input_json).profileId,
+        ),
+        id: r.id,
+        courseId: r.course_id,
+        status: r.status,
+        error: r.error,
+        completedChapters: (JSON.parse(r.chapters_json) as GeneratedChapter[])
+          .length,
+        chapterCount: (JSON.parse(r.input_json) as GenerationSnapshot)
+          .chapterCount,
+        createdAt: r.created_at,
+        updatedAt: r.updated_at,
+      })),
       nextBefore: rows.length > 20 ? rows[19].cursor : null,
     });
   });
@@ -395,6 +413,7 @@ export function registerGeneration(
         ).run(clock(), tenant, jobId);
         attempt(job, -1, "cancelled", null);
       } else {
+        assertProfileActive(db, tenant, JSON.parse(job.input_json).profileId);
         if (["queued", "running"].includes(job.status)) return;
         if (job.status === "completed")
           conflict("Completed task cannot be resumed");
@@ -411,6 +430,13 @@ export function registerGeneration(
     return c.json({ job: dto(row(tenant, jobId)) });
   });
   return {
+    abortProfile(tenant: string, profile: string) {
+      if (
+        active?.tenant === tenant &&
+        JSON.parse(row(tenant, active.id).input_json).profileId === profile
+      )
+        active.controller.abort();
+    },
     start() {
       if (started || closed) return;
       started = true;

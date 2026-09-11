@@ -507,14 +507,16 @@ export function createApp(
           clock() - run.createdAt > 120000);
       return {
         ...run,
-        stale: Boolean(basis.stale || evidenceChanged || expired),
-        staleReason: basis.stale
-          ? "本场定稿的商品依据已变化，请先复核课程讲稿。"
-          : evidenceChanged
-            ? "引用的事实已撤回，请重新生成。"
-            : expired
-              ? "直播场次或时间已变化，请重新生成当前建议。"
-              : undefined,
+        stale: Boolean(run.stale || basis.stale || evidenceChanged || expired),
+        staleReason: run.stale
+          ? run.staleReason
+          : basis.stale
+            ? "本场定稿的商品依据已变化，请先复核课程讲稿。"
+            : evidenceChanged
+              ? "引用的事实已撤回，请重新生成。"
+              : expired
+                ? "直播场次或时间已变化，请重新生成当前建议。"
+                : undefined,
       };
     },
   );

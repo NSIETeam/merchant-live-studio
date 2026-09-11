@@ -400,3 +400,89 @@ test("long generation has an independent bounded deadline", () => {
       loadAgentConfig({ AGENT_GENERATION_TIMEOUT_MS: value }),
     );
 });
+
+test("revocation aborts active long generation, blocks resume and keeps historical inputs", async () => {
+  let finish!: (value: unknown) => void;
+  let started = false,
+    aborted = false;
+  const slow: GenerationProvider = {
+    configured: true,
+    label: "synthetic-revocation-test",
+    execute: async (_i, _o, _c, signal) => {
+      started = true;
+      signal.addEventListener(
+        "abort",
+        () => {
+          aborted = true;
+        },
+        { once: true },
+      );
+      return new Promise((resolve) => {
+        finish = resolve;
+      });
+    },
+  };
+  const f = fixture(slow);
+  const profiles = async (path: string, body: unknown) => {
+    const res = await f.service.app.request("/v1/profiles" + path, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${config.serviceToken}`,
+        "x-studio-tenant": "merchant-a",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+    return { status: res.status, data: (await res.json()) as any };
+  };
+  try {
+    const p = (
+      await profiles("", {
+        name: "合成主播方案",
+        kind: "brand",
+        systemPrompt: "仅输出核实事实",
+        styleGuide: "短句",
+        audience: "验收",
+        examples: [],
+      })
+    ).data.profile;
+    const id = (await f.call("/jobs", "POST", { ...input, profileId: p.id }))
+      .data.job.id;
+    await settle(f, id, "running");
+    assert.equal(started, true);
+    assert.equal(
+      (
+        await profiles("/" + p.id + "/revoke", {
+          actorId: "owner-a",
+          reason: "合成授权撤回",
+        })
+      ).status,
+      200,
+    );
+    assert.equal(aborted, true);
+    const status = (await f.call("/jobs/" + id)).data.job;
+    assert.equal(status.status, "failed");
+    assert.equal(status.authorizationRevoked, true);
+    assert.equal(status.input.profileId, p.id);
+    assert.equal(
+      (await f.call("/jobs/" + id + "/resume", "POST", {})).status,
+      409,
+    );
+    assert.equal(
+      (
+        await f.call("/jobs", "POST", {
+          ...input,
+          profileId: p.id,
+          idempotencyKey: "after-revoke",
+        })
+      ).status,
+      409,
+    );
+    finish(outline);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual((await f.call("/jobs/" + id)).data.job.chapters, []);
+  } finally {
+    if (started) finish(outline);
+    await f.close();
+  }
+});

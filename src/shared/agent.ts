@@ -33,6 +33,7 @@ export interface PromptVersion extends PromptContent {
   createdAt: number;
 }
 export interface AgentProfile {
+  revocation?: { reason: string; actorId: string; createdAt: number };
   id: string;
   name: string;
   kind: "standard" | "brand";

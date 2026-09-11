@@ -35,6 +35,7 @@ export type GenerationStatus =
   | "cancelled"
   | "completed";
 export interface GenerationJob {
+  authorizationRevoked?: boolean;
   id: string;
   courseId: string;
   status: GenerationStatus;
@@ -48,6 +49,7 @@ export interface GenerationJob {
 }
 
 export interface GenerationSummary {
+  authorizationRevoked?: boolean;
   id: string;
   courseId: string;
   status: GenerationStatus;

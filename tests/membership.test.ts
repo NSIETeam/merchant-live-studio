@@ -1090,3 +1090,23 @@ test("engagement configuration and fulfillment require owner; analyst has read a
     f.db.close();
   }
 });
+
+test("editors cannot revoke expression authorization", async () => {
+  const f = fixture();
+  try {
+    const writer = await f.login("writer");
+    assert.equal(
+      (
+        await f.call(
+          "/merchant/agent/profiles/example/revoke",
+          "POST",
+          { reason: "拒绝越权" },
+          writer,
+        )
+      ).status,
+      403,
+    );
+  } finally {
+    f.db.close();
+  }
+});

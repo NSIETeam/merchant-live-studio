@@ -447,3 +447,54 @@ test("live gateway accepts and persists authorized presenter dossiers and reject
     await f.close();
   }
 });
+
+test("revocation through Live records the authenticated actor and preserves stale flags", async () => {
+  const f = fixture();
+  try {
+    const cookie = (await f.request("/auth/demo", "POST", {})).cookie;
+    const p = (
+      await f.request(
+        "/merchant/agent/profiles",
+        "POST",
+        { ...DEFAULT_PROMPT_CONTENT, name: "撤回试验", kind: "brand" },
+        cookie,
+      )
+    ).data.profile;
+    const job = (
+      await f.request(
+        "/merchant/rooms/demo-room/agent/runs",
+        "POST",
+        {
+          profileId: p.id,
+          mode: "rehearsal",
+          version: 1,
+          transcript: "参数介绍",
+          idempotencyKey: "completed-revoke",
+        },
+        cookie,
+      )
+    ).data.run;
+    await f.finish(job.id, cookie);
+    const result = await f.request(
+      "/merchant/agent/profiles/" + p.id + "/revoke",
+      "POST",
+      { reason: "本地授权撤回" },
+      cookie,
+    );
+    assert.equal(result.status, 200);
+    assert.equal(result.data.profile.revocation.actorId, "demo");
+    const old = (
+      await f.request(
+        "/merchant/agent/runs/" + job.id,
+        "GET",
+        undefined,
+        cookie,
+      )
+    ).data.run;
+    assert.equal(old.stale, true);
+    assert.match(old.staleReason, /授权/);
+    assert.equal(old.result, undefined);
+  } finally {
+    await f.close();
+  }
+});

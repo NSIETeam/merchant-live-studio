@@ -658,6 +658,7 @@ function Workspace({
               )}
               {tab === "copilot" && (
                 <AgentWorkbench
+                  canRevoke={memberRole === "owner"}
                   key={selected.id}
                   roomId={selected.id}
                   productName={selected.productName}
