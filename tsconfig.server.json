@@ -9,5 +9,5 @@
     "types": ["node"],
     "sourceMap": true
   },
-  "include": ["src/server", "src/shared"]
+  "include": ["src/server", "src/shared", "src/agent"]
 }

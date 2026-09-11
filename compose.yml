@@ -17,6 +17,8 @@ services:
       STREAM_RTMP_BASE: ${STREAM_RTMP_BASE:-rtmp://localhost:1935/live}
       STREAM_HLS_BASE: ${STREAM_HLS_BASE:-http://localhost:8888/live}
       STREAM_AUTH_SECRET: ${STREAM_AUTH_SECRET:-}
+      AGENT_SERVICE_URL: http://agent:8788
+      AGENT_SERVICE_TOKEN: ${AGENT_SERVICE_TOKEN:-local-agent-development-token-change-me}
     volumes:
       - studio-data:/app/data
     healthcheck:
@@ -26,6 +28,37 @@ services:
           "node",
           "-e",
           "fetch('http://127.0.0.1:8787/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+  agent:
+    build: .
+    command: ["node", "dist/server/agent/index.js"]
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      AGENT_HOST: 0.0.0.0
+      AGENT_PORT: 8788
+      AGENT_DATABASE_PATH: /app/data/agent.sqlite
+      AGENT_SERVICE_TOKEN: ${AGENT_SERVICE_TOKEN:-local-agent-development-token-change-me}
+      AGENT_CONCURRENCY: ${AGENT_CONCURRENCY:-2}
+      AGENT_QUEUE_LIMIT: ${AGENT_QUEUE_LIMIT:-100}
+      AGENT_TENANT_QUEUE_LIMIT: ${AGENT_TENANT_QUEUE_LIMIT:-20}
+      AGENT_MODEL_PROVIDER: ${AGENT_MODEL_PROVIDER:-grounded-rules}
+      AGENT_MODEL_ENDPOINT: ${AGENT_MODEL_ENDPOINT:-}
+      AGENT_MODEL_MODEL: ${AGENT_MODEL_MODEL:-}
+      AGENT_MODEL_API_KEY: ${AGENT_MODEL_API_KEY:-}
+      AGENT_MODEL_TIMEOUT_MS: ${AGENT_MODEL_TIMEOUT_MS:-10000}
+    volumes:
+      - agent-data:/app/data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8788/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
         ]
       interval: 15s
       timeout: 5s
@@ -52,3 +85,4 @@ services:
     restart: unless-stopped
 volumes:
   studio-data:
+  agent-data:

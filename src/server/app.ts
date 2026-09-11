@@ -20,7 +20,9 @@ import {
   type CampaignRow,
   type ClaimRow,
 } from "./services/rewards.js";
-import { GroundedCopilot } from "./services/copilot.js";
+import { HttpAgentBridge, type AgentBridge } from "./services/agent-bridge.js";
+import { attachAgentGateway } from "./agent-gateway.js";
+import { channelCapabilities } from "../shared/channels.js";
 import type { Analytics, Fact, Room } from "../shared/types.js";
 
 type RoomRow = {
@@ -52,12 +54,16 @@ const factsFor = (db: DB, id: string): Fact[] =>
     evidence: f.evidence,
     approved: Boolean(f.approved),
   }));
-export function createApp(db: DB, config: Config, clock = Date.now) {
+export function createApp(
+  db: DB,
+  config: Config,
+  clock = Date.now,
+  agentBridge: AgentBridge = new HttpAgentBridge(config),
+) {
   const app = new Hono<{
     Variables: { merchantId: string; viewerId: string };
   }>();
-  const stream = createStreamAdapter(config),
-    copilot = new GroundedCopilot();
+  const stream = createStreamAdapter(config);
   const media = new MediaController(config);
   const roomDto = (r: RoomRow): Room => ({
     id: r.id,
@@ -194,12 +200,14 @@ export function createApp(db: DB, config: Config, clock = Date.now) {
       status: "ok",
       demoMode: config.demoMode,
       payments: "simulation",
-      copilot: "grounded-rules",
+      copilot: "agent-service",
+      agentIndependent: true,
       streamProvider: config.streamProvider,
       mediaControl: media.configured,
       requirePlayback: config.requirePlayback,
     });
   });
+  app.get("/api/channels", (c) => c.json({ channels: channelCapabilities }));
   app.get("/api/auth/me", (c) =>
     c.json({
       merchantId: readSession(c, config, "merchant", db)?.id || null,
@@ -377,31 +385,61 @@ export function createApp(db: DB, config: Config, clock = Date.now) {
     );
     return c.json({ ok: true });
   });
-  app.post("/api/merchant/rooms/:id/copilot", async (c) => {
-    const r = owned(c.req.param("id"), c.get("merchantId"));
-    const input = z
-      .object({
-        transcript: z.string().max(4000),
-        question: z.string().max(200).optional(),
-      })
-      .parse(await c.req.json());
-    const campaign = db
-      .prepare(
-        `SELECT * FROM campaigns WHERE room_id=? AND status='active' AND expires_at>? ORDER BY opens_at LIMIT 1`,
-      )
-      .get(r.id, clock()) as CampaignRow | undefined;
-    const cue = campaign
-      ? `演示红包：观看满 ${campaign.min_watch_seconds} 秒可参与。${clock() < campaign.opens_at ? Math.ceil((campaign.opens_at - clock()) / 1000) + " 秒后开启" : "现已开启"}；不发生实际转账。`
-      : undefined;
-    return c.json(
-      await copilot.suggest({
-        ...input,
+  attachAgentGateway(
+    app,
+    agentBridge,
+    (roomId, tenant, input) => {
+      const r = owned(roomId, tenant);
+      const campaign = db
+        .prepare(
+          `SELECT * FROM campaigns WHERE room_id=? AND status='active' AND expires_at>? ORDER BY opens_at LIMIT 1`,
+        )
+        .get(r.id, clock()) as CampaignRow | undefined;
+      const cue = campaign
+        ? `演示红包：观看满 ${campaign.min_watch_seconds} 秒可参与。${clock() < campaign.opens_at ? Math.ceil((campaign.opens_at - clock()) / 1000) + " 秒后开启" : "现已开启"}；不发生实际转账。`
+        : undefined;
+      return {
+        transcript: input.transcript,
+        question: input.question,
+        roomId: r.id,
         productName: r.product_name,
-        facts: factsFor(db, r.id),
+        facts: factsFor(db, r.id)
+          .filter((f) => f.approved && f.evidence.trim())
+          .map(({ id, text, evidence, approved }) => ({
+            id,
+            text,
+            evidence,
+            approved,
+          })),
         campaignCue: cue,
-      }),
-    );
-  });
+      };
+    },
+    (tenant, run) => {
+      const current = owned(run.roomId, tenant);
+      const approved = new Set(
+        factsFor(db, current.id)
+          .filter((f) => f.approved && f.evidence.trim())
+          .map((f) => f.id),
+      );
+      const evidenceChanged = run.result?.factIds.some(
+        (id) => !approved.has(id),
+      );
+      const expired =
+        run.mode === "live" &&
+        (current.status !== "live" ||
+          current.live_started_at > run.createdAt ||
+          clock() - run.createdAt > 120000);
+      return {
+        ...run,
+        stale: Boolean(evidenceChanged || expired),
+        staleReason: evidenceChanged
+          ? "引用的事实已撤回，请重新生成。"
+          : expired
+            ? "直播场次或时间已变化，请重新生成当前建议。"
+            : undefined,
+      };
+    },
+  );
   app.get("/api/merchant/rooms/:id/campaigns", (c) => {
     owned(c.req.param("id"), c.get("merchantId"));
     return c.json({

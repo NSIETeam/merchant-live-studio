@@ -3,15 +3,49 @@ export async function api<T>(
   method = "GET",
   body?: unknown,
 ): Promise<T> {
-  const res = await fetch(`${import.meta.env.BASE_URL}api${path}`, {
-    method,
-    credentials: "same-origin",
-    headers:
-      body !== undefined ? { "Content-Type": "application/json" } : undefined,
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || `请求失败 (${res.status})`);
+  let res: Response;
+  try {
+    res = await fetch(`${import.meta.env.BASE_URL}api${path}`, {
+      method,
+      credentials: "same-origin",
+      headers:
+        body !== undefined ? { "Content-Type": "application/json" } : undefined,
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  } catch {
+    throw new Error("网络连接暂时不可用，请检查网络后重试。");
+  }
+  const fallback =
+    res.status === 401
+      ? "登录状态已失效，请重新登录。"
+      : res.status === 403
+        ? "没有权限执行此操作，请确认当前账号。"
+        : res.status === 429
+          ? "请求较频繁，请稍后重试。"
+          : res.status >= 500
+            ? "服务暂时不可用，请稍后重试。"
+            : res.ok
+              ? "服务暂未返回有效结果，请稍后重试。"
+              : "请求未完成，请刷新页面后重试。";
+  let data: unknown;
+  try {
+    data = await res.json();
+  } catch {
+    throw new Error(fallback);
+  }
+  if (!res.ok) {
+    const businessError =
+      data && typeof data === "object" && "error" in data
+        ? data.error
+        : undefined;
+    throw new Error(
+      typeof businessError === "string" &&
+        businessError.trim() &&
+        !/<(?:!doctype|html|head|body)\b/i.test(businessError)
+        ? businessError
+        : fallback,
+    );
+  }
   return data as T;
 }
 export const money = (cents: number) =>

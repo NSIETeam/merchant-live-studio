@@ -33,7 +33,7 @@ const server = serve(
   { fetch: app.fetch, hostname: config.host, port: config.port },
   () =>
     console.log(
-      `Live Studio API ready at http://${config.host}:${config.port}; payment=simulation; copilot=grounded-rules`,
+      `Live Studio API ready at http://${config.host}:${config.port}; payment=simulation; agent=separate-service`,
     ),
 );
 const shutdown = () => {

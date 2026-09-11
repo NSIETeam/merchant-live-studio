@@ -1,3 +1,5 @@
+import { AgentWorkbench } from "./AgentWorkbench.js";
+import { AgentLiveCard } from "./AgentLiveCard.js";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
@@ -26,8 +28,6 @@ import type {
   Analytics,
   Campaign,
   Claim,
-  CopilotResult,
-  Fact,
   LedgerEntry,
   Question,
   Room,
@@ -304,7 +304,7 @@ function Workspace({
   }
   const tabs: { id: Tab; label: string; icon: typeof Radio }[] = [
     { id: "studio", label: "直播工作台", icon: Video },
-    { id: "copilot", label: "提词与合规", icon: Sparkles },
+    { id: "copilot", label: "直播 Agent", icon: Sparkles },
     { id: "rewards", label: "红包活动", icon: Gift },
     { id: "analytics", label: "直播分析", icon: Activity },
   ];
@@ -520,6 +520,10 @@ function Workspace({
                       />
                     </section>
                     <div className="studio-side">
+                      <AgentLiveCard
+                        roomId={selected.id}
+                        onOpen={() => setTab("copilot")}
+                      />
                       <section className="card readiness">
                         <span className="eyebrow">BEFORE YOU GO LIVE</span>
                         <h2>开播准备</h2>
@@ -570,7 +574,11 @@ function Workspace({
                 </>
               )}
               {tab === "copilot" && (
-                <Copilot key={selected.id} room={selected} onError={setError} />
+                <AgentWorkbench
+                  key={selected.id}
+                  roomId={selected.id}
+                  productName={selected.productName}
+                />
               )}
               {tab === "rewards" && (
                 <Rewards key={selected.id} room={selected} onError={setError} />
@@ -651,7 +659,7 @@ function Workspace({
           )}
         </div>
         <footer>
-          Live Studio <span>自托管商家直播 MVP · 0.2</span>
+          Live Studio <span>直播底座 + 独立 Agent · 0.3</span>
         </footer>
       </main>
       {creating && (
@@ -943,238 +951,6 @@ function Questions({
         <p className="empty-copy">还没有提问。观众发送的问题会在这里汇总。</p>
       )}
     </section>
-  );
-}
-function Copilot({
-  room,
-  onError,
-}: {
-  room: Room;
-  onError: (m: string) => void;
-}) {
-  const [facts, setFacts] = useState<Fact[]>([]),
-    [transcript, setTranscript] = useState(""),
-    [question, setQuestion] = useState(""),
-    [result, setResult] = useState<CopilotResult | null>(null),
-    [text, setText] = useState(""),
-    [evidence, setEvidence] = useState(""),
-    [large, setLarge] = useState(false),
-    [loading, setLoading] = useState(false);
-  const [refreshTick, setRefreshTick] = useState(0);
-  useEffect(() => {
-    const timer = setInterval(() => {
-      if (document.visibilityState === "visible") setRefreshTick((v) => v + 1);
-    }, 5000);
-    return () => clearInterval(timer);
-  }, []);
-  const refresh = useCallback(
-    () =>
-      api<{ facts: Fact[] }>(`/merchant/rooms/${room.id}/facts`).then((d) =>
-        setFacts(d.facts),
-      ),
-    [room.id],
-  );
-  useEffect(() => {
-    refresh().catch((e) => onError(e.message));
-  }, [refresh, onError]);
-  useEffect(() => {
-    let cancelled = false;
-    const timer = setTimeout(() => {
-      setLoading(true);
-      api<CopilotResult>(`/merchant/rooms/${room.id}/copilot`, "POST", {
-        transcript,
-        question: question || undefined,
-      })
-        .then((d) => {
-          if (!cancelled) setResult(d);
-        })
-        .catch((e) => {
-          if (!cancelled) onError(e.message);
-        })
-        .finally(() => {
-          if (!cancelled) setLoading(false);
-        });
-    }, 600);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [room.id, transcript, question, facts, onError, refreshTick]);
-  async function addFact(e: React.FormEvent) {
-    e.preventDefault();
-    try {
-      await api(`/merchant/rooms/${room.id}/facts`, "POST", {
-        text,
-        evidence,
-        approved: false,
-      });
-      setText("");
-      setEvidence("");
-      await refresh();
-    } catch (e) {
-      onError((e as Error).message);
-    }
-  }
-  return (
-    <div className={large ? "copilot-layout focus-mode" : "copilot-layout"}>
-      <div>
-        <section className="prompter">
-          <div className="prompter-top">
-            <span>
-              <Sparkles size={18} />
-              动态提词
-            </span>
-            <button className="text-button" onClick={() => setLarge(!large)}>
-              {large ? "退出专注" : "专注模式"}
-            </button>
-          </div>
-          <span className="eyebrow">
-            建议下一句 {loading ? "· 更新中" : ""}
-          </span>
-          <p className="script">
-            {result?.suggestion || "先添加并审核商品事实，再开始组织提词。"}
-          </p>
-          <div className="evidence-tags">
-            {result?.evidence.map((e, i) => (
-              <span key={i}>
-                <Check size={13} />
-                {e}
-              </span>
-            ))}
-          </div>
-          <div className="next-cue">
-            <span>下一环节</span>
-            <p>{result?.nextCue || "介绍商品 → 回答问题 → 说明活动"}</p>
-          </div>
-          <small>仅主播可见 · 本地事实规则引擎 · AI 模型接入接口已预留</small>
-        </section>
-        <section className="card transcript">
-          <div className="section-title">
-            <h2>
-              <Mic size={18} />
-              当前话术
-            </h2>
-            <span className="muted">输入后自动检查</span>
-          </div>
-          <label className="sr-only" htmlFor="transcript">
-            当前正在说的话
-          </label>
-          <textarea
-            id="transcript"
-            rows={4}
-            value={transcript}
-            maxLength={4000}
-            onChange={(e) => setTranscript(e.target.value)}
-            placeholder="输入或粘贴正在说的话，例如：这款杯子是全网最低价，保证保温一整天。"
-          />
-          <small>本版使用文本输入；实时语音识别接口可在后续接入。</small>
-          {question && (
-            <div className="selected-question">
-              正在回答：{question}
-              <button
-                className="icon-button"
-                aria-label="清除问题"
-                onClick={() => setQuestion("")}
-              >
-                <X size={15} />
-              </button>
-            </div>
-          )}
-        </section>
-        <Questions roomId={room.id} onChoose={setQuestion} />
-      </div>
-      <div>
-        <section className="card compliance">
-          <div className="section-title">
-            <h2>
-              <ShieldCheck size={19} />
-              合规提示
-            </h2>
-            <span className="pill">人工复核</span>
-          </div>
-          {result?.alerts.length ? (
-            result.alerts.map((a, i) => (
-              <div className={`risk ${a.level}`} key={i}>
-                <strong>
-                  {a.level === "high" ? "重点核实" : "待复核"} · {a.phrase}
-                </strong>
-                <p>{a.reason}</p>
-              </div>
-            ))
-          ) : (
-            <p className="empty-copy">
-              等待输入当前话术。规则未命中也不代表合规。
-            </p>
-          )}
-          <p className="fine-print">
-            系统不作法律判断，不把违规承诺换成同义词。证据、商品资质与完整上下文仍需核实。
-          </p>
-        </section>
-        <section className="card facts">
-          <div className="section-title">
-            <h2>可宣称事实库</h2>
-            <span className="muted">
-              {facts.filter((f) => f.approved).length} 条已审核
-            </span>
-          </div>
-          {facts.length ? (
-            facts.map((f) => (
-              <div className="fact" key={f.id}>
-                <div>
-                  <strong>{f.text}</strong>
-                  <p>{f.evidence}</p>
-                </div>
-                <button
-                  className={f.approved ? "approved" : "review-button"}
-                  onClick={async () => {
-                    try {
-                      await api(`/merchant/facts/${f.id}`, "PATCH", {
-                        approved: !f.approved,
-                      });
-                      await refresh();
-                    } catch (e) {
-                      onError((e as Error).message);
-                    }
-                  }}
-                >
-                  {f.approved ? "已审核 · 撤回" : "审核通过"}
-                </button>
-              </div>
-            ))
-          ) : (
-            <p className="empty-copy">
-              先添加商品标签、检测报告或活动规则中的事实。
-            </p>
-          )}
-          <form onSubmit={addFact}>
-            <label>
-              事实内容
-              <input
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                maxLength={400}
-                required
-                placeholder="例如：容量为 500 mL"
-              />
-            </label>
-            <label>
-              依据与出处
-              <input
-                value={evidence}
-                onChange={(e) => setEvidence(e.target.value)}
-                maxLength={500}
-                required
-                placeholder="文件名称、页码或可核验链接"
-              />
-            </label>
-            <button className="secondary full">
-              <Plus size={16} />
-              添加待审核事实
-            </button>
-          </form>
-        </section>
-      </div>
-    </div>
   );
 }
 function Rewards({

@@ -53,3 +53,33 @@ TRUSTED_PROXY_IPS=127.0.0.1,::ffff:127.0.0.1
 ## 防火墙与公网推流
 
 只验证 1935 的 TCP 连接并不足以确认 RTMP 可用。本次验收曾被已有主机防火墙拦截；保留原有规则、备份持久化配置后，仅增加 TCP 1935 入站规则，才通过独立公网主机的 RTMP 发布、HTTPS HLS 解码和主动断流验证。按实际部署选择推流协议及端口，云安全组与主机防火墙都需要检查。不得为了测试清空防火墙或暴露回环 Control API。回滚时同时移除本项目的端口规则及持久化条目，保留原业务规则。
+
+
+## 0.3：独立部署 Agent
+
+使用 `infra/merchant-live-agent.service`，单独系统用户 `live-agent`、数据目录 `/var/lib/merchant-live-agent`、环境文件 `/etc/merchant-live-agent/agent.env`；示例端口 `127.0.0.1:18893`。Live Core 不读取 Agent 数据库或模型密钥。两个服务共享一个随机的服务认证密钥，放在各自仅服务账号可读的环境文件；不要使用本地已知开发 token。
+
+Agent 环境示例：
+
+```dotenv
+NODE_ENV=production
+AGENT_HOST=127.0.0.1
+AGENT_PORT=18893
+AGENT_DATABASE_PATH=/var/lib/merchant-live-agent/agent.sqlite
+AGENT_SERVICE_TOKEN=REPLACE_WITH_AN_INDEPENDENT_RANDOM_SECRET
+AGENT_CONCURRENCY=2
+AGENT_QUEUE_LIMIT=100
+AGENT_TENANT_QUEUE_LIMIT=20
+AGENT_MODEL_PROVIDER=grounded-rules
+```
+
+Live Core 环境追加：
+
+```dotenv
+AGENT_SERVICE_URL=http://127.0.0.1:18893
+AGENT_SERVICE_TOKEN=THE_SAME_RANDOM_SERVICE_SECRET
+```
+
+Agent没有公网反向代理或端口开放；浏览器仍从同源 `/api/merchant/agent/...` 网关访问。systemd模板限制 Agent 内存192MB和半个CPU配额；实际限制应结合机器负载调整。Live Core不使用Requires=Agent，因此Agent重启、停机或模型失败不会让直播服务随之停止。模型配置以后只加入Agent环境文件，详见 [Agent配置](agent.md)。
+
+升级前备份Live数据库与配置，将新版本解压至独立release，安装依赖后切换current软链接并分别启动Agent与Live。失败时将current和Live环境文件恢复至旧版本并重启Live，保留新Agent数据库用于检查。不要覆盖已有流媒体或其他业务服务。

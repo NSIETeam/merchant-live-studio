@@ -1,6 +1,6 @@
 # API 索引
 
-对应 0.2.0。应用内部前缀为 `/api`；经 `/studio/` 代理部署时，浏览器请求 `/studio/api/...`，代理剥离 `/studio/`。`APP_BASE_PATH` 控制 Cookie 路径，前端使用构建时 `VITE_BASE_PATH`，详见[服务器部署](server-testing.md)。
+对应 0.3.0。应用内部前缀为 `/api`；经 `/studio/` 代理部署时，浏览器请求 `/studio/api/...`，代理剥离 `/studio/`。`APP_BASE_PATH` 控制 Cookie 路径，前端使用构建时 `VITE_BASE_PATH`，详见[服务器部署](server-testing.md)。
 
 成功通常返回 JSON，MediaMTX 鉴权成功为 204。普通错误为 `{ "error": "说明" }`，SRS 拒绝使用 `{ "code": 403 }`。金额用整数分，时间戳用 Unix 毫秒。普通写请求使用 `Content-Type: application/json`，空参数也传 `{}`。
 
@@ -26,7 +26,7 @@
 | 商家   | `GET /merchant/rooms/:id/facts`              | 事实、出处、批准状态                                          |
 | 商家   | `POST /merchant/rooms/:id/facts`             | `{text,evidence,approved:false}`                              |
 | 商家   | `PATCH /merchant/facts/:id`                  | `{approved:boolean}`，人工审核                                |
-| 商家   | `POST /merchant/rooms/:id/copilot`           | `{transcript,question?}`，本地规则建议                        |
+| 商家   | `POST /merchant/rooms/:id/copilot`           | `{transcript,question?}`，经私有 Agent 服务进行本地规则检查   |
 | 商家   | `GET /merchant/rooms/:id/campaigns`          | 活动列表与 serverTime                                         |
 | 商家   | `POST /merchant/rooms/:id/campaigns`         | 创建演示活动                                                  |
 | 商家   | `POST /merchant/campaigns/:id/close`         | 幂等关闭，返回演示余量                                        |
@@ -110,4 +110,30 @@ MediaMTX 支持 RTMP/RTMPS 踢连接后再次查询。未配置、协议不支�
 
 无有效会话为 401；跨站操作或资格不足为 403；无权访问另一商家资源统一为 404；状态、窗口和信号冲突通常为 409；格式验证为 400；超限为 429。微信通知能力未接入，返回 501 并保持支付状态不变。
 
-当前契约由共享 DTO、Zod 与 26 项回归测试维护，尚未生成 OpenAPI。后续需增加 API 版本化、分页、稳定错误码与审计。微信 OAuth/支付、远程 LLM 和 ASR 仍是待实现边界，见[架构](architecture.md)与[支付说明](payments.md)。
+当前契约由共享 DTO、Zod 与回归测试维护，尚未生成 OpenAPI。后续需增加 API 版本化、分页、稳定错误码与审计。微信 OAuth/支付和实时 ASR 尚未接入；模型 HTTP 适配已实现但真实模型按用户选择保持未配置，见[Agent 说明](agent.md)、[架构](architecture.md)与[支付说明](payments.md)。
+
+## 独立 Agent 网关（0.3）
+
+以下表格路径接在 `/api` 后，全部要求商家会话；网关从会话设置租户，商家不能伪造租户或模型连接配置。所有正文沿用 32 KiB 总上限。Agent 的私有 API 不直接暴露给浏览器。
+
+| 路径                                                          | 功能                                                                                                                                               |
+| ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /merchant/agent/status`                                  | 可用性、模型是否配置、队列占用；Agent 离线不会让直播健康接口失败                                                                                   |
+| `GET/POST /merchant/agent/profiles`                           | 标准/品牌风格列表；创建品牌风格                                                                                                                    |
+| `GET/POST /merchant/agent/profiles/:id/versions`              | 不可变版本历史；追加草稿版本                                                                                                                       |
+| `POST /merchant/agent/profiles/:id/versions/:version/publish` | 选择直播使用的已发布版本                                                                                                                           |
+| `POST /merchant/rooms/:id/copilot`                            | 兼容快速检查接口，转交独立 Agent 的本地规则，不触发远端模型                                                                                        |
+| `POST /merchant/rooms/:id/agent/runs`                         | 异步创建试演/直播建议，202 返回任务；正文为 profileId、version?、transcript、question?、mode、idempotencyKey；幂等重放返回原任务并复核当前过期状态 |
+| `GET /merchant/agent/runs/:id`                                | 读取任务与结果；结合当前直播数据标记过期                                                                                                           |
+| `POST /merchant/agent/runs/:id/feedback`                      | rating 为 useful/needs_work，note 为复盘意见；返回结果也复核事实撤回与过期状态                                                                     |
+| `GET /merchant/rooms/:id/agent/latest`                        | 只读取最近的 live 任务；rehearsal 草稿不会覆盖直播卡，Agent 离线返回 available=false                                                               |
+
+公开 `GET /api/channels` 不要求商家会话，报告当前渠道能力：网页入口可用，微信和合作方未配置，不冒充已验证身份、签名分享或真实支付。
+
+运行输入的商品、已审核事实与活动提示由网关从当前商家直播间提取。正文中附加 `context`、`facts`、`tenant`、模型地址或密钥会被拒绝。试演可指定草稿版本；`live` 任务入队时必须使用已发布版本。任务固定入队时的提示词与上下文快照，之后发布新版本不会改写历史任务。
+
+`/agent/latest` 向私有服务明确查询 `mode=live`，不会把时间较新的试演任务作为直播建议。返回的是最近直播任务及其真实状态，可能仍在排队、执行、失败或已完成；它不是“最近任意草稿”或“始终存在有效建议”的保证。
+
+任务单独读取、最新建议读取、创建接口的幂等重放结果及反馈结果都经过同一 `validateRun` 复核：引用事实撤回会标记 `stale`；直播任务在场次改变、房间结束或距创建超过 120 秒时也会标记 `stale` 并给出 `staleReason`。该标记在返回时根据当前直播数据计算，提交反馈或重放请求不能使旧结果重新有效。过期结果仅供历史复盘，当前建议需重新生成。
+
+详细数据结构见 `src/shared/agent.ts`，执行与模型契约见[Agent 说明](agent.md)。当前模型未配置；试演、反馈和阶段摘要不表示已经完成模型调优或微调。

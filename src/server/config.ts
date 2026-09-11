@@ -18,6 +18,8 @@ export interface Config {
   trustedProxyIps: string[];
   mediaControlToken: string;
   basePath: string;
+  agentServiceUrl: string;
+  agentServiceToken: string;
 }
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const production = env.NODE_ENV === "production";
@@ -39,6 +41,36 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const appOrigin = z.url().parse(env.APP_ORIGIN || "http://127.0.0.1:5173");
   if (production && !appOrigin.startsWith("https://"))
     throw new Error("Production APP_ORIGIN must use HTTPS");
+  const agentServiceUrl = (
+    env.AGENT_SERVICE_URL ?? (production ? "" : "http://127.0.0.1:8788")
+  ).replace(/\/$/, "");
+  if (agentServiceUrl) {
+    const parsed = new URL(agentServiceUrl);
+    if (
+      !["http:", "https:"].includes(parsed.protocol) ||
+      parsed.username ||
+      parsed.password ||
+      parsed.search ||
+      parsed.hash ||
+      parsed.pathname !== "/"
+    )
+      throw new Error(
+        "AGENT_SERVICE_URL must be an HTTP(S) origin without credentials or path",
+      );
+  }
+  const agentServiceToken =
+    env.AGENT_SERVICE_TOKEN ||
+    (production ? "" : "local-agent-development-token-change-me");
+  if (production && agentServiceUrl && agentServiceToken.length < 32)
+    throw new Error("AGENT_SERVICE_TOKEN must contain at least 32 characters");
+  if (
+    production &&
+    agentServiceUrl &&
+    agentServiceToken === "local-agent-development-token-change-me"
+  )
+    throw new Error(
+      "The known development Agent token cannot be used in production",
+    );
   return {
     production,
     demoMode,
@@ -68,5 +100,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       .split(",")
       .map((v) => v.trim())
       .filter(Boolean),
+    agentServiceUrl,
+    agentServiceToken,
   };
 }
