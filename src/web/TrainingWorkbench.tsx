@@ -154,7 +154,8 @@ function TrainingRoom({
   }, [roomId]);
   return (
     <div className="tw-root">
-      <div className="tw-intro">
+      <details className="tw-intro">
+        <summary>资料与评测使用说明</summary>
         <div>
           <span className="eyebrow">PREPARE · COMPARE · REVIEW</span>
           <h2>让每一句话，都有来处</h2>
@@ -164,7 +165,7 @@ function TrainingRoom({
           </p>
         </div>
         <BookOpen size={30} />
-      </div>
+      </details>
       {basis?.contentBound && (
         <p className={basis.stale ? "tw-alert" : "tw-notice"}>
           {basis.stale

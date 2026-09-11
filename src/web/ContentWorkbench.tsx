@@ -948,11 +948,11 @@ function ProductWorkspace({
                 )}
               </div>
             </main>
-            <aside className="cw-review-panel">
-              <div className="cw-panel-heading">
+            <details className="cw-review-panel cw-guidance">
+              <summary className="cw-panel-heading">
                 <h2>{view === "facts" ? "依据先行" : "制作进度"}</h2>
                 <BookOpen size={15} />
-              </div>
+              </summary>
               <div className="cw-panel-body">
                 <p className="cw-meta">
                   {view === "facts"
@@ -972,7 +972,7 @@ function ProductWorkspace({
                   </p>
                 </div>
               </div>
-            </aside>
+            </details>
           </>
         )}
       </div>

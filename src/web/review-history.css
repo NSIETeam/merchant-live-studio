@@ -1,6 +1,6 @@
 .script-comparison,
 .binding-history {
-  border-top: 1px solid var(--line, #dce4de);
+  border-top: 1px solid var(--line, #dcdfe4);
   margin-top: 12px;
   padding-top: 10px;
 }
@@ -36,21 +36,21 @@
 }
 .comparison-columns > section {
   min-width: 0;
-  background: #f7f9f7;
+  background: #f7f8f9;
   border-radius: 6px;
   padding: 10px;
 }
 .comparison-change {
   margin-top: 12px;
   padding: 10px;
-  border: 1px solid #dce4de;
+  border: 1px solid #dcdfe4;
   border-radius: 8px;
 }
 .comparison-change h4 {
   margin: 0 0 8px;
 }
 .comparison-added {
-  border-left: 3px solid #117c60;
+  border-left: 3px solid #3e444f;
 }
 .comparison-removed {
   border-left: 3px solid #c96044;
@@ -65,7 +65,7 @@
 }
 .comparison-empty,
 .comparison-note {
-  color: #65736b;
+  color: #656a73;
 }
 .binding-history ol {
   max-height: 350px;
@@ -74,7 +74,7 @@
 }
 .binding-history li {
   padding: 10px 0;
-  border-bottom: 1px solid #e5eae5;
+  border-bottom: 1px solid #e5e7ea;
 }
 .binding-history p {
   margin: 6px 0;

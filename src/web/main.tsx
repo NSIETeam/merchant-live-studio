@@ -255,6 +255,9 @@ function Workspace({
   );
   const [admissionRevision, setAdmissionRevision] = useState(0);
   const selected = rooms.find((r) => r.id === roomId);
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+  }, [tab]);
   const refreshRooms = useCallback(async () => {
     const data = await api<{ rooms: Room[] }>("/merchant/rooms");
     setRooms(data.rooms);

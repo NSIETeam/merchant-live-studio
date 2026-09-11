@@ -360,7 +360,7 @@
   overflow-wrap: anywhere;
   margin: 12px 0;
   padding: 14px;
-  background: #f3f6f3;
+  background: #f3f4f6;
   border-radius: 6px;
 }
 .workspace .bound-controls {
@@ -379,7 +379,7 @@
 }
 .workspace .bound-overview summary {
   cursor: pointer;
-  color: #286c56;
+  color: #414753;
 }
 .workspace .bound-overview ol {
   padding-left: 22px;
@@ -393,8 +393,8 @@
   padding: 5px;
 }
 .workspace .bound-overview button.active {
-  color: var(--green);
-  background: #e7f2e9;
+  color: var(--accent);
+  background: #eaecef;
 }
 .workspace .bound-overview p {
   padding: 5px 0;
@@ -410,7 +410,7 @@
   position: fixed;
   inset: 24px;
   z-index: 45;
-  box-shadow: 0 0 0 100vmax #102119cf;
+  box-shadow: 0 0 0 100vmax #16181bcf;
   display: flex;
   flex-direction: column;
   max-height: calc(100dvh - 48px);
@@ -528,4 +528,80 @@
   .workspace .tw-root button {
     min-height: 38px;
   }
+}
+/* Shared quiet surfaces and bounded secondary guidance. */
+.workspace .page-heading {
+  align-items: center;
+}
+.workspace .page-heading p {
+  max-width: 760px;
+}
+.workspace .sidebar-note {
+  display: none;
+}
+.workspace .account {
+  margin-top: auto;
+}
+.workspace .cw-grid:has(.cw-guidance) {
+  grid-template-columns: 200px minmax(0, 1fr);
+}
+.workspace .cw-guidance {
+  grid-column: 2;
+}
+.workspace .cw-guidance summary {
+  cursor: pointer;
+}
+.workspace .tw-intro {
+  display: block;
+  padding: 12px 14px;
+  background: #fff;
+  border-color: var(--border);
+}
+.workspace .tw-intro > summary {
+  cursor: pointer;
+  font-weight: 600;
+  min-height: 24px;
+}
+.workspace .tw-intro > svg {
+  display: none;
+}
+.workspace .aw-columns {
+  grid-template-columns: minmax(0, 2.4fr) minmax(240px, 1fr);
+}
+.workspace .aw-card,
+.workspace .tw-card,
+.workspace .card {
+  box-shadow: none;
+}
+.workspace .personal-home .home-heading h1 {
+  font-size: 26px;
+}
+@media (max-width: 700px) {
+  .workspace .cw-grid:has(.cw-guidance) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .workspace .cw-guidance {
+    grid-column: 1;
+  }
+  .workspace .aw-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.workspace .analytics-chart:has(.empty-chart) {
+  min-height: 0;
+}
+.workspace .empty-chart {
+  height: auto;
+  min-height: 120px;
+  padding: 20px 12px;
+}
+.workspace .empty-chart svg {
+  width: 24px;
+  height: 24px;
+}
+.workspace .stat {
+  padding: 10px 12px;
+}
+.workspace .stat strong {
+  font-size: 21px;
 }

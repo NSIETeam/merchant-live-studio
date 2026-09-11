@@ -32,7 +32,7 @@
   margin-bottom: 12px;
 }
 .workspace.live-workspace .studio-side {
-  border: 1px solid #dfe5e3;
+  border: 1px solid #dfe1e5;
   background: white;
   border-radius: 10px;
   min-width: 0;
@@ -48,7 +48,7 @@
 }
 .live-tool-tabs {
   display: flex;
-  border-bottom: 1px solid #e0e6e3;
+  border-bottom: 1px solid #e0e2e6;
   padding: 5px;
   gap: 3px;
 }
@@ -56,14 +56,14 @@
   flex: 1;
   padding: 10px 4px;
   background: transparent;
-  color: #69746f;
+  color: #696d74;
   white-space: nowrap;
   font-size: 12px;
   border-radius: 6px;
 }
 .live-tool-tabs button[aria-selected="true"] {
-  background: #edf5ee;
-  color: #1e674c;
+  background: #eff0f3;
+  color: #3b404a;
   font-weight: 600;
 }
 .workspace.live-workspace .bound-paragraph {
@@ -193,7 +193,7 @@
   }
 }
 .workspace .audience-share {
-  border: 1px solid #dfe5e3;
+  border: 1px solid #dfe1e5;
   border-radius: 8px;
   background: #fff;
   margin: 0 0 10px;

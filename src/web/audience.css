@@ -16,7 +16,7 @@
 }
 .audience-view button:focus-visible,
 .audience-view summary:focus-visible {
-  outline: 3px solid #b9ec95;
+  outline: 3px solid #b9bec8;
   outline-offset: -3px;
 }
 .audience-topbar {
@@ -34,7 +34,7 @@
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  color: #c8efb2;
+  color: #cbcfd6;
   font-size: 18px;
   font-weight: 700;
   white-space: nowrap;
@@ -65,10 +65,10 @@
   background: #8d9ca7;
 }
 .audience-live-status.is-live {
-  color: #c1efb6;
+  color: #cdd1d8;
 }
 .audience-live-status.is-live i {
-  background: #b6ed90;
+  background: #b7bcc6;
 }
 .audience-stage {
   position: relative;
@@ -106,8 +106,8 @@
   min-height: 48px;
   padding: 11px 24px;
   font-size: 17px;
-  background: #d0efb7;
-  color: #172619;
+  background: #ced1d8;
+  color: #1b1d22;
 }
 .audience-view .player-message {
   font-size: 16px;
@@ -131,7 +131,7 @@
   text-align: center;
 }
 .audience-stage-state > svg {
-  color: #c1d8bb;
+  color: #c3c7d0;
 }
 .audience-stage-state h2 {
   font-size: 22px;
@@ -181,11 +181,11 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  border: 1px solid #5b7270;
+  border: 1px solid #5b6372;
   border-radius: 10px;
   padding: 10px 10px 10px 16px;
-  background: #243a39f5;
-  color: #f4faf5;
+  background: #292d35f5;
+  color: #f6f7f8;
   font-size: 16px;
   overflow-wrap: anywhere;
 }
@@ -233,7 +233,7 @@
 .audience-toolbar > button:hover,
 .audience-toolbar > button.is-selected {
   background: #2a3a43;
-  color: #e0f8d0;
+  color: #e1e3e7;
 }
 .audience-toolbar-icon {
   display: inline-flex;
@@ -293,15 +293,15 @@
   overflow-wrap: anywhere;
 }
 .audience-help strong {
-  color: #ecf4ee;
+  color: #eeeff2;
 }
 .audience-action {
   min-height: 48px;
   border-radius: 10px;
   padding: 12px 18px;
   font-weight: 600;
-  background: #c7edaf;
-  color: #15241b;
+  background: #c8ccd4;
+  color: #191b20;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -313,8 +313,8 @@
   color: #a9b7c0;
 }
 .audience-secondary {
-  border: 1px solid #779289;
-  color: #d8efdd;
+  border: 1px solid #778092;
+  color: #e0e2e7;
   background: transparent;
   margin-bottom: 18px;
 }
@@ -336,8 +336,8 @@
   color: #96a9b4;
 }
 .audience-question-form textarea:focus {
-  outline: 2px solid #bcdf9a;
-  border-color: #c7edaf;
+  outline: 2px solid #b5bac4;
+  border-color: #c8ccd4;
 }
 .audience-question-meta {
   display: flex;
@@ -353,9 +353,9 @@
   width: 100%;
 }
 .audience-panel-notice {
-  color: #dfeddf;
-  background: #2b4038;
-  border: 1px solid #476759;
+  color: #e3e5e9;
+  background: #2f333c;
+  border: 1px solid #4d5461;
   border-radius: 9px;
   padding: 12px;
   font-size: 16px;
@@ -486,7 +486,7 @@
 }
 .audience-counting {
   font-size: 14px;
-  color: #b8d6aa;
+  color: #b8bdc8;
   margin-left: 12px;
 }
 @media (max-width: 600px) {

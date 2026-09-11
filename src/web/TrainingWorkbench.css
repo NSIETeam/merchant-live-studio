@@ -17,8 +17,8 @@
   overflow-wrap: anywhere;
 }
 .tw-intro {
-  background: #e8f0ec;
-  border: 1px solid #d4e3dc;
+  background: #eaebee;
+  border: 1px solid #d7dae0;
   border-radius: 14px;
   padding: 24px;
   display: flex;
@@ -31,12 +31,12 @@
   margin: 6px 0;
 }
 .tw-intro p {
-  color: #4d6559;
+  color: #4e5564;
   font-size: 0.9rem;
   max-width: 740px;
 }
 .tw-intro > svg {
-  color: var(--green);
+  color: var(--accent);
   flex-shrink: 0;
 }
 .tw-tabs {
@@ -58,7 +58,7 @@
 }
 .tw-tabs button.active {
   color: #fff;
-  background: var(--green);
+  background: var(--accent);
 }
 .tw-stack {
   display: grid;
@@ -80,7 +80,7 @@
   gap: 20px;
 }
 .tw-card > header > svg {
-  color: var(--green);
+  color: var(--accent);
   flex-shrink: 0;
 }
 .tw-card > header p {
@@ -131,8 +131,8 @@
 }
 .tw-upload {
   padding: 16px;
-  border: 1px dashed #b9cbc0;
-  background: #f6f9f7;
+  border: 1px dashed #bbc0c9;
+  background: #f7f7f8;
   border-radius: 10px;
 }
 .tw-upload input {
@@ -146,7 +146,7 @@
   padding: 7px 12px;
   border-radius: 6px;
   margin-right: 10px;
-  color: #344d40;
+  color: #393e48;
 }
 .tw-fit {
   justify-self: start;
@@ -163,8 +163,8 @@
   background: #fdf0ee;
 }
 .tw-notice {
-  color: #1c644b;
-  background: #edf6ef;
+  color: #383d48;
+  background: #f0f1f3;
 }
 .tw-warning {
   color: #765822;
@@ -196,8 +196,8 @@
 }
 .tw-scroll th {
   text-align: left;
-  background: #f3f6f4;
-  color: #58695f;
+  background: #f3f4f6;
+  color: #585e69;
 }
 .tw-scroll th,
 .tw-scroll td {
@@ -251,11 +251,11 @@
   width: fit-content;
 }
 .tw-badge.good {
-  background: #e7f3eb;
-  color: #1e6b4b;
+  background: #ebecef;
+  color: #3c424d;
 }
 .tw-source {
-  color: #5c7265;
+  color: #5c6372;
   font-size: 0.8rem;
   margin-top: 6px;
   white-space: pre-wrap;
@@ -269,11 +269,11 @@
 .tw-review summary {
   cursor: pointer;
   font-weight: 600;
-  color: #3c5647;
+  color: #404652;
 }
 .tw-record {
   padding: 12px 0;
-  border-bottom: 1px solid #eff2ef;
+  border-bottom: 1px solid #eff0f2;
   display: grid;
   gap: 5px;
 }
@@ -306,11 +306,11 @@
   height: 16px;
   flex: 0 0 16px;
   margin: 3px 0 0;
-  accent-color: var(--green);
+  accent-color: var(--accent);
   padding: 0;
 }
 .tw-receipt {
-  background: #f3f8f4;
+  background: #f4f5f7;
   border-radius: 10px;
   padding: 20px;
 }
@@ -338,8 +338,8 @@
   padding-top: 20px;
 }
 .tw-case-editor {
-  background: #f7f9f8;
-  border: 1px solid #e1e8e3;
+  background: #f7f8f9;
+  border: 1px solid #e1e3e8;
   padding: 18px;
   border-radius: 12px;
   display: grid;
@@ -349,10 +349,10 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  color: #496653;
+  color: #4d5462;
 }
 .tw-case-expect {
-  border-top: 1px dashed #cfdbd2;
+  border-top: 1px dashed #d0d3da;
   padding-top: 14px;
   display: grid;
   gap: 12px;
@@ -365,8 +365,8 @@
 }
 .tw-suite-summary {
   font-size: 0.84rem;
-  color: #587061;
-  border-left: 3px solid #a7c8b4;
+  color: #586070;
+  border-left: 3px solid #afb5c0;
   padding-left: 12px;
 }
 .tw-comparison {
@@ -377,7 +377,7 @@
 }
 .tw-variant {
   border: 1px solid var(--border);
-  background: #f8faf9;
+  background: #f8f9fa;
   padding: 18px;
   border-radius: 10px;
   display: grid;
@@ -385,7 +385,7 @@
 }
 .tw-variant > strong {
   font-size: 0.85rem;
-  color: #58705d;
+  color: #586070;
 }
 .tw-results {
   display: grid;
@@ -417,7 +417,7 @@
   font-size: 0.78rem;
 }
 .tw-counters b {
-  color: #243d2d;
+  color: #2b2f36;
   font-size: 1.6rem;
 }
 .tw-case-result {
@@ -428,8 +428,8 @@
 }
 .tw-case-input {
   font-size: 0.84rem;
-  color: #67756c;
-  background: #f4f6f5;
+  color: #676c75;
+  background: #f4f5f6;
   padding: 12px 14px;
   border-radius: 8px;
 }
@@ -455,9 +455,9 @@
 }
 .tw-output blockquote {
   margin: 0;
-  border-left: 3px solid #87b99c;
+  border-left: 3px solid #959cab;
   padding: 10px 12px;
-  background: #f2f7f3;
+  background: #f3f4f6;
   white-space: pre-wrap;
   font-size: 0.91rem;
 }
@@ -489,8 +489,8 @@
   line-height: 18px;
 }
 .tw-check-results .passed > span {
-  color: #267447;
-  background: #eaf6ed;
+  color: #444a56;
+  background: #eeeff2;
 }
 .tw-check-results .failed > span {
   color: #9b6030;
@@ -516,7 +516,7 @@
 .tw-footnote {
   color: var(--muted);
   font-size: 0.8rem;
-  background: #f5f7f6;
+  background: #f5f6f7;
   padding: 15px;
   border-radius: 8px;
 }

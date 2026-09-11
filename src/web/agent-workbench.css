@@ -27,10 +27,10 @@
   flex-wrap: wrap;
   gap: 8px 20px;
   padding: 12px 16px;
-  border: 1px solid #dce6e2;
+  border: 1px solid #dde0e5;
   border-radius: 12px;
-  background: #f7faf8;
-  color: #62736b;
+  background: #f8f8f9;
+  color: #626873;
   font-size: 0.78rem;
 }
 .aw-service > div {
@@ -40,7 +40,7 @@
   gap: 9px;
 }
 .aw-service strong {
-  color: #273d33;
+  color: #2c3038;
   font-size: 0.85rem;
 }
 .aw-status-dot {
@@ -51,8 +51,8 @@
   background: #ba8c4a;
 }
 .aw-status-dot.aw-online {
-  background: #198268;
-  box-shadow: 0 0 0 3px #e0eee7;
+  background: #444a57;
+  box-shadow: 0 0 0 3px #e4e6ea;
 }
 .aw-service-note,
 .aw-help {
@@ -95,20 +95,20 @@
   margin: 0;
 }
 .aw-muted {
-  color: #718077;
+  color: #717680;
   font-size: 0.73rem;
 }
 .aw-prompter {
   padding: 24px 28px;
-  color: #f1f7f2;
+  color: #f3f4f5;
   border-radius: 16px;
-  background: linear-gradient(130deg, #142b25, #17252a);
+  background: linear-gradient(130deg, #1c1e23, #17252a);
   min-width: 0;
 }
 .aw-prompter h2 {
   font-size: 0.91rem;
   font-weight: 500;
-  color: #c5d8cc;
+  color: #c9cdd4;
 }
 .aw-text-button {
   display: inline-flex;
@@ -122,11 +122,11 @@
   font-size: 0.76rem;
 }
 .aw-text-button:hover {
-  background: #8694881c;
+  background: #868b941c;
 }
 .aw-result-label {
   font-size: 0.72rem;
-  color: #a4bbae;
+  color: #a6acb9;
   margin-top: 25px;
 }
 .aw-script {
@@ -146,8 +146,8 @@
   align-items: center;
   gap: 5px;
   padding: 5px 8px;
-  background: #4d755c30;
-  color: #c7deca;
+  background: #555d6d30;
+  color: #cdd1d8;
   border-radius: 5px;
   font-size: 0.7rem;
 }
@@ -161,7 +161,7 @@
 }
 .aw-next > span {
   font-size: 0.7rem;
-  color: #a3b9ab;
+  color: #a4abb8;
 }
 .aw-next p {
   font-size: 0.87rem;
@@ -174,7 +174,7 @@
   gap: 12px;
   margin-top: 16px;
   font-size: 0.68rem;
-  color: #9dafaa;
+  color: #9da3af;
 }
 .aw-abstained {
   margin-top: 12px;
@@ -189,14 +189,14 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  background: #f0f6f3;
+  background: #f2f3f4;
   border-radius: 8px;
   padding: 8px 10px;
   font-size: 0.81rem;
   margin-top: 9px;
 }
 .aw-selected-question button {
-  color: #48715e;
+  color: #515968;
   background: transparent;
   display: grid;
   place-items: center;
@@ -215,7 +215,7 @@
   display: grid;
   gap: 7px;
   font-size: 0.77rem;
-  color: #5c6b63;
+  color: #5c616b;
 }
 .aw-run-controls select {
   font-size: 0.82rem;
@@ -241,23 +241,23 @@
   line-height: 1.4;
 }
 .aw-primary {
-  background: #117c60;
+  background: #3e444f;
   color: white;
 }
 .aw-primary:hover:not(:disabled) {
-  background: #0b654d;
+  background: #31363f;
 }
 .aw-secondary {
-  background: #f1f4f2;
-  color: #3f594b;
+  background: #f1f2f4;
+  color: #434955;
 }
 .aw-secondary:hover:not(:disabled) {
-  background: #e3ece6;
+  background: #e5e7ea;
 }
 .aw-feedback-selected,
 .aw-approved {
-  color: #177356;
-  background: #e3f2e9;
+  color: #3d424d;
+  background: #e8eaed;
 }
 .aw-job-progress {
   display: flex;
@@ -265,19 +265,19 @@
   gap: 8px;
   flex-wrap: wrap;
   padding-top: 13px;
-  color: #2a7d60;
+  color: #49505e;
   font-size: 0.78rem;
 }
 .aw-job-progress > span:last-child {
   width: 100%;
-  color: #7a867e;
+  color: #7a7e86;
   font-size: 0.71rem;
 }
 .aw-spinner {
   width: 13px;
   height: 13px;
-  border: 2px solid #b5d5c5;
-  border-top-color: #247353;
+  border: 2px solid #bec3cc;
+  border-top-color: #424855;
   border-radius: 50%;
   animation: aw-spin 1s linear infinite;
 }
@@ -290,8 +290,8 @@
   font-size: 0.68rem;
   padding: 3px 7px;
   border-radius: 5px;
-  background: #eef5f0;
-  color: #447653;
+  background: #f0f1f3;
+  color: #525968;
 }
 .aw-badge-review {
   background: #faf1df;
@@ -299,7 +299,7 @@
 }
 .aw-empty {
   font-size: 0.82rem;
-  color: #79867e;
+  color: #797d86;
   line-height: 1.8;
 }
 .aw-compliance .aw-help {
@@ -332,7 +332,7 @@
 .aw-agent-alerts {
   padding-top: 16px;
   margin-top: 16px;
-  border-top: 1px solid #e8ede9;
+  border-top: 1px solid #e8eaed;
 }
 .aw-question {
   display: flex;
@@ -341,18 +341,18 @@
   gap: 15px;
   align-items: center;
   text-align: left;
-  background: #f7f9f7;
+  background: #f7f8f9;
   padding: 12px;
   border-radius: 8px;
   margin-top: 8px;
-  color: #43574a;
+  color: #444a56;
   font-size: 0.81rem;
 }
 .aw-question:hover {
-  background: #edf3ee;
+  background: #eeeff2;
 }
 .aw-question b {
-  color: #658271;
+  color: #666f81;
   font-size: 0.73rem;
   flex-shrink: 0;
 }
@@ -365,7 +365,7 @@
   display: flex;
   gap: 11px;
   padding: 12px 0;
-  border-bottom: 1px solid #eff2ef;
+  border-bottom: 1px solid #eff0f2;
   align-items: flex-start;
 }
 .aw-stages li:last-child {
@@ -379,8 +379,8 @@
   flex-shrink: 0;
   border-radius: 50%;
   font-size: 0.65rem;
-  background: #e7f3e9;
-  color: #497d50;
+  background: #ebecef;
+  color: #575f6f;
   margin-top: 2px;
 }
 .aw-stage-review {
@@ -399,18 +399,18 @@
   font-size: 0.8rem;
 }
 .aw-stages p {
-  color: #7b877e;
+  color: #7b7f87;
   font-size: 0.75rem;
   margin-top: 3px;
 }
 .aw-stage-status {
   font-size: 0.67rem;
-  color: #7f8c82;
+  color: #7f838c;
   white-space: nowrap;
 }
 .aw-decision {
   font-size: 0.77rem;
-  color: #6c7a70;
+  color: #6c717a;
   margin-top: 12px;
 }
 .aw-decision summary {
@@ -424,7 +424,7 @@
 }
 .aw-feedback {
   margin-top: 20px;
-  border-top: 1px solid #e8ede9;
+  border-top: 1px solid #e8eaed;
   padding-top: 17px;
   display: grid;
   gap: 10px;
@@ -465,13 +465,13 @@
 .aw-facts > summary span {
   display: block;
   font-size: 0.74rem;
-  color: #7f8b82;
+  color: #7f838b;
   margin-top: 4px;
 }
 .aw-editor > summary > svg,
 .aw-facts > summary > svg {
   flex-shrink: 0;
-  color: #728377;
+  color: #727883;
   transition: transform 0.15s;
 }
 .aw-editor[open] > summary > svg,
@@ -515,10 +515,10 @@
   flex: 2 1 200px;
 }
 .aw-example {
-  border: 1px solid #e3eae4;
+  border: 1px solid #e4e6e9;
   padding: 14px;
   border-radius: 9px;
-  background: #fafcfa;
+  background: #fbfbfb;
   display: grid;
   gap: 12px;
 }
@@ -527,10 +527,10 @@
 }
 .aw-example strong {
   font-size: 0.77rem;
-  color: #5e7364;
+  color: #5e6573;
 }
 .aw-brand-form {
-  border-top: 1px solid #e4eae5;
+  border-top: 1px solid #e4e6ea;
   padding-top: 18px;
   display: flex;
   gap: 10px;
@@ -542,7 +542,7 @@
 }
 .aw-fact {
   padding: 13px 0;
-  border-bottom: 1px solid #edf0ed;
+  border-bottom: 1px solid #edeef0;
 }
 .aw-fact:first-of-type {
   padding-top: 0;
@@ -552,7 +552,7 @@
 }
 .aw-fact p {
   font-size: 0.74rem;
-  color: #7c8a80;
+  color: #7c818a;
   margin: 4px 0 9px;
 }
 .aw-fact button {
@@ -590,9 +590,9 @@
   border: 1px solid #f3d5c9;
 }
 .aw-success {
-  color: #367257;
-  background: #edf7ef;
-  border: 1px solid #dcebdd;
+  color: #4a515e;
+  background: #f0f1f4;
+  border: 1px solid #e0e2e7;
 }
 .aw-stale {
   color: #886b35;
