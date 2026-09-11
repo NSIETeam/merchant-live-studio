@@ -97,7 +97,16 @@ export function memberMayAccess(
         method === "POST" &&
         /^\/api\/merchant\/disclosure\/\d+\/review$/.test(path))
     );
-  if (path.startsWith("/api/merchant/complaints")) return false;
+  if (path.startsWith("/api/merchant/complaints"))
+    return (
+      role === "reviewer" &&
+      ((method === "GET" &&
+        /^\/api\/merchant\/complaints\/rooms\/[^/]+$/.test(path)) ||
+        (method === "POST" &&
+          /^\/api\/merchant\/complaints\/[^/]+\/appeals\/[^/]+\/reply$/.test(
+            path,
+          )))
+    );
   if (
     path.startsWith("/api/merchant/attribution") ||
     path.startsWith("/api/merchant/engagement")

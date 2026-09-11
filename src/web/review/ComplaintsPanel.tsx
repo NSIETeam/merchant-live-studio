@@ -1,17 +1,21 @@
 import { useState } from "react";
 import { api } from "../shared/api.js";
 import {
+  complaintAppealStates,
   complaintCategories,
   complaintStates,
   type Complaint,
   type ComplaintPage,
 } from "../../shared/complaints.js";
+import type { MemberRole } from "../../shared/membership.js";
 export function ComplaintsPanel({
   roomId,
   merchant = false,
+  role,
 }: {
   roomId: string;
   merchant?: boolean;
+  role?: MemberRole;
 }) {
   const [items, setItems] = useState<Complaint[]>([]),
     [after, setAfter] = useState<string | null>(null),
@@ -121,13 +125,17 @@ export function ComplaintsPanel({
               </h3>
               <small>编号：{item.id}</small>
               <p>{item.body}</p>
+              <p className={item.overdue ? "complaint-overdue" : "muted"}>
+                首次处理目标：{new Date(item.responseDueAt).toLocaleString()}
+                {item.overdue ? " · 已超时" : ""}
+              </p>
               {item.events.map((event) => (
                 <p key={event.version}>
                   {new Date(event.createdAt).toLocaleString()} ·{" "}
                   {complaintStates[event.state]}：{event.reply}
                 </p>
               ))}
-              {merchant && (
+              {merchant && role === "owner" && (
                 <Reply
                   key={item.events.length}
                   item={item}
@@ -148,6 +156,74 @@ export function ComplaintsPanel({
                   }
                 />
               )}
+              {!merchant &&
+                item.events.at(-1)?.state === "resolved" &&
+                !item.appeal && (
+                  <Appeal
+                    busy={busy}
+                    submit={(reason, idempotencyKey) =>
+                      void act(async () => {
+                        await api(
+                          `/viewer/rooms/${roomId}/complaints/${item.id}/appeals`,
+                          "POST",
+                          { reason, idempotencyKey },
+                        );
+                        await refresh();
+                      })
+                    }
+                  />
+                )}
+              {item.appeal && (
+                <section className="complaint-appeal">
+                  <h4>
+                    申诉 ·{" "}
+                    {complaintAppealStates[item.appeal.events.at(-1)!.state]}
+                  </h4>
+                  <p>{item.appeal.reason}</p>
+                  <p
+                    className={
+                      item.appeal.overdue ? "complaint-overdue" : "muted"
+                    }
+                  >
+                    复核目标：
+                    {new Date(item.appeal.reviewDueAt).toLocaleString()}
+                    {item.appeal.overdue ? " · 已超时" : ""}
+                  </p>
+                  {item.appeal.events.map((event) => (
+                    <p key={event.version}>
+                      {new Date(event.createdAt).toLocaleString()} ·{" "}
+                      {complaintAppealStates[event.state]}：{event.reply}
+                    </p>
+                  ))}
+                  {merchant &&
+                    role === "reviewer" &&
+                    item.appeal.events.at(-1)?.state !== "resolved" && (
+                      <Reply
+                        item={item}
+                        busy={busy}
+                        appeal
+                        submit={(reply, state) =>
+                          void act(async () => {
+                            await api(
+                              `/merchant/complaints/${item.id}/appeals/${item.appeal!.id}/reply`,
+                              "POST",
+                              {
+                                previousVersion:
+                                  item.appeal!.events.at(-1)!.version,
+                                reply,
+                                state,
+                              },
+                            );
+                            await refresh();
+                          })
+                        }
+                      />
+                    )}
+                  {merchant && role === "owner" && (
+                    <p className="muted">申诉由独立审核员复核。</p>
+                  )}
+                </section>
+              )}
             </article>
           ))}
           {after && (
@@ -167,10 +243,12 @@ function Reply({
   item,
   busy,
   submit,
+  appeal = false,
 }: {
   item: Complaint;
   busy: boolean;
   submit: (reply: string, state: string) => void;
+  appeal?: boolean;
 }) {
   const [reply, setReply] = useState(""),
     [state, setState] = useState("reviewing");
@@ -184,14 +262,16 @@ function Reply({
       <label>
         处理状态
         <select value={state} onChange={(e) => setState(e.target.value)}>
-          <option value="reviewing">处理中 / 重新受理</option>
-          <option value="resolved">已答复</option>
+          <option value="reviewing">
+            {appeal ? "复核中" : "处理中 / 重新受理"}
+          </option>
+          <option value="resolved">{appeal ? "复核完成" : "已答复"}</option>
         </select>
       </label>
       <label>
         给观众的回执
         <textarea
-          aria-label={`投诉 ${item.id} 的回执`}
+          aria-label={`投诉 ${item.id} 的${appeal ? "申诉" : "处理"}回执`}
           required
           minLength={5}
           maxLength={2000}
@@ -200,6 +280,41 @@ function Reply({
         />
       </label>
       <button disabled={busy || reply.trim().length < 5}>保存并反馈</button>
+    </form>
+  );
+}
+
+function Appeal({
+  busy,
+  submit,
+}: {
+  busy: boolean;
+  submit: (reason: string, idempotencyKey: string) => void;
+}) {
+  const [reason, setReason] = useState(""),
+    [key, setKey] = useState(() => crypto.randomUUID());
+  return (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        submit(reason, key);
+      }}
+    >
+      <label>
+        对处理结果申诉
+        <textarea
+          required
+          minLength={5}
+          maxLength={2000}
+          value={reason}
+          onChange={(event) => {
+            setReason(event.target.value);
+            setKey(crypto.randomUUID());
+          }}
+          placeholder="说明仍有异议的原因，至少 5 个字"
+        />
+      </label>
+      <button disabled={busy || reason.trim().length < 5}>提交独立复核</button>
     </form>
   );
 }

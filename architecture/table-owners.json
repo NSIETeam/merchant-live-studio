@@ -57,6 +57,8 @@
     "disclosure_events": "review",
     "complaints": "review",
     "complaint_events": "review",
+    "complaint_appeals": "review",
+    "complaint_appeal_events": "review",
     "live_admissions": "live",
     "moderation_actions": "live",
     "moderation_results": "live",

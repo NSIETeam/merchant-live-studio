@@ -768,11 +768,12 @@ function Workspace({
                   </details>
                   <details className="live-management">
                     <summary>直播管理 · 投诉、录像与数据</summary>
-                    {memberRole === "owner" && (
+                    {["owner", "reviewer"].includes(memberRole) && (
                       <ComplaintsPanel
                         key={selected.id}
                         roomId={selected.id}
                         merchant
+                        role={memberRole}
                       />
                     )}
                     <Stats analytics={analytics} />
@@ -816,11 +817,12 @@ function Workspace({
               )}
               {tab === "analytics" && (
                 <>
-                  {memberRole === "owner" && (
+                  {["owner", "reviewer"].includes(memberRole) && (
                     <ComplaintsPanel
                       key={selected.id}
                       roomId={selected.id}
                       merchant
+                      role={memberRole}
                     />
                   )}
                   <Stats analytics={analytics} />

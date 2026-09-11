@@ -1737,9 +1737,58 @@ progress::-moz-progress-bar {
 }
 
 /* Account controls remain folded and fit narrow screens. */
-.account-provisioning form { display: grid; gap: 10px; max-width: 38rem; padding: 16px 0; border-bottom: 1px solid #e2e4e8; }
-.account-provisioning form > button { justify-self: start; padding: 9px 14px; border: 1px solid #d4d7dd; border-radius: 6px; }
-.account-provisioning .account-confirm { display: flex; align-items: flex-start; gap: 8px; font-weight: 400; }
-.account-provisioning .account-confirm input { width: auto; flex: 0 0 auto; margin-top: 3px; }
-.account-provisioning textarea { width: 100%; min-width: 0; overflow-wrap: anywhere; }
-.account-provisioning .notice { margin-block: 12px; }
+.account-provisioning form {
+  display: grid;
+  gap: 10px;
+  max-width: 38rem;
+  padding: 16px 0;
+  border-bottom: 1px solid #e2e4e8;
+}
+.account-provisioning form > button {
+  justify-self: start;
+  padding: 9px 14px;
+  border: 1px solid #d4d7dd;
+  border-radius: 6px;
+}
+.account-provisioning .account-confirm {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-weight: 400;
+}
+.account-provisioning .account-confirm input {
+  width: auto;
+  flex: 0 0 auto;
+  margin-top: 3px;
+}
+.account-provisioning textarea {
+  width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.account-provisioning .notice {
+  margin-block: 12px;
+}
+
+.complaints-body article {
+  padding-block: 16px;
+  border-top: 1px solid #e2e4e8;
+}
+.complaint-overdue {
+  color: #9f2d2d;
+  background: #fff2f2;
+  border: 1px solid #efcccc;
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+.complaint-appeal {
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid #d9dce2;
+  border-left: 3px solid #747b88;
+  border-radius: 6px;
+  background: #f7f7f8;
+}
+.complaint-appeal h4 {
+  margin-top: 0;
+}
