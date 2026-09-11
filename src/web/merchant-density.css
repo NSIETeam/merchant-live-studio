@@ -580,8 +580,10 @@
   .workspace .cw-grid:has(.cw-guidance) {
     grid-template-columns: minmax(0, 1fr);
   }
-  .workspace .cw-guidance {
+  .workspace .cw-sidebar,
+  .workspace .cw-review-panel {
     grid-column: 1;
+    grid-row: auto;
   }
   .workspace .aw-columns {
     grid-template-columns: minmax(0, 1fr);
@@ -762,8 +764,10 @@
   .workspace .cw-grid {
     grid-template-columns: minmax(0, 1fr);
   }
-  .workspace .cw-guidance {
+  .workspace .cw-sidebar,
+  .workspace .cw-review-panel {
     grid-column: 1;
+    grid-row: auto;
   }
 }
 @media (max-width: 700px) {
@@ -792,4 +796,12 @@
   .workspace .two-fields {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+/* Focus layout must win regardless of deferred stylesheet load order. */
+.workspace .aw-focus .aw-columns {
+  grid-template-columns: minmax(0, 1fr);
+}
+.workspace .aw-focus .aw-script {
+  font-size: clamp(1.8rem, 3.5vw, 3rem);
 }

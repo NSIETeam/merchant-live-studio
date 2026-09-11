@@ -286,3 +286,12 @@
 .camera-controls button {
   min-height: 44px;
 }
+
+/* Expanded prompter uses the available viewport, not the inline card limit. */
+.workspace.live-workspace .bound-expanded .bound-paragraph {
+  max-height: none;
+  min-height: 0;
+}
+.workspace.live-workspace .bound-expanded {
+  overflow: auto;
+}
