@@ -328,6 +328,17 @@ export function openDatabase(path: string) {
         Date.now(),
       );
     });
+  if (version < 14)
+    transaction(db, () => {
+      db.exec(`CREATE TABLE live_admissions(id INTEGER PRIMARY KEY AUTOINCREMENT,room_id TEXT NOT NULL REFERENCES rooms(id),merchant_id TEXT NOT NULL,actor_id TEXT NOT NULL,basis_json TEXT NOT NULL,created_at INTEGER NOT NULL);
+      CREATE INDEX live_admissions_room ON live_admissions(room_id,id);
+      CREATE TRIGGER live_admissions_immutable_update BEFORE UPDATE ON live_admissions BEGIN SELECT RAISE(ABORT,'immutable'); END;
+      CREATE TRIGGER live_admissions_immutable_delete BEFORE DELETE ON live_admissions BEGIN SELECT RAISE(ABORT,'immutable'); END;`);
+      db.prepare("INSERT INTO schema_migrations VALUES(?,?)").run(
+        14,
+        Date.now(),
+      );
+    });
   return db;
 }
 export type DB = ReturnType<typeof openDatabase>;

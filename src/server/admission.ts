@@ -1,0 +1,64 @@
+import type { DB } from "./db.js";
+import type { Config } from "./config.js";
+import { getRoomContentBinding } from "./content.js";
+import type { AdmissionCheck } from "../shared/admission.js";
+export function admissionCheck(
+  db: DB,
+  config: Config,
+  roomId: string,
+  merchantId: string,
+  controlReachable: boolean,
+): AdmissionCheck {
+  const disclosure = db
+    .prepare(
+      "SELECT version,action FROM disclosure_events WHERE merchant_id=? ORDER BY id DESC LIMIT 1",
+    )
+    .get(merchantId);
+  const binding = getRoomContentBinding(db, roomId, merchantId, true);
+  const configured =
+    config.streamProvider === "mediamtx" &&
+    Boolean(config.mediaControlUrl) &&
+    Boolean(config.streamAuthSecret);
+  const checks = [
+    {
+      code: "disclosure",
+      label: "经营者公示",
+      passed: disclosure?.action === "publish",
+      detail:
+        disclosure?.action === "publish"
+          ? "已有独立复核的公示资料"
+          : "请先填写企业资料并由另一账号复核公示",
+    },
+    {
+      code: "script",
+      label: "独立审核定稿",
+      passed: Boolean(binding && !binding.stale),
+      detail: !binding
+        ? "请先绑定另一账号审核通过的讲稿"
+        : binding.stale
+          ? "当前讲稿或依据已失效，或尚未完成独立审核"
+          : "已绑定有效的独立审核版本",
+    },
+    {
+      code: "media",
+      label: "推流鉴权与断流控制",
+      passed: configured && controlReachable,
+      detail: !configured
+        ? "服务器尚未接通推流鉴权和强制断流控制，请联系管理员"
+        : !controlReachable
+          ? "流媒体控制服务暂时不可达，请恢复后重试"
+          : "控制服务可达；实际断流效果仍需现场验证",
+    },
+  ];
+  return {
+    enforced: config.requireReviewedLive,
+    ready: checks.every((check) => check.passed),
+    checks,
+    basis: {
+      disclosureVersion:
+        disclosure?.action === "publish" ? Number(disclosure.version) : null,
+      courseId: binding?.courseId || null,
+      scriptVersion: binding?.scriptVersion || null,
+    },
+  };
+}

@@ -1,3 +1,4 @@
+import { AdmissionPanel } from "./AdmissionPanel.js";
 import { MerchantDisclosure } from "./DisclosurePanel.js";
 import { ComplaintsPanel } from "./ComplaintsPanel.js";
 import { MerchantEngagement } from "./EngagementPanel.js";
@@ -547,6 +548,7 @@ function Workspace({
                     />
                   )}
                   <Stats analytics={analytics} />
+                  <AdmissionPanel key={selected.id} roomId={selected.id} />
                   <div className="studio-grid">
                     <section>
                       <div className="section-title">

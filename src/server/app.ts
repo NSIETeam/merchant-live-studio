@@ -1,3 +1,4 @@
+import { admissionCheck } from "./admission.js";
 import { attachDisclosure } from "./disclosure.js";
 import { attachComplaints } from "./complaints.js";
 import {
@@ -112,6 +113,22 @@ export function createApp(
       throw new HTTPException(404, { message: "直播间不存在" });
     return r;
   };
+  async function controlForAdmission(r: RoomRow) {
+    await syncContentAuthorization(r.merchant_id);
+    return media.readyForAdmission();
+  }
+  async function checkPublishAdmission(r: RoomRow) {
+    if (!config.requireReviewedLive) return;
+    const reachable = await controlForAdmission(r);
+    const current = room(r.id);
+    if (current.status !== "live" || current.stream_secret !== r.stream_secret)
+      throw new HTTPException(403);
+    const check = admissionCheck(db, config, r.id, r.merchant_id, reachable);
+    if (!check.ready)
+      throw new HTTPException(403, {
+        message: "开播资料或流媒体控制已失效，请返回工作台核对",
+      });
+  }
   const campaignOwned = (id: string, merchantId: string) => {
     const r = db.prepare("SELECT * FROM campaigns WHERE id=?").get(id) as
       CampaignRow | undefined;
@@ -336,11 +353,43 @@ export function createApp(
     );
     return c.json({ room: roomDto(room(id)) }, 201);
   });
-  app.patch("/api/merchant/rooms/:id", async (c) => {
+  app.get("/api/merchant/rooms/:id/admission", async (c) => {
     const r = owned(c.req.param("id"), c.get("merchantId"));
+    const reachable = await controlForAdmission(r);
+    return c.json(admissionCheck(db, config, r.id, r.merchant_id, reachable));
+  });
+  app.get("/api/merchant/rooms/:id/admissions", (c) => {
+    const r = owned(c.req.param("id"), c.get("merchantId"));
+    const before = z.coerce
+      .number()
+      .int()
+      .positive()
+      .parse(c.req.query("before") || Number.MAX_SAFE_INTEGER);
+    const rows = db
+      .prepare(
+        "SELECT id,actor_id AS actorId,basis_json,created_at AS createdAt FROM live_admissions WHERE room_id=? AND id<? ORDER BY id DESC LIMIT 51",
+      )
+      .all(r.id, before);
+    return c.json({
+      items: rows.slice(0, 50).map((row) => ({
+        id: row.id,
+        actorId: row.actorId,
+        createdAt: row.createdAt,
+        basis: JSON.parse(String(row.basis_json)),
+      })),
+      nextBefore: rows.length > 50 ? rows[49].id : null,
+    });
+  });
+  app.patch("/api/merchant/rooms/:id", async (c) => {
+    let r = owned(c.req.param("id"), c.get("merchantId"));
     const input = z
       .object({ status: z.enum(["draft", "live", "ended"]) })
       .parse(await c.req.json());
+    let controlReachable = false;
+    if (input.status === "live" && config.requireReviewedLive) {
+      controlReachable = await controlForAdmission(r);
+      r = owned(r.id, c.get("merchantId"));
+    }
     const legal: Record<string, string[]> = {
       draft: ["draft", "live"],
       live: ["live", "ended"],
@@ -351,6 +400,34 @@ export function createApp(
         message: "请先结束当前直播，或将已结束直播重置为待开播",
       });
     transaction(db, () => {
+      if (input.status === "live" && config.requireReviewedLive) {
+        const check = admissionCheck(
+          db,
+          config,
+          r.id,
+          r.merchant_id,
+          controlReachable,
+        );
+        if (!check.ready)
+          throw new HTTPException(409, {
+            message:
+              "暂不能开播：" +
+              check.checks
+                .filter((item) => !item.passed)
+                .map((item) => item.detail)
+                .join("；"),
+          });
+        if (r.status !== "live")
+          db.prepare(
+            "INSERT INTO live_admissions(room_id,merchant_id,actor_id,basis_json,created_at) VALUES(?,?,?,?,?)",
+          ).run(
+            r.id,
+            r.merchant_id,
+            c.get("actorId"),
+            JSON.stringify(check.basis),
+            clock(),
+          );
+      }
       db.prepare("UPDATE rooms SET status=?,live_started_at=? WHERE id=?").run(
         input.status,
         input.status === "live" && r.status !== "live"
@@ -806,6 +883,7 @@ export function createApp(
     const token = new URLSearchParams(input.query || "").get("token") || "";
     if (r.status !== "live" || !equalSecret(token, r.stream_secret))
       throw new HTTPException(403);
+    await checkPublishAdmission(r);
     return c.body(null, 204);
   });
   app.post("/api/streams/srs/publish", async (c) => {
@@ -830,6 +908,7 @@ export function createApp(
       !equalSecret(token, r.stream_secret)
     )
       return c.json({ code: 403 }, 403);
+    await checkPublishAdmission(r);
     return c.json({ code: 0 });
   });
   app.post("/api/payments/wechat/notify", (c) =>

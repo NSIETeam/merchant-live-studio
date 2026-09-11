@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { Membership } from "../shared/membership.js";
 export interface Config {
   production: boolean;
+  requireReviewedLive: boolean;
   demoMode: boolean;
   host: string;
   port: number;
@@ -99,6 +100,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     );
   return {
     production,
+    requireReviewedLive: production || env.REQUIRE_REVIEWED_LIVE === "true",
     demoMode,
     sessionSecret,
     merchantCredentials,
