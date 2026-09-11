@@ -48,8 +48,13 @@ npm run dev
 
 ## 开发与验证
 
+开发前必须阅读 [仓库硬门禁](AGENTS.md) 和 [模块开发规范](docs/module-development.md)。后续功能按十个业务模块开发；新代码归属、模块接口、数据访问和遗留依赖由架构检查约束。`npm run check` 与 CI 已纳入该检查及负向测试。现有目录是迁移中的结构，不能据此继续扩大混合业务文件。
+
+涉及数据、附件或媒体时还必须遵循 [平台存储规范](docs/storage-architecture.md)：数据库保存业务状态与版本关系，私有资产按所属模块管理，原件、AI 候选、正式素材、录像与临时缓存分层，开发时明确权限、清理及备份恢复。统一文件服务与录制归档尚待按规范实现；当前数据库路径保持不变，新增本地运行文件使用不提交 Git、不进入镜像构建上下文的 `var/`。
+
 ```bash
 npm test             # 直播、Agent 核心/服务/桥接与回归测试
+npm run check:architecture # 模块边界、存量依赖与门禁负向测试
 npm run typecheck
 npm run build        # Web + 直播 API + Agent 编译
 npm run smoke        # 构建后同源 HTTP 闭环

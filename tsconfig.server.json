@@ -9,5 +9,12 @@
     "types": ["node"],
     "sourceMap": true
   },
-  "include": ["src/server", "src/shared", "src/agent"]
+  "include": [
+    "src/server",
+    "src/shared",
+    "src/agent",
+    "src/modules",
+    "src/platform",
+    "src/composition"
+  ]
 }

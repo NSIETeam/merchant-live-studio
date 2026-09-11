@@ -1,0 +1,150 @@
+{
+  "version": 1,
+  "sourceCommit": "9493ed1",
+  "exceptions": [
+    {
+      "key": "[\"LEGACY_CROSS_MODULE\",\"src/server/agent-gateway.ts\",\"src/server/services/agent-bridge.ts\",\"import\",true,[\"AgentBridge:AgentBridge\"]]",
+      "reason": "Existing dependency in 9493ed1; remove when its callers migrate to module public contracts."
+    },
+    {
+      "key": "[\"LEGACY_CROSS_MODULE\",\"src/server/app.ts\",\"src/server/services/media-control.ts\",\"import\",false,[\"MediaController:MediaController\"]]",
+      "reason": "Existing dependency in 9493ed1; remove when its callers migrate to module public contracts."
+    },
+    {
+      "key": "[\"LEGACY_CROSS_MODULE\",\"src/server/app.ts\",\"src/server/services/presence.ts\",\"import\",false,[\"recordPresence:recordPresence\"]]",
+      "reason": "Existing dependency in 9493ed1; remove when its callers migrate to module public contracts."
+    },
+    {
+      "key": "[\"LEGACY_CROSS_MODULE\",\"src/server/app.ts\",\"src/server/config.ts\",\"import\",true,[\"Config:Config\"]]",
+      "reason": "Existing dependency in 9493ed1; remove when its callers migrate to module public contracts."
+    },
+    {
+      "key": "[\"LEGACY_CROSS_MODULE\",\"src/server/app.ts\",\"src/server/db.ts\",\"import\",false,[\"transaction:transaction\",\"type:DB:DB\"]]",
+      "reason": "Existing dependency in 9493ed1; remove when its callers migrate to module public contracts."
+    },
+    {
+      "key": "[\"LEGACY_CROSS_MODULE\",\"src/server/app.ts\",\"src/server/auth.ts\",\"import\",false,[\"equalSecret:equalSecret\",\"issueSession:issueSession\",\"readSession:readSession\"]]",
+      "reason": "Existing dependency in 9493ed1; remove when its callers migrate to module public contracts."
+    },
+    {
+      "key": "[\"LEGACY_CROSS_MODULE\",\"src/server/app.ts\",\"src/server/permissions.ts\",\"import\",false,[\"memberMayAccess:memberMayAccess\",\"merchantIdentity:merchantIdentity\",\"requiresIndependentReview:requiresIndependentReview\"]]",
+      "reason": "Existing dependency in 9493ed1; remove when its callers migrate to module public contracts."
+    },
+    {
+      "key": "[\"LEGACY_CROSS_MODULE\",\"src/server/app.ts\",\"src/server/services/stream.ts\",\"import\",false,[\"createStreamAdapter:createStreamAdapter\"]]",
+      "reason": "Existing dependency in 9493ed1; remove when its callers migrate to module public contracts."
+    },
+    {
+      "key": "[\"LEGACY_CROSS_MODULE\",\"src/server/app.ts\",\"src/server/services/rewards.ts\",\"import\",false,[\"campaignDto:campaignDto\",\"claimDto:claimDto\",\"closeCampaign:closeCampaign\",\"reserveClaim:reserveClaim\",\"type:CampaignRow:CampaignRow\",\"type:ClaimRow:ClaimRow\"]]",
+      "reason": "Existing dependency in 9493ed1; remove when its callers migrate to module public contracts."
+    },
+    {
+      "key": "[\"LEGACY_CROSS_MODULE\",\"src/server/app.ts\",\"src/server/services/agent-bridge.ts\",\"import\",false,[\"HttpAgentBridge:HttpAgentBridge\",\"type:AgentBridge:AgentBridge\"]]",
+      "reason": "Existing dependency in 9493ed1; remove when its callers migrate to module public contracts."
+    },
+    {
+      "key": "[\"LEGACY_CROSS_MODULE\",\"src/server/app.ts\",\"src/server/materials.ts\",\"import\",false,[\"attachMaterials:attachMaterials\"]]",
+      "reason": "Existing dependency in 9493ed1; remove when its callers migrate to module public contracts."
+    },
+    {
+      "key": "[\"LEGACY_CROSS_MODULE\",\"src/server/app.ts\",\"src/server/content.ts\",\"import\",false,[\"attachContent:attachContent\",\"getRoomContentBinding:getRoomContentBinding\"]]",
+      "reason": "Existing dependency in 9493ed1; remove when its callers migrate to module public contracts."
+    },
+    {
+      "key": "[\"LEGACY_CROSS_MODULE\",\"src/server/auth.ts\",\"src/server/config.ts\",\"import\",true,[\"Config:Config\"]]",
+      "reason": "Existing dependency in 9493ed1; remove when its callers migrate to module public contracts."
+    },
+    {
+      "key": "[\"LEGACY_CROSS_MODULE\",\"src/server/auth.ts\",\"src/server/db.ts\",\"import\",true,[\"DB:DB\"]]",
+      "reason": "Existing dependency in 9493ed1; remove when its callers migrate to module public contracts."
+    },
+    {
+      "key": "[\"LEGACY_CROSS_MODULE\",\"src/server/content-generation.ts\",\"src/server/db.ts\",\"import\",false,[\"transaction:transaction\",\"type:DB:DB\"]]",
+      "reason": "Existing dependency in 9493ed1; remove when its callers migrate to module public contracts."
+    },
+    {
+      "key": "[\"LEGACY_CROSS_MODULE\",\"src/server/content-generation.ts\",\"src/server/services/agent-bridge.ts\",\"import\",true,[\"AgentBridge:AgentBridge\"]]",
+      "reason": "Existing dependency in 9493ed1; remove when its callers migrate to module public contracts."
+    },
+    {
+      "key": "[\"LEGACY_CROSS_MODULE\",\"src/server/content.ts\",\"src/server/services/agent-bridge.ts\",\"import\",true,[\"AgentBridge:AgentBridge\"]]",
+      "reason": "Existing dependency in 9493ed1; remove when its callers migrate to module public contracts."
+    },
+    {
+      "key": "[\"LEGACY_CROSS_MODULE\",\"src/server/content.ts\",\"src/server/db.ts\",\"import\",false,[\"transaction:transaction\",\"type:DB:DB\"]]",
+      "reason": "Existing dependency in 9493ed1; remove when its callers migrate to module public contracts."
+    },
+    {
+      "key": "[\"LEGACY_CROSS_MODULE\",\"src/server/content.ts\",\"src/server/content-check.ts\",\"import\",false,[\"CONTENT_RULE_VERSION:CONTENT_RULE_VERSION\",\"checkScript:checkScript\"]]",
+      "reason": "Existing dependency in 9493ed1; remove when its callers migrate to module public contracts."
+    },
+    {
+      "key": "[\"LEGACY_CROSS_MODULE\",\"src/server/content.ts\",\"src/server/script-suggestions.ts\",\"import\",false,[\"attachScriptSuggestions:attachScriptSuggestions\"]]",
+      "reason": "Existing dependency in 9493ed1; remove when its callers migrate to module public contracts."
+    },
+    {
+      "key": "[\"LEGACY_CROSS_MODULE\",\"src/server/content.ts\",\"src/server/script-review.ts\",\"import\",false,[\"attachScriptReview:attachScriptReview\",\"readScriptReview:readScriptReview\"]]",
+      "reason": "Existing dependency in 9493ed1; remove when its callers migrate to module public contracts."
+    },
+    {
+      "key": "[\"LEGACY_CROSS_MODULE\",\"src/server/index.ts\",\"src/server/config.ts\",\"import\",false,[\"loadConfig:loadConfig\"]]",
+      "reason": "Existing dependency in 9493ed1; remove when its callers migrate to module public contracts."
+    },
+    {
+      "key": "[\"LEGACY_CROSS_MODULE\",\"src/server/index.ts\",\"src/server/db.ts\",\"import\",false,[\"openDatabase:openDatabase\"]]",
+      "reason": "Existing dependency in 9493ed1; remove when its callers migrate to module public contracts."
+    },
+    {
+      "key": "[\"LEGACY_CROSS_MODULE\",\"src/server/index.ts\",\"src/server/services/payments.ts\",\"import\",false,[\"processSimulationJobs:processSimulationJobs\"]]",
+      "reason": "Existing dependency in 9493ed1; remove when its callers migrate to module public contracts."
+    },
+    {
+      "key": "[\"LEGACY_CROSS_MODULE\",\"src/server/index.ts\",\"src/server/services/rewards.ts\",\"import\",false,[\"expireCampaigns:expireCampaigns\"]]",
+      "reason": "Existing dependency in 9493ed1; remove when its callers migrate to module public contracts."
+    },
+    {
+      "key": "[\"LEGACY_CROSS_MODULE\",\"src/server/materials.ts\",\"src/server/db.ts\",\"import\",false,[\"transaction:transaction\",\"type:DB:DB\"]]",
+      "reason": "Existing dependency in 9493ed1; remove when its callers migrate to module public contracts."
+    },
+    {
+      "key": "[\"LEGACY_CROSS_MODULE\",\"src/server/permissions.ts\",\"src/server/config.ts\",\"import\",true,[\"Config:Config\"]]",
+      "reason": "Existing dependency in 9493ed1; remove when its callers migrate to module public contracts."
+    },
+    {
+      "key": "[\"LEGACY_CROSS_MODULE\",\"src/server/script-review.ts\",\"src/server/db.ts\",\"import\",false,[\"transaction:transaction\",\"type:DB:DB\"]]",
+      "reason": "Existing dependency in 9493ed1; remove when its callers migrate to module public contracts."
+    },
+    {
+      "key": "[\"LEGACY_CROSS_MODULE\",\"src/server/script-suggestions.ts\",\"src/server/db.ts\",\"import\",false,[\"transaction:transaction\",\"type:DB:DB\"]]",
+      "reason": "Existing dependency in 9493ed1; remove when its callers migrate to module public contracts."
+    },
+    {
+      "key": "[\"LEGACY_CROSS_MODULE\",\"src/server/services/agent-bridge.ts\",\"src/server/config.ts\",\"import\",true,[\"Config:Config\"]]",
+      "reason": "Existing dependency in 9493ed1; remove when its callers migrate to module public contracts."
+    },
+    {
+      "key": "[\"LEGACY_CROSS_MODULE\",\"src/server/services/media-control.ts\",\"src/server/config.ts\",\"import\",true,[\"Config:Config\"]]",
+      "reason": "Existing dependency in 9493ed1; remove when its callers migrate to module public contracts."
+    },
+    {
+      "key": "[\"LEGACY_CROSS_MODULE\",\"src/server/services/payments.ts\",\"src/server/db.ts\",\"import\",false,[\"transaction:transaction\",\"type:DB:DB\"]]",
+      "reason": "Existing dependency in 9493ed1; remove when its callers migrate to module public contracts."
+    },
+    {
+      "key": "[\"LEGACY_CROSS_MODULE\",\"src/server/services/presence.ts\",\"src/server/db.ts\",\"import\",true,[\"DB:DB\"]]",
+      "reason": "Existing dependency in 9493ed1; remove when its callers migrate to module public contracts."
+    },
+    {
+      "key": "[\"LEGACY_CROSS_MODULE\",\"src/server/services/rewards.ts\",\"src/server/db.ts\",\"import\",false,[\"transaction:transaction\",\"type:DB:DB\"]]",
+      "reason": "Existing dependency in 9493ed1; remove when its callers migrate to module public contracts."
+    },
+    {
+      "key": "[\"LEGACY_CROSS_MODULE\",\"src/server/services/stream.ts\",\"src/server/config.ts\",\"import\",true,[\"Config:Config\"]]",
+      "reason": "Existing dependency in 9493ed1; remove when its callers migrate to module public contracts."
+    },
+    {
+      "key": "[\"LEGACY_CROSS_MODULE\",\"src/server/training-gateway.ts\",\"src/server/services/agent-bridge.ts\",\"import\",true,[\"AgentBridge:AgentBridge\"]]",
+      "reason": "Existing dependency in 9493ed1; remove when its callers migrate to module public contracts."
+    }
+  ]
+}
