@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { ScriptVersion, ScriptReviewRecord } from "../shared/content.js";
 import type { MerchantIdentity } from "../shared/membership.js";
+import { ScriptSuggestions } from "./ScriptSuggestions.js";
 import { api } from "./api.js";
 
 export function ScriptReviewPanel({
@@ -176,6 +177,17 @@ export function ScriptReviewPanel({
           )}
         </fieldset>
       )}
+      <ScriptSuggestions
+        script={script}
+        identity={identity}
+        dirty={dirty}
+        canSuggest={Boolean(
+          canReview &&
+          review?.submission &&
+          review.decision?.decision !== "approved",
+        )}
+        onChanged={onChanged}
+      />
       {dirty && <p>请先保存或放弃编辑，再操作此已存版本。</p>}
       <p className="cw-meta">
         每版审核决定不可覆盖。退回后修改并另存新版本再提交。审核不替代证据真实性核查。

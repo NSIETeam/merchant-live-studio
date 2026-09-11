@@ -187,6 +187,35 @@ export function openDatabase(path: string) {
       CREATE TRIGGER ${table}_immutable_delete BEFORE DELETE ON ${table} BEGIN SELECT RAISE(ABORT,'Review records are immutable'); END;
     `);
     });
+  if (version < 7)
+    transaction(db, () => {
+      db.exec(`
+      CREATE TABLE content_script_suggestions (
+        id TEXT PRIMARY KEY, course_id TEXT NOT NULL, script_version INTEGER NOT NULL,
+        paragraph_id TEXT NOT NULL, replacement TEXT NOT NULL, reason TEXT NOT NULL,
+        author_id TEXT NOT NULL, created_at INTEGER NOT NULL,
+        FOREIGN KEY(course_id,script_version) REFERENCES content_script_versions(course_id,version)
+      );
+      CREATE INDEX content_suggestions_version ON content_script_suggestions(course_id,script_version,created_at);
+      CREATE TABLE content_suggestion_resolutions (
+        suggestion_id TEXT PRIMARY KEY REFERENCES content_script_suggestions(id),
+        course_id TEXT NOT NULL, decision TEXT NOT NULL CHECK(decision IN ('accepted','rejected')),
+        actor_id TEXT NOT NULL, note TEXT NOT NULL, resolved_at INTEGER NOT NULL,
+        result_version INTEGER,
+        CHECK((decision='accepted' AND result_version IS NOT NULL) OR (decision='rejected' AND result_version IS NULL)),
+        FOREIGN KEY(course_id,result_version) REFERENCES content_script_versions(course_id,version)
+      );
+      INSERT INTO schema_migrations VALUES(7,unixepoch());
+    `);
+      for (const table of [
+        "content_script_suggestions",
+        "content_suggestion_resolutions",
+      ])
+        db.exec(`
+      CREATE TRIGGER ${table}_immutable_update BEFORE UPDATE ON ${table} BEGIN SELECT RAISE(ABORT,'Suggestion records are immutable'); END;
+      CREATE TRIGGER ${table}_immutable_delete BEFORE DELETE ON ${table} BEGIN SELECT RAISE(ABORT,'Suggestion records are immutable'); END;
+    `);
+    });
   return db;
 }
 export type DB = ReturnType<typeof openDatabase>;

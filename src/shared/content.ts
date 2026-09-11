@@ -168,3 +168,19 @@ export interface ReviewQueueItem {
   submittedAt: number;
   note: string;
 }
+
+export interface ScriptSuggestion {
+  id: string;
+  courseId: string;
+  scriptVersion: number;
+  paragraphId: string;
+  replacement: string;
+  reason: string;
+  authorId: string;
+  createdAt: number;
+  decision: "accepted" | "rejected" | null;
+  resolvedBy: string | null;
+  resolutionNote: string | null;
+  resolvedAt: number | null;
+  resultVersion: number | null;
+}

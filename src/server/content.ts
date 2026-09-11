@@ -5,6 +5,7 @@ import { z } from "zod";
 import { transaction, type DB } from "./db.js";
 import { checkScript, CONTENT_RULE_VERSION } from "./content-check.js";
 import { compareScripts } from "../shared/content-diff.js";
+import { attachScriptSuggestions } from "./script-suggestions.js";
 import { readScriptReview, attachScriptReview } from "./script-review.js";
 import {
   CONTENT_LIMITS,
@@ -320,6 +321,55 @@ export function attachContent(
   db: DB,
   clock: () => number = Date.now,
 ) {
+  // Caller owns the transaction so applying a suggestion and recording its result are atomic.
+  const saveScript = (
+    id: string,
+    merchant: string,
+    actor: string,
+    value: unknown,
+  ) => {
+    const input = scriptSchema.parse(value);
+    const course = courseOwned(db, id, merchant),
+      plan = planOwned(db, course.plan_id, merchant),
+      product = productOwned(db, plan.product_id, merchant);
+    if (course.latest_script_version !== input.baseVersion)
+      conflict("讲稿已更新，请读取最新版本后再保存。");
+    if (product.latest_version !== input.productVersion)
+      conflict("商品依据已变化，请先刷新并核对当前证据版本。");
+    const snapshot = productVersion(db, product.id, input.productVersion),
+      now = clock(),
+      review = checkScript(input.paragraphs, snapshot, now),
+      next = input.baseVersion + 1;
+    db.prepare(
+      "INSERT INTO content_script_versions VALUES(?,?,?,?,?,?,?,?,?)",
+    ).run(
+      id,
+      next,
+      product.id,
+      input.productVersion,
+      JSON.stringify(snapshot),
+      JSON.stringify(input.paragraphs),
+      input.changeNote,
+      JSON.stringify(review),
+      now,
+    );
+    db.prepare(
+      "UPDATE content_courses SET latest_script_version=? WHERE id=?",
+    ).run(next, id);
+    db.prepare("INSERT INTO content_script_authors VALUES(?,?,?)").run(
+      id,
+      next,
+      actor,
+    );
+    return next;
+  };
+  attachScriptSuggestions(
+    app,
+    db,
+    (id, version, merchant) => scriptVersion(db, id, version, merchant),
+    saveScript,
+    clock,
+  );
   attachScriptReview(
     app,
     db,
@@ -625,41 +675,9 @@ export function attachContent(
     const input = scriptSchema.parse(await c.req.json()),
       merchant = c.get("merchantId"),
       id = c.req.param("id");
-    const next = transaction(db, () => {
-      const course = courseOwned(db, id, merchant),
-        plan = planOwned(db, course.plan_id, merchant),
-        product = productOwned(db, plan.product_id, merchant);
-      if (course.latest_script_version !== input.baseVersion)
-        conflict("讲稿已更新，请读取最新版本后再保存。");
-      if (product.latest_version !== input.productVersion)
-        conflict("商品依据已变化，请先刷新并核对当前证据版本。");
-      const snapshot = productVersion(db, product.id, input.productVersion),
-        now = clock(),
-        review = checkScript(input.paragraphs, snapshot, now),
-        next = input.baseVersion + 1;
-      db.prepare(
-        "INSERT INTO content_script_versions VALUES(?,?,?,?,?,?,?,?,?)",
-      ).run(
-        id,
-        next,
-        product.id,
-        input.productVersion,
-        JSON.stringify(snapshot),
-        JSON.stringify(input.paragraphs),
-        input.changeNote,
-        JSON.stringify(review),
-        now,
-      );
-      db.prepare(
-        "UPDATE content_courses SET latest_script_version=? WHERE id=?",
-      ).run(next, id);
-      db.prepare("INSERT INTO content_script_authors VALUES(?,?,?)").run(
-        id,
-        next,
-        c.get("actorId") || merchant,
-      );
-      return next;
-    });
+    const next = transaction(db, () =>
+      saveScript(id, merchant, c.get("actorId") || merchant, input),
+    );
     return c.json({ script: scriptVersion(db, id, next, merchant) }, 201);
   });
   app.post(

@@ -191,6 +191,22 @@ export function attachScriptReview(
           });
         if (
           input.decision === "approved" &&
+          db
+            .prepare(
+              `
+          SELECT count(*) AS n FROM content_script_suggestions s
+          LEFT JOIN content_suggestion_resolutions r ON r.suggestion_id=s.id
+          WHERE s.course_id=? AND s.script_version=? AND r.suggestion_id IS NULL
+        `,
+            )
+            .get(id, version)!.n
+        )
+          throw new HTTPException(409, {
+            message:
+              "此版本还有未处置的逐条建议，请先由编辑采纳或拒绝后再审核。",
+          });
+        if (
+          input.decision === "approved" &&
           (script.stale || script.check.blockingCount)
         )
           throw new HTTPException(409, {

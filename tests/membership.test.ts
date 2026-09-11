@@ -734,3 +734,293 @@ test("review queue cursor does not skip remaining submissions when the previous 
     f.db.close();
   }
 });
+
+async function suggestionFixture() {
+  const f = await reviewFixture();
+  await f.save();
+  await f.request(f.base + "/scripts/1/submit", "POST", { note: "请逐条审改" });
+  const suggestion = {
+    id: crypto.randomUUID(),
+    paragraphId: "p1",
+    replacement: "欢迎来到合成材料的软件验收课堂。",
+    reason: "明确测试用途",
+  };
+  const suggest = (input = suggestion, cookie = f.checker) =>
+    f.request(f.base + "/scripts/1/suggestions", "POST", input, cookie);
+  const resolve = (
+    decision = "accepted",
+    note = "按建议处理",
+    cookie = f.writer,
+    id = suggestion.id,
+  ) =>
+    f.request(`/suggestions/${id}/resolve`, "POST", { decision, note }, cookie);
+  return { ...f, suggestion, suggest, resolve };
+}
+
+test("paragraph suggestions create an auditable new draft and retries never create duplicate versions", async () => {
+  const f = await suggestionFixture();
+  try {
+    assert.equal((await f.suggest()).status, 201);
+    assert.equal((await f.suggest()).status, 201);
+    assert.equal(
+      f.db
+        .prepare("SELECT count(*) AS n FROM content_script_suggestions")
+        .get()!.n,
+      1,
+    );
+    assert.equal(
+      (
+        await f.request(
+          f.base + "/scripts/1/review",
+          "POST",
+          { decision: "approved", note: "核对", acknowledged: true },
+          f.checker,
+        )
+      ).status,
+      409,
+    );
+    const accepted = await f.resolve();
+    assert.equal(accepted.status, 200);
+    assert.equal(accepted.data.resultVersion, 2);
+    assert.equal((await f.resolve()).data.resultVersion, 2);
+    assert.equal((await f.resolve("rejected")).status, 409);
+    const latest = (await f.request(f.base + "/scripts/2")).data.script;
+    assert.equal(latest.paragraphs[0].text, f.suggestion.replacement);
+    assert.equal(latest.confirmation, undefined);
+    assert.equal(
+      (await f.request(f.base + "/scripts/2/review")).data.review.authorId,
+      "writer",
+    );
+    const original = (await f.request(f.base + "/scripts/1")).data.script;
+    assert.equal(original.paragraphs[0].text, "欢迎来到本次测试课堂。");
+    const history = (await f.request(f.base + "/scripts/1/suggestions")).data
+      .suggestions;
+    assert.equal(history[0].resultVersion, 2);
+    assert.equal(history[0].resolvedBy, "writer");
+    assert.throws(() =>
+      f.db.exec("UPDATE content_script_suggestions SET reason='rewrite'"),
+    );
+    assert.throws(() =>
+      f.db.exec("DELETE FROM content_suggestion_resolutions"),
+    );
+  } finally {
+    f.db.close();
+  }
+});
+
+test("suggestion permissions isolate tenants and reject unauthorized writes", async () => {
+  const f = await suggestionFixture();
+  try {
+    assert.equal((await f.suggest(f.suggestion, f.writer)).status, 403);
+    assert.equal((await f.suggest()).status, 201);
+    const foreign = await f.login("foreign");
+    assert.equal(
+      (
+        await f.request(
+          f.base + "/scripts/1/suggestions",
+          "GET",
+          undefined,
+          foreign,
+        )
+      ).status,
+      404,
+    );
+    assert.equal((await f.resolve("accepted", "越权", foreign)).status, 404);
+    assert.equal((await f.resolve("accepted", "越权", f.checker)).status, 403);
+    assert.equal((await f.resolve("accepted", "越权", f.host)).status, 403);
+    assert.equal(
+      (await f.suggest({ ...f.suggestion, reason: "不同内容重用编号" })).status,
+      409,
+    );
+    assert.equal(
+      (
+        await f.suggest({
+          ...f.suggestion,
+          id: crypto.randomUUID(),
+          paragraphId: "missing",
+        })
+      ).status,
+      404,
+    );
+    assert.equal((await f.resolve("rejected", "保留原文")).status, 200);
+    assert.equal(
+      f.db
+        .prepare(
+          "SELECT latest_script_version AS v FROM content_courses WHERE id=?",
+        )
+        .get(f.course.id)!.v,
+      1,
+    );
+    assert.equal(
+      (
+        await f.request(
+          f.base + "/scripts/1/review",
+          "POST",
+          {
+            decision: "approved",
+            note: "建议已处置，已核对",
+            acknowledged: true,
+          },
+          f.checker,
+        )
+      ).status,
+      200,
+    );
+  } finally {
+    f.db.close();
+  }
+});
+
+test("suggestions never overwrite a concurrently edited paragraph or changed product basis", async () => {
+  const f = await suggestionFixture();
+  try {
+    await f.suggest();
+    const changed = await f.request(f.base + "/scripts", "POST", {
+      baseVersion: 1,
+      productVersion: 1,
+      paragraphs: [
+        {
+          id: "p1",
+          kind: "transition",
+          text: "编辑已另写这一段。",
+          factIds: [],
+        },
+      ],
+      changeNote: "并行编辑",
+    });
+    assert.equal(changed.status, 201);
+    assert.equal((await f.resolve()).status, 409);
+    assert.equal(
+      f.db
+        .prepare("SELECT count(*) AS n FROM content_suggestion_resolutions")
+        .get()!.n,
+      0,
+    );
+    assert.equal(
+      (await f.suggest({ ...f.suggestion, id: crypto.randomUUID() })).status,
+      409,
+    );
+  } finally {
+    f.db.close();
+  }
+  const g = await suggestionFixture();
+  try {
+    await g.suggest();
+    const updated = await g.request(
+      `/products/${g.product.id}/versions`,
+      "POST",
+      {
+        baseVersion: 1,
+        name: "审核合成资料",
+        sku: "review-1",
+        category: "更新测试资料",
+        facts: [],
+      },
+    );
+    assert.equal(updated.status, 201);
+    assert.equal((await g.resolve()).status, 409);
+    assert.equal(
+      g.db
+        .prepare(
+          "SELECT latest_script_version AS v FROM content_courses WHERE id=?",
+        )
+        .get(g.course.id)!.v,
+      1,
+    );
+  } finally {
+    g.db.close();
+  }
+});
+
+test("accepting separate paragraph suggestions preserves other edits and reruns content checks", async () => {
+  const f = await suggestionFixture();
+  try {
+    await f.suggest();
+    const append = await f.request(f.base + "/scripts", "POST", {
+      baseVersion: 1,
+      productVersion: 1,
+      paragraphs: [
+        {
+          id: "p1",
+          kind: "transition",
+          text: "欢迎来到本次测试课堂。",
+          factIds: [],
+        },
+        {
+          id: "p2",
+          kind: "transition",
+          text: "新增段落必须保留。",
+          factIds: [],
+        },
+      ],
+      changeNote: "新增段落",
+    });
+    assert.equal(append.status, 201);
+    const result = await f.resolve();
+    assert.equal(result.status, 200);
+    assert.equal(result.data.resultVersion, 3);
+    const script = (await f.request(f.base + "/scripts/3")).data.script;
+    assert.equal(script.paragraphs[1].text, "新增段落必须保留。");
+    assert.ok(script.check.ruleVersion);
+    assert.equal(script.confirmation, undefined);
+  } finally {
+    f.db.close();
+  }
+});
+
+test("an oversized accepted suggestion rolls back both its new version and resolution", async () => {
+  const f = await suggestionFixture();
+  try {
+    await f.suggest();
+    const first = {
+      id: "p1",
+      kind: "transition",
+      text: "欢迎来到本次测试课堂。",
+      factIds: [],
+    };
+    const paragraphs = [first];
+    let remaining = 12000 - first.text.length;
+    while (remaining) {
+      const length = Math.min(1500, remaining);
+      paragraphs.push({
+        id: `extra-${paragraphs.length}`,
+        kind: "transition",
+        text: "测".repeat(length),
+        factIds: [],
+      });
+      remaining -= length;
+    }
+    assert.equal(
+      (
+        await f.request(f.base + "/scripts", "POST", {
+          baseVersion: 1,
+          productVersion: 1,
+          paragraphs,
+          changeNote: "容量边界测试",
+        })
+      ).status,
+      201,
+    );
+    assert.equal((await f.resolve()).status, 400);
+    assert.equal(
+      f.db
+        .prepare(
+          "SELECT latest_script_version AS v FROM content_courses WHERE id=?",
+        )
+        .get(f.course.id)!.v,
+      2,
+    );
+    assert.equal(
+      f.db
+        .prepare("SELECT count(*) AS n FROM content_suggestion_resolutions")
+        .get()!.n,
+      0,
+    );
+    assert.equal(
+      (await f.resolve("rejected", "文本容量不足，另行精简")).status,
+      200,
+    );
+  } finally {
+    f.db.close();
+  }
+});
