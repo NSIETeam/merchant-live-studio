@@ -710,12 +710,33 @@ export function createApp(
   });
   app.get("/api/merchant/rooms/:id/ledger", (c) => {
     owned(c.req.param("id"), c.get("merchantId"));
-    const entries = db
+    const roomId = c.req.param("id");
+    const before = c.req.query("before");
+    const cursor = before
+      ? (db
+          .prepare(
+            `SELECT l.id,l.created_at FROM ledger l JOIN campaigns c ON c.id=l.campaign_id WHERE l.id=? AND c.room_id=?`,
+          )
+          .get(before, roomId) as
+          { id: string; created_at: number } | undefined)
+      : undefined;
+    if (before !== undefined && !cursor)
+      return c.json({ error: "无效的账本分页位置" }, 400);
+    const rows = db
       .prepare(
-        `SELECT l.id,l.campaign_id AS campaignId,l.claim_id AS claimId,l.debit,l.credit,l.amount_cents AS amountCents,l.created_at AS createdAt FROM ledger l JOIN campaigns c ON c.id=l.campaign_id WHERE c.room_id=? ORDER BY l.created_at DESC LIMIT 200`,
+        `SELECT l.id,l.campaign_id AS campaignId,l.claim_id AS claimId,l.debit,l.credit,l.amount_cents AS amountCents,l.created_at AS createdAt FROM ledger l JOIN campaigns c ON c.id=l.campaign_id WHERE c.room_id=? ${cursor ? "AND (l.created_at < ? OR (l.created_at = ? AND l.id < ?))" : ""} ORDER BY l.created_at DESC,l.id DESC LIMIT 201`,
       )
-      .all(c.req.param("id"));
-    return c.json({ entries, mode: "simulation", limit: 200 });
+      .all(
+        roomId,
+        ...(cursor ? [cursor.created_at, cursor.created_at, cursor.id] : []),
+      );
+    const entries = rows.slice(0, 200);
+    return c.json({
+      entries,
+      mode: "simulation",
+      limit: 200,
+      nextBefore: rows.length > 200 ? entries[199].id : null,
+    });
   });
   app.get("/api/merchant/rooms/:id/analytics", (c) => {
     const id = c.req.param("id");
