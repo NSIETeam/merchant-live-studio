@@ -1,3 +1,4 @@
+import { TeamPanel } from "./TeamPanel.js";
 import { AudienceShare } from "./AudienceShare.js";
 import { homeDestinations } from "../shared/home.js";
 import { PersonalHome, type Destination } from "./PersonalHome.js";
@@ -561,6 +562,7 @@ function Workspace({
               />
             </>
           )}
+          {tab === "home" && memberRole === "owner" && <TeamPanel />}
           {tab === "home" || tab === "content" ? null : !selected ? (
             <div className="empty-state">
               <Radio size={44} />

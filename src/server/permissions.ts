@@ -40,6 +40,8 @@ export function memberMayAccess(
   if (path === "/api/merchant/home")
     return ["GET", "HEAD", "PUT"].includes(method);
   if (role === "owner") return true;
+  if (path === "/api/merchant/team" || path.startsWith("/api/merchant/team/"))
+    return false;
   if (
     /^\/api\/merchant\/(?:recordings(?:\/|$)|rooms\/[^/]+\/recordings$)/.test(
       path,

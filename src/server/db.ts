@@ -375,6 +375,17 @@ export function openDatabase(path: string) {
         Date.now(),
       );
     });
+  if (version < 18)
+    transaction(db, () => {
+      db.exec(`CREATE TABLE team_access(actor_id TEXT PRIMARY KEY,merchant_id TEXT NOT NULL,disabled INTEGER NOT NULL CHECK(disabled IN(0,1)),version INTEGER NOT NULL);
+    CREATE TABLE team_access_events(id INTEGER PRIMARY KEY AUTOINCREMENT,merchant_id TEXT NOT NULL,target_actor_id TEXT NOT NULL,actor_id TEXT NOT NULL,disabled INTEGER NOT NULL,reason TEXT NOT NULL,version INTEGER NOT NULL,created_at INTEGER NOT NULL);
+    CREATE TRIGGER team_access_events_no_update BEFORE UPDATE ON team_access_events BEGIN SELECT RAISE(ABORT,'immutable'); END;
+    CREATE TRIGGER team_access_events_no_delete BEFORE DELETE ON team_access_events BEGIN SELECT RAISE(ABORT,'immutable'); END;`);
+      db.prepare("INSERT INTO schema_migrations VALUES(?,?)").run(
+        18,
+        Date.now(),
+      );
+    });
   return db;
 }
 export type DB = ReturnType<typeof openDatabase>;

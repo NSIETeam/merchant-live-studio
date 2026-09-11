@@ -1,3 +1,4 @@
+import { attachTeam } from "./team.js";
 import { attachHome } from "./home.js";
 import { attachRecordings } from "./recordings.js";
 import { activeModerationHold, attachModeration } from "./moderation.js";
@@ -274,9 +275,15 @@ export function createApp(
       .object({ merchantId: z.string().max(50), token: z.string().max(256) })
       .parse(await c.req.json());
     const expected = config.merchantCredentials[input.merchantId];
-    if (!expected || !equalSecret(expected, input.token))
+    if (
+      !expected ||
+      !equalSecret(expected, input.token) ||
+      db
+        .prepare("SELECT disabled FROM team_access WHERE actor_id=?")
+        .get(input.merchantId)?.disabled
+    )
       throw new HTTPException(401, { message: "商家编号或访问密钥错误" });
-    issueSession(c, config, "merchant", input.merchantId);
+    issueSession(c, config, "merchant", input.merchantId, db);
     return c.json(merchantIdentity(config, input.merchantId));
   });
   app.post("/api/auth/logout", (c) => {
@@ -520,6 +527,7 @@ export function createApp(
   attachComplaints(app, db, clock);
   attachDisclosure(app, db, clock);
   attachModeration(app, db, media, clock);
+  attachTeam(app, db, config);
   attachHome(app, db);
   attachRecordings(app, db, config);
   const agentBasis = (roomId: string, tenant: string) => {
