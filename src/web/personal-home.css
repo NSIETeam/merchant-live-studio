@@ -165,3 +165,50 @@
   color: var(--muted);
   margin-top: 4px;
 }
+
+/* Keep the personal landing page compact without shrinking touch targets. */
+.personal-home .home-heading {
+  margin: 0 0 16px;
+  gap: 12px;
+}
+.personal-home .home-heading h1 {
+  margin: 6px 0;
+}
+.personal-home .home-card {
+  padding: 16px;
+}
+.personal-home .home-card > header {
+  margin-bottom: 10px;
+}
+.personal-home .home-links button {
+  padding: 10px 8px;
+  min-height: 44px;
+}
+@media (max-width: 560px) {
+  .personal-home .home-heading {
+    flex-direction: row;
+    align-items: center;
+  }
+  .workspace .personal-home .home-heading h1 {
+    font-size: 21px;
+  }
+  .personal-home .home-heading > div > p:last-child {
+    display: none;
+  }
+  .personal-home .home-heading > button {
+    min-height: 44px;
+  }
+  .personal-home .home-links {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px;
+  }
+  .personal-home .home-links small {
+    display: none;
+  }
+  .personal-home .home-links button {
+    gap: 5px;
+  }
+  .personal-home .home-grid {
+    gap: 12px;
+  }
+}

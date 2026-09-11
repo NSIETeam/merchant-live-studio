@@ -211,13 +211,15 @@ export function PersonalHome({
           {notice}
         </p>
       )}
-      <button
-        className="text-button"
-        disabled={busy}
-        onClick={() => void reload()}
-      >
-        重新载入布局
-      </button>
+      {(editing || !ready || notice) && (
+        <button
+          className="text-button"
+          disabled={busy}
+          onClick={() => void reload()}
+        >
+          重新载入布局
+        </button>
+      )}
       {!modules.length && (
         <div className="home-card">
           <h2>从你关心的功能开始</h2>
