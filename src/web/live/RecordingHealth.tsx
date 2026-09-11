@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../shared/api.js";
 type Health = {
   storage: "unconfigured" | "available" | "low-space" | "unavailable";
+  processor?: "unconfigured" | "checking" | "available" | "unavailable" | "stalled";
   ingestErrorCount: number;
   checkedAt: number;
 };
@@ -33,7 +34,7 @@ export function RecordingHealth() {
   }, [revision]);
   if (
     !error &&
-    (!health || (health.storage === "available" && !health.ingestErrorCount))
+    (!health || (health.storage === "available" && (!health.processor || health.processor === "available") && !health.ingestErrorCount))
   )
     return null;
   return (
@@ -52,6 +53,10 @@ export function RecordingHealth() {
             <p role="alert">
               录像或回执存储可用空间低于 10%，请及时处理，避免录制中断。
             </p>
+          )}
+          {health?.processor === "checking" && <p>正在确认录像登记服务状态。</p>}
+          {(health?.processor === "unavailable" || health?.processor === "stalled") && (
+            <p role="alert">录像登记服务处理异常或长时间未完成，请联系管理员检查。尚未登记的录像可能无法下载。</p>
           )}
           {!!health?.ingestErrorCount && (
             <p role="alert">

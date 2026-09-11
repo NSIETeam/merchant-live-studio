@@ -8,3 +8,8 @@ export function moderationQuery6(db: DB, ...values: SQLValue[]) { return db.prep
 export function moderationQuery7(db: DB, ...values: SQLValue[]) { return db.prepare("INSERT INTO moderation_actions(room_id,merchant_id,actor_id,kind,note,evidence_reference,hold_id,idempotency_key,created_at) VALUES(?,?,?,?,?,?,?,?,?)").run(...values); }
 export function moderationQuery8(db: DB, ...values: SQLValue[]) { return db.prepare("UPDATE rooms SET status='ended',stream_secret=? WHERE id=?").run(...values); }
 export function moderationQuery9(db: DB, ...values: SQLValue[]) { return db.prepare("UPDATE visits SET active=0 WHERE room_id=?").run(...values); }
+
+export function moderationAction(db: DB, id: number, room: string) { return db.prepare("SELECT id,kind,note,evidence_reference AS evidenceReference,actor_id AS actorId,created_at AS createdAt,hold_id AS holdId FROM moderation_actions WHERE id=? AND room_id=?").get(id,room); }
+export function moderationResults(db: DB, action: number, before: number) { return db.prepare("SELECT id,disconnected,message,actor_id AS actorId,created_at AS createdAt FROM moderation_results WHERE action_id=? AND id<? ORDER BY id DESC LIMIT 51").all(action,before); }
+export function moderationResultBound(db: DB, action: number) { return Number(db.prepare("SELECT COALESCE(MAX(id),0) AS n FROM moderation_results WHERE action_id=?").get(action)!.n); }
+export function moderationResultBatch(db: DB, action: number, after: number, through: number) { return db.prepare("SELECT id,disconnected,message,actor_id AS actorId,created_at AS createdAt FROM moderation_results WHERE action_id=? AND id>? AND id<=? ORDER BY id LIMIT 100").all(action,after,through); }

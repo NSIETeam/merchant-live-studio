@@ -58,6 +58,8 @@ export function memberMayAccess(
     )
   )
     return role === "reviewer" && method === "GET";
+  if (/^\/api\/merchant\/rooms\/[^/]+\/moderation\/\d+\/results(?:\/export)?$/.test(path))
+    return ["reviewer", "presenter", "editor"].includes(role) && method === "GET";
   if (/^\/api\/merchant\/rooms\/[^/]+\/moderation(?:\/\d+\/retry)?$/.test(path))
     return (
       (role === "reviewer" && (method === "POST" || method === "GET")) ||
