@@ -605,3 +605,37 @@
 .workspace .stat strong {
   font-size: 21px;
 }
+.workspace .disclosure-panel.is-collapsed {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  margin-bottom: 8px;
+}
+.workspace .disclosure-panel.is-collapsed > button {
+  background: transparent;
+  color: var(--muted);
+  padding: 4px 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.workspace .cw-form-panel {
+  scroll-margin-top: 12px;
+}
+.workspace .cw-form-panel:focus {
+  outline: none;
+}
+@media (max-width: 700px) {
+  .workspace .cw-form-panel input,
+  .workspace .cw-form-panel textarea {
+    font-size: 16px;
+  }
+  .workspace .cw-form-panel button {
+    min-height: 44px;
+  }
+}
+@media (max-width: 700px) {
+  .workspace .cw-root:has(> [aria-label="商品资料编辑"]) > .cw-toolbar,
+  .workspace .cw-root:has(> [aria-label="商品资料编辑"]) > .cw-flow {
+    display: none;
+  }
+}

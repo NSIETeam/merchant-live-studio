@@ -259,6 +259,16 @@ function ProductForm({
   onCancel: () => void;
   onSaved: (product: ContentProduct, version: ProductVersion) => void;
 }) {
+  const formPanel = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (window.matchMedia("(max-width: 700px)").matches) {
+      formPanel.current?.scrollIntoView({
+        block: "start",
+        behavior: "instant",
+      });
+      formPanel.current?.focus({ preventScroll: true });
+    }
+  }, []);
   const alive = useAlive();
   const [input, setInput] = useState<ProductInput>({
     name: version?.name || "",
@@ -304,7 +314,12 @@ function ProductForm({
     }
   }
   return (
-    <section className="cw-form-panel">
+    <section
+      className="cw-form-panel"
+      ref={formPanel}
+      tabIndex={-1}
+      aria-label="商品资料编辑"
+    >
       <div className="cw-section-header">
         <h2>{product ? "编辑商品资料" : "建立商品资料"}</h2>
         <small>

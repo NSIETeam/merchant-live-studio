@@ -150,7 +150,9 @@ export function MerchantDisclosure({
     await refresh();
   }
   return (
-    <section className="card disclosure-panel">
+    <section
+      className={`card disclosure-panel ${open ? "is-open" : "is-collapsed"}`}
+    >
       <button
         onClick={() => {
           setOpen(!open);
