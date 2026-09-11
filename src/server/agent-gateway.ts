@@ -2,7 +2,7 @@ import { presenterSchema } from "../shared/presenter-schema.js";
 import type { Hono } from "hono";
 import { z } from "zod";
 import type { AgentBridge } from "./services/agent-bridge.js";
-import type { AgentContext, AgentRun } from "../shared/agent.js";
+import type { AgentContext, AgentRun, AgentProfile } from "../shared/agent.js";
 import { attachTrainingGateway } from "./training-gateway.js";
 
 const id = (value: string) =>
@@ -42,6 +42,7 @@ export function attachAgentGateway(
     input: { transcript: string; question?: string },
   ) => AgentContext,
   validateRun: (tenant: string, run: AgentRun) => AgentRun = (_, run) => run,
+  onRevocation: (tenant: string, profile: AgentProfile) => void = () => {},
 ) {
   attachTrainingGateway(app, bridge, contextFor, validateRun);
   app.get("/api/merchant/agent/status", async (c) =>
@@ -55,14 +56,14 @@ export function attachAgentGateway(
       .object({ reason: z.string().trim().min(1).max(500) })
       .strict()
       .parse(await c.req.json());
-    return c.json(
-      await bridge.request(
-        c.get("merchantId"),
-        `/v1/profiles/${id(c.req.param("id"))}/revoke`,
-        "POST",
-        { ...input, actorId: c.get("actorId") },
-      ),
+    const result = await bridge.request<{ profile: AgentProfile }>(
+      c.get("merchantId"),
+      `/v1/profiles/${id(c.req.param("id"))}/revoke`,
+      "POST",
+      { ...input, actorId: c.get("actorId") },
     );
+    onRevocation(c.get("merchantId"), result.profile);
+    return c.json(result);
   });
   app.post("/api/merchant/agent/profiles", async (c) => {
     const body = prompt

@@ -1,3 +1,4 @@
+import { contentAuthorizationIssue } from "./content-authorization.js";
 import type { AgentBridge } from "./services/agent-bridge.js";
 import { attachContentGeneration } from "./content-generation.js";
 import type { Hono } from "hono";
@@ -252,7 +253,14 @@ function scriptVersion(
             }
           : undefined;
   const check = JSON.parse(row.check_json) as ScriptVersion["check"];
+  const authorizationIssue = contentAuthorizationIssue(
+    db,
+    merchant,
+    courseId,
+    version,
+  );
   const stale =
+    !!authorizationIssue ||
     current.latest_version !== row.product_version ||
     check.ruleVersion !== CONTENT_RULE_VERSION;
   return {
@@ -265,6 +273,7 @@ function scriptVersion(
     createdAt: row.created_at,
     check,
     ...(confirmation ? { confirmation } : {}),
+    ...(authorizationIssue ? { authorizationIssue } : {}),
     stale,
     state: stale
       ? "needs_review"

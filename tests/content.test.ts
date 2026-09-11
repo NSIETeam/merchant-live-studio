@@ -757,7 +757,7 @@ test("Content migration preserves legacy data and product, course, finalization 
         restored.db
           .prepare("SELECT max(version) AS v FROM schema_migrations")
           .get()!.v,
-        10,
+        11,
       );
       assert.equal(
         restored.db.prepare("SELECT count(*) AS n FROM facts").get()!.n,
@@ -958,7 +958,7 @@ test("v4 migration records only the known current binding and does not invent it
       scriptVersion: 1,
     });
     f.db.exec(
-      "DROP TABLE engagement_events; DROP TABLE engagement_redemptions; DROP TABLE engagement_gift_history; DROP TABLE engagement_gifts; DROP TABLE engagement_points; DROP TABLE engagement_checkins; DROP TABLE engagement_programs; DROP TABLE offline_records; DROP TABLE offline_batches; DROP TABLE attribution_visits; DROP TABLE attribution_sources; DROP TABLE attribution_stores; DROP TABLE content_generation_imports; DROP TABLE content_suggestion_resolutions; DROP TABLE content_script_suggestions; DROP TABLE content_review_decisions; DROP TABLE content_review_requests; DROP TABLE content_script_authors; DROP TABLE content_binding_history; DELETE FROM schema_migrations WHERE version>=5;",
+      "DROP TABLE content_authorization_checks; DROP TABLE content_profile_revocations; DROP TABLE engagement_events; DROP TABLE engagement_redemptions; DROP TABLE engagement_gift_history; DROP TABLE engagement_gifts; DROP TABLE engagement_points; DROP TABLE engagement_checkins; DROP TABLE engagement_programs; DROP TABLE offline_records; DROP TABLE offline_batches; DROP TABLE attribution_visits; DROP TABLE attribution_sources; DROP TABLE attribution_stores; DROP TABLE content_generation_imports; DROP TABLE content_suggestion_resolutions; DROP TABLE content_script_suggestions; DROP TABLE content_review_decisions; DROP TABLE content_review_requests; DROP TABLE content_script_authors; DROP TABLE content_binding_history; DELETE FROM schema_migrations WHERE version>=5;",
     );
     f.close();
     const migrated = openDatabase(path);

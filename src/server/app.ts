@@ -1,3 +1,7 @@
+import {
+  createContentAuthorizationSync,
+  recordProfileRevocation,
+} from "./content-authorization.js";
 import { attachEngagement } from "./engagement.js";
 import { attachAttribution, recordAttribution } from "./attribution.js";
 import { Hono } from "hono";
@@ -72,6 +76,10 @@ export function createApp(
   const app = new Hono<{
     Variables: { merchantId: string; viewerId: string };
   }>();
+  const syncContentAuthorization = createContentAuthorizationSync(
+    db,
+    agentBridge,
+  );
   const stream = createStreamAdapter(config);
   const media = new MediaController(config);
   const roomDto = (r: RoomRow): Room => ({
@@ -278,6 +286,14 @@ export function createApp(
     c.set("requireIndependentReview", identity.requiresIndependentReview);
     if (!memberMayAccess(identity.memberRole, c.req.method, c.req.path))
       throw new HTTPException(403, { message: "当前角色没有此操作权限" });
+    await next();
+  });
+  app.use("/api/merchant/*", async (c, next) => {
+    if (
+      c.req.path.startsWith("/api/merchant/content/") ||
+      /\/rooms\/[^/]+\/(agent(?:\/|$)|copilot(?:\/|$))/.test(c.req.path)
+    )
+      await syncContentAuthorization(c.get("merchantId"));
     await next();
   });
   app.use("/api/viewer/*", async (c, next) => {
@@ -519,6 +535,7 @@ export function createApp(
                 : undefined,
       };
     },
+    (tenant, profile) => recordProfileRevocation(db, tenant, profile),
   );
   app.get("/api/merchant/rooms/:id/campaigns", (c) => {
     owned(c.req.param("id"), c.get("merchantId"));

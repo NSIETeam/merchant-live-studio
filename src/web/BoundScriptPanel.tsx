@@ -102,7 +102,8 @@ export function BoundScriptPanel({
         </p>
       ) : binding?.stale ? (
         <p className="risk high" role="alert">
-          商品资料或讲稿状态已改变，当前版本需复核。重新定稿并绑定后再播讲。
+          {binding.script.authorizationIssue ||
+            "商品资料或讲稿状态已改变，当前版本需复核。重新定稿并绑定后再播讲。"}
         </p>
       ) : !binding ? (
         <p className="empty-copy">

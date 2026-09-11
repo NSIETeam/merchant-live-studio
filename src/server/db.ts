@@ -286,6 +286,17 @@ export function openDatabase(path: string) {
         Date.now(),
       );
     });
+  if (version < 11)
+    transaction(db, () => {
+      db.exec(`CREATE TABLE content_profile_revocations(merchant_id TEXT NOT NULL,profile_id TEXT NOT NULL,reason TEXT NOT NULL,actor_id TEXT NOT NULL,revoked_at INTEGER NOT NULL,PRIMARY KEY(merchant_id,profile_id));
+      CREATE TRIGGER content_profile_revocations_immutable_update BEFORE UPDATE ON content_profile_revocations BEGIN SELECT RAISE(ABORT,'immutable'); END;
+      CREATE TRIGGER content_profile_revocations_immutable_delete BEFORE DELETE ON content_profile_revocations BEGIN SELECT RAISE(ABORT,'immutable'); END;
+      CREATE TABLE content_authorization_checks(merchant_id TEXT NOT NULL,profile_id TEXT NOT NULL,verified_at INTEGER NOT NULL,PRIMARY KEY(merchant_id,profile_id));`);
+      db.prepare("INSERT INTO schema_migrations VALUES(?,?)").run(
+        11,
+        Date.now(),
+      );
+    });
   return db;
 }
 export type DB = ReturnType<typeof openDatabase>;

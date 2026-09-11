@@ -1931,7 +1931,8 @@ function CourseEditor({
             )}
             {selected?.stale && (
               <p className="cw-warning">
-                商品资料已变化。请对照当前资料保存新版本并重新复核。
+                {selected.authorizationIssue ||
+                  "商品资料已变化。请对照当前资料保存新版本并重新复核。"}
               </p>
             )}
           </div>
