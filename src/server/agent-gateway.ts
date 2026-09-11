@@ -1,3 +1,4 @@
+import { presenterSchema } from "../shared/presenter-schema.js";
 import type { Hono } from "hono";
 import { z } from "zod";
 import type { AgentBridge } from "./services/agent-bridge.js";
@@ -11,6 +12,7 @@ const id = (value: string) =>
     .parse(value);
 const prompt = z
   .object({
+    presenter: presenterSchema.optional(),
     systemPrompt: z.string().trim().min(1).max(6000),
     styleGuide: z.string().max(3000),
     audience: z.string().max(500),

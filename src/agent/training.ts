@@ -330,6 +330,7 @@ export function registerTrainingRoutes(
       const next = current.latestVersion + 1,
         now = clock();
       const content = {
+        ...(base.presenter ? { presenter: base.presenter } : {}),
         systemPrompt: base.systemPrompt,
         styleGuide: base.styleGuide,
         audience: base.audience,

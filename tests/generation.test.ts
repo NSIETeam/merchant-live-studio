@@ -280,7 +280,11 @@ test("compatible model adapter rejects truncated, refused and oversized envelope
       { finish_reason: "stop", message: { content: JSON.stringify(outline) } },
     ],
   };
-  const server = createServer((_req, res) => {
+  let requestBody = "";
+  const server = createServer(async (req, res) => {
+    const parts: Buffer[] = [];
+    for await (const chunk of req) parts.push(Buffer.from(chunk));
+    requestBody = Buffer.concat(parts).toString();
     res.setHeader("content-type", "application/json");
     res.end(JSON.stringify(envelope));
   });
@@ -296,10 +300,26 @@ test("compatible model adapter rejects truncated, refused and oversized envelope
   const f = fixture(provider, ":memory:", false);
   try {
     const snapshot = (await f.call("/jobs", "POST", input)).data.job.input;
+    snapshot.prompt.presenter = {
+      displayName: "PRIVATE_PRESENTER_NAME",
+      roleDescription: "PRIVATE_ROLE",
+      speakingStyle: "平缓短句",
+      pace: "slow",
+      authorizationReference: "PRIVATE_AUTHORIZATION",
+      authorizationConfirmed: true,
+    };
     assert.deepEqual(
       await adapter.execute(snapshot, null, [], new AbortController().signal),
       outline,
     );
+    assert.deepEqual(
+      JSON.parse(JSON.parse(requestBody).messages[1].content).input.prompt
+        .presenter,
+      { speakingStyle: "平缓短句", pace: "slow" },
+    );
+    assert.ok(!requestBody.includes("PRIVATE_PRESENTER_NAME"));
+    assert.ok(!requestBody.includes("PRIVATE_AUTHORIZATION"));
+    assert.ok(!requestBody.includes("PRIVATE_ROLE"));
     for (const bad of [
       {
         choices: [

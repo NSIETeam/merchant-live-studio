@@ -379,3 +379,71 @@ test("rehearsal drafts never replace the live card and replay/feedback preserve 
     await f.close();
   }
 });
+
+test("live gateway accepts and persists authorized presenter dossiers and rejects missing consent", async () => {
+  const f = fixture();
+  try {
+    const cookie = (await f.request("/auth/demo", "POST", {})).cookie;
+    const presenter = {
+      displayName: "合成主播",
+      roleDescription: "测试讲解员",
+      speakingStyle: "温和短句",
+      pace: "slow",
+      authorizationReference: "合成验收授权记录",
+      authorizationConfirmed: true,
+    };
+    const body = {
+      ...DEFAULT_PROMPT_CONTENT,
+      name: "主播方案",
+      kind: "brand",
+      presenter,
+    };
+    assert.equal(
+      (
+        await f.request(
+          "/merchant/agent/profiles",
+          "POST",
+          {
+            ...body,
+            presenter: { ...presenter, authorizationConfirmed: false },
+          },
+          cookie,
+        )
+      ).status,
+      400,
+    );
+    const created = await f.request(
+      "/merchant/agent/profiles",
+      "POST",
+      body,
+      cookie,
+    );
+    assert.equal(created.status, 201);
+    assert.deepEqual(created.data.version.presenter, presenter);
+    const id = created.data.profile.id;
+    assert.equal(
+      (
+        await f.request(
+          "/merchant/agent/profiles/" + id + "/versions",
+          "POST",
+          {
+            ...DEFAULT_PROMPT_CONTENT,
+            presenter: { ...presenter, speakingStyle: "先问题再解释" },
+          },
+          cookie,
+        )
+      ).status,
+      201,
+    );
+    const history = await f.request(
+      "/merchant/agent/profiles/" + id + "/versions",
+      "GET",
+      undefined,
+      cookie,
+    );
+    assert.equal(history.data.versions.length, 2);
+    assert.deepEqual(history.data.versions[1].presenter, presenter);
+  } finally {
+    await f.close();
+  }
+});

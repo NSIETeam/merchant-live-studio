@@ -291,6 +291,8 @@ export function GenerationPanel({
             <article aria-label="生成结果预览">
               <h3>生成结果预览 · {labels[preview.status]}</h3>
               <p>
+                主播：
+                {preview.input.prompt.presenter?.displayName || "通用表达"} ·
                 提示词：{preview.input.profileId} V{preview.input.promptVersion}{" "}
                 · 商品依据 V{preview.input.productVersion}
               </p>

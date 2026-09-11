@@ -1,3 +1,4 @@
+import { PresenterEditor } from "./PresenterEditor.js";
 import { useEffect, useRef, useState } from "react";
 import {
   Check,
@@ -33,6 +34,7 @@ const emptyPrompt: PromptContent = {
 const messageOf = (error: unknown) =>
   error instanceof Error ? error.message : "请求暂时未完成，请重试。";
 const contentOf = (version: PromptVersion): PromptContent => ({
+  ...(version.presenter ? { presenter: { ...version.presenter } } : {}),
   systemPrompt: version.systemPrompt,
   styleGuide: version.styleGuide,
   audience: version.audience,
@@ -622,6 +624,13 @@ export function AgentWorkbench({
     }
   }
 
+  const presenterReady =
+    !draft.presenter ||
+    (draft.presenter.authorizationConfirmed &&
+      draft.presenter.displayName.trim() &&
+      draft.presenter.roleDescription.trim() &&
+      draft.presenter.speakingStyle.trim() &&
+      draft.presenter.authorizationReference.trim());
   return (
     <div className={`aw-workbench${focus ? " aw-focus" : ""}`}>
       <div className="aw-service" role="status">
@@ -1039,6 +1048,12 @@ export function AgentWorkbench({
               <fieldset
                 disabled={versionLoading || editorBusy || !savedVersion}
               >
+                <PresenterEditor
+                  value={draft.presenter}
+                  onChange={(presenter) =>
+                    setDraft((current) => ({ ...current, presenter }))
+                  }
+                />
                 <label>
                   系统提示词
                   <textarea
@@ -1171,6 +1186,7 @@ export function AgentWorkbench({
                   disabled={
                     !savedVersion ||
                     !draft.systemPrompt.trim() ||
+                    !presenterReady ||
                     promptTooLarge ||
                     !dirty ||
                     editorBusy
@@ -1216,6 +1232,7 @@ export function AgentWorkbench({
                     editorBusy ||
                     !savedVersion ||
                     !draft.systemPrompt.trim() ||
+                    !presenterReady ||
                     promptTooLarge ||
                     !brandName.trim()
                   }

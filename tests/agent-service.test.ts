@@ -641,3 +641,91 @@ test("Execution and storage failures return safe errors without disclosing confi
   assert.equal(health.data.available, false);
   assert.ok(!JSON.stringify(health.data).includes(serviceToken));
 });
+
+test("presenter dossiers require explicit authorization and remain frozen in prompt and run snapshots", async () => {
+  const f = fixture();
+  try {
+    const presenter = {
+      displayName: "合成测试主播",
+      roleDescription: "验收讲解员",
+      speakingStyle: "短句，先解释再举例",
+      pace: "slow",
+      authorizationReference: "synthetic-consent-01，仅合成验收",
+      authorizationConfirmed: true,
+    };
+    assert.equal(
+      (
+        await f.call("/v1/profiles", "POST", {
+          ...content,
+          name: "获授权表达",
+          kind: "brand",
+          presenter: { ...presenter, authorizationConfirmed: false },
+        })
+      ).status,
+      400,
+    );
+    assert.equal(
+      (
+        await f.call("/v1/profiles", "POST", {
+          ...content,
+          name: "缺依据",
+          kind: "brand",
+          presenter: { ...presenter, authorizationReference: "" },
+        })
+      ).status,
+      400,
+    );
+    const created = await f.call("/v1/profiles", "POST", {
+      ...content,
+      name: "获授权表达",
+      kind: "brand",
+      presenter,
+    });
+    assert.equal(created.status, 201);
+    const id = created.data.profile.id;
+    const run = await f.call(
+      "/v1/runs",
+      "POST",
+      requestInput("presenter-snapshot", {
+        profileId: id,
+        mode: "rehearsal",
+        version: 1,
+      }),
+    );
+    assert.equal(run.status, 202);
+    const next = await f.call("/v1/profiles/" + id + "/versions", "POST", {
+      ...content,
+      presenter: {
+        ...presenter,
+        displayName: "另一位合成主播",
+        speakingStyle: "先提问再解释",
+      },
+    });
+    assert.equal(next.status, 201);
+    const snapshot = JSON.parse(
+      String(
+        f.db
+          .prepare("SELECT input_json FROM agent_runs WHERE id=?")
+          .get(run.data.run.id)!.input_json,
+      ),
+    );
+    assert.deepEqual(snapshot.prompt.presenter, presenter);
+    const versions = (await f.call("/v1/profiles/" + id + "/versions")).data
+      .versions;
+    assert.equal(versions[0].presenter.displayName, "另一位合成主播");
+    assert.deepEqual(versions[1].presenter, presenter);
+    assert.equal(
+      (
+        await f.call(
+          "/v1/profiles/" + id + "/versions",
+          "GET",
+          undefined,
+          "merchant-b",
+        )
+      ).status,
+      404,
+    );
+  } finally {
+    await f.dispose();
+  }
+});

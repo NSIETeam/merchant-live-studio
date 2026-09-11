@@ -1,3 +1,4 @@
+import { presenterSchema } from "../shared/presenter-schema.js";
 import { registerGeneration } from "./generation.js";
 import {
   createGenerationProvider,
@@ -29,6 +30,7 @@ import type {
 
 const promptSchema = z
   .object({
+    presenter: presenterSchema.optional(),
     systemPrompt: z.string().trim().min(1).max(6000),
     styleGuide: z.string().max(4000),
     audience: z.string().max(1000),

@@ -1,3 +1,16 @@
+export interface PresenterProfile {
+  displayName: string;
+  roleDescription: string;
+  speakingStyle: string;
+  pace: "slow" | "balanced" | "brisk";
+  authorizationReference: string;
+  authorizationConfirmed: boolean;
+}
+/** Only delivery characteristics cross the model boundary. Authorization is retained for human audit. */
+export function presenterForModel(presenter?: PresenterProfile) {
+  if (!presenter) return undefined;
+  return { speakingStyle: presenter.speakingStyle, pace: presenter.pace };
+}
 export interface AgentFact {
   id: string;
   text: string;
@@ -9,6 +22,7 @@ export interface StyleExample {
   response: string;
 }
 export interface PromptContent {
+  presenter?: PresenterProfile;
   systemPrompt: string;
   styleGuide: string;
   audience: string;
