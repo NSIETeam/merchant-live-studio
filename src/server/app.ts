@@ -409,7 +409,7 @@ export function createApp(
     return c.json({ ok: true });
   });
   attachMaterials(app, db, owned, (roomId) => factsFor(db, roomId), clock);
-  attachContent(app, db, clock);
+  attachContent(app, db, clock, agentBridge);
   const agentBasis = (roomId: string, tenant: string) => {
     const r = owned(roomId, tenant);
     const binding = getRoomContentBinding(

@@ -1,3 +1,8 @@
+import { registerGeneration } from "./generation.js";
+import {
+  createGenerationProvider,
+  type GenerationProvider,
+} from "./generation-provider.js";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { bodyLimit } from "hono/body-limit";
@@ -146,6 +151,7 @@ const digest = (value: unknown) =>
 
 export interface AgentServiceOptions {
   execute?: typeof runAgent;
+  generationProvider?: GenerationProvider;
   clock?: () => number;
   autoStart?: boolean;
 }
@@ -355,6 +361,7 @@ export function createAgentService(
   function start() {
     if (started || closing || closed) return;
     started = true;
+    generation.start();
     timer = setInterval(schedule, 250);
     timer.unref();
     schedule();
@@ -362,6 +369,7 @@ export function createAgentService(
   async function close({ timeoutMs = 35000 }: { timeoutMs?: number } = {}) {
     if (closed) return;
     closing = true;
+    await generation.close();
     if (timer) clearInterval(timer);
     let deadline: ReturnType<typeof setTimeout> | undefined;
     await Promise.race([
@@ -660,6 +668,18 @@ export function createAgentService(
     reserve,
     schedule,
   });
+  const generation = registerGeneration(
+    app,
+    db,
+    options.generationProvider ||
+      createGenerationProvider({
+        ...config.model,
+        timeoutMs: config.generationTimeoutMs ?? 90000,
+      }),
+    version,
+    { global: config.queueLimit, tenant: config.tenantQueueLimit },
+    clock,
+  );
   if (options.autoStart !== false) start();
   return { app, start, close, status };
 }

@@ -60,7 +60,7 @@ export function memberMayAccess(
     if (/\/content\//.test(path))
       return (
         (method === "POST" &&
-          /^\/api\/merchant\/content\/(products|products\/[^/]+\/versions|plans|plans\/[^/]+\/courses|courses\/[^/]+\/scripts|courses\/[^/]+\/scripts\/\d+\/submit|suggestions\/[^/]+\/resolve)$/.test(
+          /^\/api\/merchant\/content\/(products|products\/[^/]+\/versions|plans|plans\/[^/]+\/courses|courses\/[^/]+\/scripts|courses\/[^/]+\/generation|courses\/[^/]+\/generation\/[^/]+\/(cancel|resume|import)|courses\/[^/]+\/scripts\/\d+\/submit|suggestions\/[^/]+\/resolve)$/.test(
             path,
           )) ||
         (method === "PATCH" &&

@@ -216,6 +216,21 @@ export function openDatabase(path: string) {
       CREATE TRIGGER ${table}_immutable_delete BEFORE DELETE ON ${table} BEGIN SELECT RAISE(ABORT,'Suggestion records are immutable'); END;
     `);
     });
+  if (version < 8)
+    transaction(db, () => {
+      db.exec(`
+      CREATE TABLE content_generation_imports (
+        merchant_id TEXT NOT NULL,job_id TEXT NOT NULL,course_id TEXT NOT NULL,script_version INTEGER NOT NULL,
+        actor_id TEXT NOT NULL,imported_at INTEGER NOT NULL,snapshot_json TEXT NOT NULL,
+        PRIMARY KEY(merchant_id,job_id),FOREIGN KEY(course_id,script_version) REFERENCES content_script_versions(course_id,version)
+      );
+      CREATE TRIGGER content_generation_imports_immutable_update BEFORE UPDATE ON content_generation_imports
+        BEGIN SELECT RAISE(ABORT,'Generation import is immutable'); END;
+      CREATE TRIGGER content_generation_imports_immutable_delete BEFORE DELETE ON content_generation_imports
+        BEGIN SELECT RAISE(ABORT,'Generation import is immutable'); END;
+      INSERT INTO schema_migrations VALUES(8,unixepoch());
+    `);
+    });
   return db;
 }
 export type DB = ReturnType<typeof openDatabase>;

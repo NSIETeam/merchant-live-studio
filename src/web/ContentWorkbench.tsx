@@ -1,3 +1,4 @@
+import { GenerationPanel } from "./GenerationPanel.js";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ScriptComparison } from "./ScriptComparison.js";
 import { ReviewQueue } from "./ReviewQueue.js";
@@ -961,7 +962,7 @@ function ProductWorkspace({
                 <div className="cw-divider">
                   <h3>当前制作方式</h3>
                   <p className="cw-meta">
-                    人工写稿与导入，保存时按段进行规则检查。模型接口尚未承担长篇讲稿生成。
+                    人工写稿与导入，保存时按段进行规则检查。长稿任务支持分章生成；模型未配置时等待，不生成示例稿。
                   </p>
                 </div>
                 <div className="cw-divider">
@@ -1574,6 +1575,16 @@ function CourseEditor({
           {course.objective && (
             <p className="cw-meta">本课目标：{course.objective}</p>
           )}
+          <GenerationPanel
+            key={course.id}
+            courseId={course.id}
+            canEdit={canEdit}
+            dirty={dirty}
+            onImported={() => {
+              void refresh(true);
+              onSaved();
+            }}
+          />
           <div className="cw-script-note">
             <span>人工写稿 / 文字导入 · 保存后按段检查</span>
             <span>

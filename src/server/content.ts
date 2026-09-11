@@ -1,3 +1,5 @@
+import type { AgentBridge } from "./services/agent-bridge.js";
+import { attachContentGeneration } from "./content-generation.js";
 import type { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { randomUUID } from "node:crypto";
@@ -320,6 +322,7 @@ export function attachContent(
   app: Hono<{ Variables: { merchantId: string; viewerId: string } }>,
   db: DB,
   clock: () => number = Date.now,
+  bridge?: AgentBridge,
 ) {
   // Caller owns the transaction so applying a suggestion and recording its result are atomic.
   const saveScript = (
@@ -363,6 +366,31 @@ export function attachContent(
     );
     return next;
   };
+  if (bridge)
+    attachContentGeneration(
+      app,
+      db,
+      bridge,
+      (id, merchant) => {
+        const course = courseOwned(db, id, merchant),
+          plan = planOwned(db, course.plan_id, merchant),
+          product = productOwned(db, plan.product_id, merchant);
+        return {
+          courseId: id,
+          baseVersion: course.latest_script_version,
+          productId: product.id,
+          productVersion: product.latest_version,
+          productName: product.name,
+          category: product.category,
+          title: course.title,
+          objective: course.objective,
+          audience: plan.audience,
+          facts: productVersion(db, product.id, product.latest_version).facts,
+        };
+      },
+      saveScript,
+      clock,
+    );
   attachScriptSuggestions(
     app,
     db,

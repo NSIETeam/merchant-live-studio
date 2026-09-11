@@ -13,6 +13,7 @@ export interface AgentConfig {
   tenantQueueLimit: number;
   concurrency: number;
   model: AgentModelConfig;
+  generationTimeoutMs?: number;
 }
 
 export function loadAgentConfig(
@@ -82,6 +83,11 @@ export function loadAgentConfig(
     model.timeoutMs = integer(env.AGENT_MODEL_TIMEOUT_MS, 10000, 30000);
   }
   return {
+    generationTimeoutMs: integer(
+      env.AGENT_GENERATION_TIMEOUT_MS,
+      90000,
+      180000,
+    ),
     production,
     host,
     serviceToken,
