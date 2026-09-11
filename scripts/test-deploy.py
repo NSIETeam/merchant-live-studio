@@ -42,6 +42,12 @@ class TransactionTests(unittest.TestCase):
             root=Path(directory).resolve()/'studio';root.mkdir();(root/'releases').mkdir();(root/'backups').mkdir()
             old=root/'releases'/'old';old.mkdir();(old/'REVISION').write_text('b'*40)
             (old/'dist/web/assets').mkdir(parents=True)
+            # Represent a tab which has not yet loaded its old lazy module/CSS.
+            old_assets = {'workbench-old.js': b'export const version = 1;',
+                          'workbench-old.css': b'.card { color: #334155; }',
+                          'shared.js': b'old shared contents'}
+            for name, content in old_assets.items():
+                (old/'dist/web/assets'/name).write_bytes(content)
             (root/'current').symlink_to(old)
             if pending_recovery:(root/'maintenance').touch()
             database=Path(directory)/'live.sqlite'
@@ -53,6 +59,10 @@ class TransactionTests(unittest.TestCase):
             for name in names:
                 dest=artifact/name;dest.parent.mkdir(parents=True,exist_ok=True);dest.write_text('a'*40 if name=='REVISION' else '{}')
             (artifact/'dist/web/assets').mkdir()
+            new_assets = {'workbench-new.js': b'export const version = 2;',
+                          'shared.js': b'new shared contents'}
+            for name, content in new_assets.items():
+                (artifact/'dist/web/assets'/name).write_bytes(content)
             archive=Path(directory)/'artifact.tgz'
             with tarfile.open(archive,'w:gz') as bundle:
                 for name in ['REVISION','package.json','package-lock.json','dist']:bundle.add(artifact/name,arcname=name)
@@ -76,6 +86,14 @@ class TransactionTests(unittest.TestCase):
                     self.assertEqual((root/'current').resolve(),old)
                 else:
                     deploy.main();self.assertEqual((root/'current').resolve().name,'a'*40)
+            current_assets = (root/'current').resolve()/'dist/web/assets'
+            for name in ['workbench-old.js', 'workbench-old.css']:
+                self.assertEqual((current_assets/name).read_bytes(), old_assets[name])
+            if not (fail_new or active or pending_recovery):
+                for name, content in new_assets.items():
+                    self.assertEqual((current_assets/name).read_bytes(), content)
+            else:
+                self.assertEqual((current_assets/'shared.js').read_bytes(), old_assets['shared.js'])
             self.assertEqual((root/'maintenance').exists(),fail_rollback or corrupt_backup or pending_recovery)
             with connection(database) as db:
                 self.assertEqual(db.execute('SELECT status FROM rooms').fetchone()[0],'migration-change' if corrupt_backup else 'live' if active else 'ended')
