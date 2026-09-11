@@ -36,6 +36,12 @@ export function attachAccountManagement(app: Hono<{Variables:{merchantId:string;
       return {actorId:input.actorId,credentialVersion:version,secret,replayed:false};
     }finally{active--;pending.delete(key);release();}
   }
+  app.get('/api/merchant/team/accounts/events',c=>{
+    const before=z.coerce.number().int().positive().safe().parse(c.req.query('before') || Number.MAX_SAFE_INTEGER);
+    const rows=store.history(c.get('merchantId'),before);
+    c.header('Cache-Control','no-store');
+    return c.json({items:rows.slice(0,50),nextBefore:rows.length>50?rows[49].id:null});
+  });
   app.post('/api/merchant/team/accounts',async c=>{
     const input=z.object({actorId:identifier,role:z.enum(['editor','reviewer','presenter','analyst']),requestKey:z.string().uuid()}).strict().parse(await c.req.json());
     const result=await execute(c.get('merchantId'),c.get('actorId'),input,'create');
