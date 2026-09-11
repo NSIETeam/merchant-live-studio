@@ -50,6 +50,8 @@ npm run dev
 
 开发前必须阅读 [仓库硬门禁](AGENTS.md) 和 [模块开发规范](docs/module-development.md)。现有业务实现已迁入 `src/modules/`、`src/platform/` 与 `src/composition/`，前端按功能归类，详见 [代码分配与迁移记录](docs/module-migration.md)。`npm run check` 与 CI 检查模块依赖、persistence 中的 SQL 和表归属，并执行对应负向测试；原路径仅保留部署入口与历史数据库初始化。
 
+新增功能或修改业务行为，先填写[简短功能卡](docs/feature-card-template.md)，按可验证的业务流程实现，合并前全跑基础检查并按改动补专项验证，发布时填写[具体版本验收记录](docs/release-verification-template.md)。已有规则直接引用，只有验收通过的阶段才能标记完成；纯文档或样式调整使用简短变更说明。
+
 涉及数据、附件或媒体时还必须遵循 [平台存储规范](docs/storage-architecture.md)：数据库保存业务状态与版本关系，私有资产按所属模块管理，原件、AI 候选、正式素材、录像与临时缓存分层，开发时明确权限、清理及备份恢复。统一文件服务与录制归档尚待按规范实现；当前数据库路径保持不变，新增本地运行文件使用不提交 Git、不进入镜像构建上下文的 `var/`。
 
 ```bash
