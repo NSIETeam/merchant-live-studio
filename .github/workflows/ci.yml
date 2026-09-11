@@ -2,6 +2,7 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
@@ -17,3 +18,52 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm audit --omit=dev --audit-level=high
+      - run: python3 scripts/test-deploy.py
+  deploy:
+    name: Deploy checked main to test server
+    needs: check
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: studio-test-server
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - name: Build server artifact with deployed URL prefix
+        env:
+          VITE_BASE_PATH: /studio/
+        run: |
+          npm run build
+          printf '%s\n' "$GITHUB_SHA" > REVISION
+          tar -czf /tmp/studio-release.tar.gz dist package.json package-lock.json REVISION
+      - name: Deploy only the current main revision
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STUDIO_DEPLOY_KEY: ${{ secrets.STUDIO_DEPLOY_KEY }}
+          STUDIO_KNOWN_HOSTS: ${{ secrets.STUDIO_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          latest=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)
+          if [[ "$latest" != "$GITHUB_SHA" ]]; then
+            echo "Newer main revision exists; skipping stale deployment." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          test -n "$STUDIO_DEPLOY_KEY"
+          test -n "$STUDIO_KNOWN_HOSTS"
+          umask 077
+          keydir=$(mktemp -d)
+          trap 'rm -rf "$keydir"' EXIT
+          printf '%s\n' "$STUDIO_DEPLOY_KEY" > "$keydir/key"
+          printf '%s\n' "$STUDIO_KNOWN_HOSTS" > "$keydir/known_hosts"
+          ssh -T -i "$keydir/key" -o IdentitiesOnly=yes -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$keydir/known_hosts" \
+            -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 \
+            root@8.140.52.117 "deploy $GITHUB_SHA" < /tmp/studio-release.tar.gz
+          echo "Deployed checked commit $GITHUB_SHA to the test server." >> "$GITHUB_STEP_SUMMARY"
