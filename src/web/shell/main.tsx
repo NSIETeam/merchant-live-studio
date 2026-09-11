@@ -5,6 +5,7 @@ import { Questions, Rewards } from "../engagement/Interactions.js";
 import { RecordingHealth } from "../live/RecordingHealth.js";
 import { StudioVideo } from "../live/StudioVideo.js";
 import { DeferredPanel } from "../shared/DeferredPanel.js";
+import { PlatformCompliancePage } from "../shared/PlatformCompliance.js";
 import { LedgerPanel } from "../payments/LedgerPanel.js";
 import { TeamPanel } from "./TeamPanel.js";
 import { AudienceShare } from "../live/AudienceShare.js";
@@ -85,6 +86,7 @@ function App() {
     : window.location.pathname;
   if (path.startsWith("/watch/"))
     return <Audience id={decodeURIComponent(path.slice(7))} />;
+  if (path === "/compliance") return <PlatformCompliancePage />;
   return <Merchant />;
 }
 function Merchant() {
@@ -187,6 +189,12 @@ function Merchant() {
                   登录
                 </button>
               </form>
+              <a
+                className="login-compliance-link"
+                href={`${import.meta.env.BASE_URL}compliance`}
+              >
+                平台信息、隐私政策与服务协议
+              </a>
             </>
           )}
           {error && <Notice>{error}</Notice>}
@@ -768,11 +776,12 @@ function Workspace({
                   </details>
                   <details className="live-management">
                     <summary>直播管理 · 投诉、录像与数据</summary>
-                    {memberRole === "owner" && (
+                    {["owner", "reviewer"].includes(memberRole) && (
                       <ComplaintsPanel
                         key={selected.id}
                         roomId={selected.id}
                         merchant
+                        role={memberRole}
                       />
                     )}
                     <Stats analytics={analytics} />
@@ -816,11 +825,12 @@ function Workspace({
               )}
               {tab === "analytics" && (
                 <>
-                  {memberRole === "owner" && (
+                  {["owner", "reviewer"].includes(memberRole) && (
                     <ComplaintsPanel
                       key={selected.id}
                       roomId={selected.id}
                       merchant
+                      role={memberRole}
                     />
                   )}
                   <Stats analytics={analytics} />
@@ -910,6 +920,7 @@ function Workspace({
           >
             Logo 候选
           </a>
+          <a href={`${import.meta.env.BASE_URL}compliance`}>平台信息与隐私</a>
         </footer>
       </main>
       {creating && (

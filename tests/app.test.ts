@@ -816,6 +816,14 @@ test("real payments fail closed, configuration blocks demo production, notify ne
         SESSION_SECRET: "test-secret-at-least-32-characters",
       }),
     );
+    for (const reserved of ["__proto__", "constructor", "toString"])
+      assert.throws(() =>
+        loadConfig({
+          MERCHANT_CREDENTIALS: JSON.stringify({
+            [reserved]: "test-secret-at-least-32-characters",
+          }),
+        }),
+      );
   } finally {
     f.db.close();
   }

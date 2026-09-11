@@ -31,6 +31,9 @@ export function createAccountStore(db: DB) {
     list(merchant: string) {
       return db.prepare("SELECT actor_id,merchant_id,role,credential_version,created_at FROM identity_accounts WHERE merchant_id=? ORDER BY actor_id").all(merchant);
     },
+    history(merchant: string, before: number) {
+      return db.prepare("SELECT id,actor_id AS targetActorId,performed_by AS actorId,kind,credential_version AS credentialVersion,created_at AS createdAt FROM identity_account_events WHERE merchant_id=? AND id<? ORDER BY id DESC LIMIT 51").all(merchant,before);
+    },
     receipt(merchant: string, request: string) {
       return db.prepare("SELECT actor_id,kind,performed_by,credential_version,request_fingerprint FROM identity_account_events WHERE merchant_id=? AND request_key=?").get(merchant,request);
     },

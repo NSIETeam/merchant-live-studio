@@ -489,6 +489,71 @@
   color: #b8bdc8;
   margin-left: 12px;
 }
+.audience-drawer .complaints-body {
+  color: #24272e;
+}
+.audience-drawer .complaints-body p,
+.audience-drawer .complaints-body h3,
+.audience-drawer .complaints-body h4,
+.audience-drawer .complaints-body small,
+.audience-drawer .complaints-body label,
+.audience-drawer .complaints-body .muted {
+  color: #4e5562;
+}
+.audience-drawer .complaints-body h3,
+.audience-drawer .complaints-body h4 {
+  color: #202329;
+}
+.audience-drawer .complaints-body input,
+.audience-drawer .complaints-body select,
+.audience-drawer .complaints-body textarea {
+  background: #fff;
+  color: #24272e;
+  border-color: #c9ced6;
+}
+.audience-drawer .complaints-body textarea::placeholder {
+  color: #737b88;
+}
+.audience-drawer .complaints-body button {
+  background: #e1e4e9;
+  color: #252830;
+  border: 1px solid #c7ccd4;
+}
+.audience-drawer .complaints-body button:disabled {
+  color: #737b88;
+  background: #eceef1;
+}
+.audience-drawer .complaints-body .complaint-overdue {
+  color: #902a2a;
+  background: #fff2f2;
+  border-color: #efcccc;
+}
+.audience-drawer .platform-compliance,
+.audience-drawer .platform-compliance h2,
+.audience-drawer .platform-compliance h3,
+.audience-drawer .platform-compliance dd,
+.audience-drawer .platform-compliance li,
+.audience-drawer .platform-compliance p {
+  color: #e7e9ed;
+}
+.audience-drawer .platform-compliance dt,
+.audience-drawer .platform-compliance .muted {
+  color: #b8bec8;
+}
+.audience-drawer .platform-compliance.is-compact {
+  border-bottom-color: #4b4f5a;
+}
+.audience-drawer .retention-status {
+  border-top-color: #4b4f5a;
+}
+.audience-drawer .platform-compliance-missing {
+  color: #f0c4c0;
+  background: #3d292b;
+  border-color: #70464a;
+}
+.audience-drawer .platform-policy-links a {
+  color: #d7e2f0;
+}
 @media (max-width: 600px) {
   .audience-topbar {
     min-height: 54px;

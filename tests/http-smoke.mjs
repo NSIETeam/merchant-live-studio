@@ -38,7 +38,14 @@ try {
   assert.match(html, /靠谱 · 内容与直播工作台/);
   const asset = html.match(/src="([^"]+\.js)"/)[1];
   assert.equal((await fetch(base + asset)).status, 200);
+  const compliancePage = await fetch(base + "/compliance");
+  assert.equal(compliancePage.status, 200);
+  assert.match(await compliancePage.text(), /靠谱 · 内容与直播工作台/);
   assert.equal((await fetch(base + "/watch/demo-room")).status, 200);
+  const compliance = await fetch(base + "/api/platform/compliance");
+  assert.equal(compliance.status, 200);
+  assert.match(compliance.headers.get("cache-control") || "", /no-store/);
+  assert.equal((await compliance.json()).configured, false);
   async function call(path, method = "GET", body, cookie = "") {
     const r = await fetch(base + "/api" + path, {
       method,
@@ -123,7 +130,7 @@ try {
   assert.equal((await call("/does-not-exist")).status, 404);
   assert.equal((await fetch(base + "/src/server/config.ts")).status, 404);
   console.log(
-    "Built HTTP smoke passed: pages, asset, auth origin, room, campaign, heartbeat, claim, worker, analytics, source privacy.",
+    "Built HTTP smoke passed: pages, compliance, asset, auth origin, room, campaign, heartbeat, claim, worker, analytics, source privacy.",
   );
 } finally {
   if (child.exitCode === null) {

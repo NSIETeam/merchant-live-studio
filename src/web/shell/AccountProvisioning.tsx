@@ -1,3 +1,4 @@
+import { AccountHistory } from "./AccountHistory.js";
 import { useState } from "react";
 import { api } from "../shared/api.js";
 import { memberRoleNames, type MemberRole } from "../../shared/membership.js";
@@ -41,5 +42,6 @@ export function AccountProvisioning({members,onChanged}:{members:ManagedMember[]
    <label className="account-confirm"><input type="checkbox" checked={confirmed} disabled={busy} onChange={e=>{setConfirmed(e.target.checked);change();}}/>我确认重置该成员的密钥，并使其旧登录失效</label>
    <button disabled={busy||!target||!confirmed}>重置访问密钥</button>
   </form>
+  <AccountHistory />
  </details>;
 }

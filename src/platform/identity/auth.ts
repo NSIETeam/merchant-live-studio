@@ -16,14 +16,26 @@ export interface Session {
 }
 const credentialVersion = (config: Config, id: string, db?: DB) => {
   const account = managedAccount(db, config, id);
+  const credential = Object.hasOwn(config.merchantCredentials, id)
+    ? config.merchantCredentials[id]
+    : undefined;
+  const membership = Object.hasOwn(config.merchantMemberships || {}, id)
+    ? config.merchantMemberships![id]
+    : undefined;
   return createHmac("sha256", config.sessionSecret)
     .update(
-      account ? JSON.stringify([account.actor_id, account.merchant_id, account.role, account.credential_version, account.verifier]) : config.demoMode && id === "demo"
-        ? "local-demo"
-        : (config.merchantCredentials[id] || "disabled") +
-            (config.merchantMemberships?.[id]
-              ? JSON.stringify(config.merchantMemberships[id])
-              : ""),
+      account
+        ? JSON.stringify([
+            account.actor_id,
+            account.merchant_id,
+            account.role,
+            account.credential_version,
+            account.verifier,
+          ])
+        : config.demoMode && id === "demo"
+          ? "local-demo"
+          : (credential || "disabled") +
+            (membership ? JSON.stringify(membership) : ""),
     )
     .digest("hex");
 };
@@ -39,10 +51,7 @@ export function issueSession(
   id: string = randomUUID(),
   db?: DB,
 ) {
-  const access =
-    role === "merchant" && db
-      ? findSessionAccess(db, id)
-      : null;
+  const access = role === "merchant" && db ? findSessionAccess(db, id) : null;
   if (access?.disabled) throw new Error("Account disabled");
   const session = {
     accessVersion: Number(access?.version || 0),
@@ -98,7 +107,8 @@ export function readSession(
         session.credentialVersion || "",
         credentialVersion(config, session.id, db),
       ) ||
-        (!config.merchantCredentials[session.id] && !managedAccount(db, config, session.id) &&
+        (!Object.hasOwn(config.merchantCredentials, session.id) &&
+          !managedAccount(db, config, session.id) &&
           !(config.demoMode && session.id === "demo")))
     )
       return null;

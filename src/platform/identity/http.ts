@@ -1,5 +1,8 @@
 import { attachAccountManagement } from "./account-http.js";
-import { createAccountStore, findManagedAccount } from "./persistence/accounts.js";
+import {
+  createAccountStore,
+  findManagedAccount,
+} from "./persistence/accounts.js";
 import { managedAccount } from "./managed-accounts.js";
 import { verifyAccessSecret } from "./credentials.js";
 import { findSessionAccess } from "./persistence/access-queries.js";
@@ -14,7 +17,11 @@ import { z, ZodError } from "zod";
 import { type Config } from "../../platform/infrastructure/public.js";
 import type { DB } from "../../shared/persistence.js";
 import { equalSecret, issueSession, readSession } from "./auth.js";
-import { memberMayAccess, merchantIdentity, requiresIndependentReview } from "./permissions.js";
+import {
+  memberMayAccess,
+  merchantIdentity,
+  requiresIndependentReview,
+} from "./permissions.js";
 import {
   deleteRevokedSessionsByExpiresAt,
   insertRevokedSessions,
@@ -27,11 +34,13 @@ export function createIdentity(
 ) {
   const accounts = createAccountStore(db);
   for (const id of Object.keys(config.merchantCredentials)) {
-    if (findManagedAccount(db, id)) throw new Error("配置账号与托管账号冲突，请核对账号配置");
+    if (findManagedAccount(db, id))
+      throw new Error("配置账号与托管账号冲突，请核对账号配置");
   }
   let credentialChecks = 0;
   return {
-    requiresIndependentReview: (tenant: string) => requiresIndependentReview(config, tenant, db),
+    requiresIndependentReview: (tenant: string) =>
+      requiresIndependentReview(config, tenant, db),
     cleanup() {
       deleteRevokedSessionsByExpiresAt(db, clock());
     },
@@ -188,17 +197,29 @@ export function createIdentity(
             token: z.string().max(256),
           })
           .parse(await c.req.json());
-        const expected = config.merchantCredentials[input.merchantId];
+        const expected = Object.hasOwn(
+          config.merchantCredentials,
+          input.merchantId,
+        )
+          ? config.merchantCredentials[input.merchantId]
+          : undefined;
         const account = managedAccount(db, config, input.merchantId);
         let verified = Boolean(expected && equalSecret(expected, input.token));
         if (account) {
-          if (credentialChecks >= 4) throw new HTTPException(429, {message: "登录繁忙，请稍后重试"});
+          if (credentialChecks >= 4)
+            throw new HTTPException(429, { message: "登录繁忙，请稍后重试" });
           credentialChecks++;
-          try { verified = await verifyAccessSecret(input.token, account.verifier); }
-          finally { credentialChecks--; }
+          try {
+            verified = await verifyAccessSecret(input.token, account.verifier);
+          } finally {
+            credentialChecks--;
+          }
           // Reject a reset or ownership change that happened while scrypt was running.
           const current = managedAccount(db, config, input.merchantId);
-          verified = verified && current?.credential_version === account.credential_version && current?.verifier === account.verifier;
+          verified =
+            verified &&
+            current?.credential_version === account.credential_version &&
+            current?.verifier === account.verifier;
         }
         if (!verified || findSessionAccess(db, input.merchantId)?.disabled)
           throw new HTTPException(401, { message: "商家编号或访问密钥错误" });

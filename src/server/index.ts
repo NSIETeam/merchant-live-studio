@@ -13,6 +13,7 @@ if (existsSync("dist/web/index.html")) {
   app.get("/assets/*", serveStatic({ root: "./dist/web" }));
   app.get("/brand/*", serveStatic({ root: "./dist/web" }));
   app.get("/", serveStatic({ path: "./dist/web/index.html" }));
+  app.get("/compliance", serveStatic({ path: "./dist/web/index.html" }));
   app.get("/watch/*", serveStatic({ path: "./dist/web/index.html" }));
 }
 const worker = setInterval(() => {
@@ -28,7 +29,8 @@ const worker = setInterval(() => {
 let recordingJob: Promise<void> | null = null;
 const recordingWorker = setInterval(() => {
   if (!recordingJob)
-    recordingJob = studio.processRecordingOutbox()
+    recordingJob = studio
+      .processRecordingOutbox()
       .catch(() => console.error("Recording queue unavailable"))
       .finally(() => {
         recordingJob = null;

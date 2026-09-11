@@ -100,6 +100,10 @@ Agent 另外使用独立服务进程、数据目录和 `AGENT_SERVICE_TOKEN`，�
 
 生产模式要求至少 32 字符的会话签名密钥、每商家至少 24 字符的访问密钥。修改环境文件中的商家凭据后重启应用，新配置生效即拒绝对应旧会话。注销只撤销当前登录会话，不影响同商家的其他有效登录。
 
+平台运营主体、投诉渠道、隐私政策和服务协议通过服务器环境变量 `PLATFORM_COMPLIANCE` 配置，公开入口为 `/compliance`，观众直播间的「经营者信息」也会同时展示。缺少配置时页面与健康接口明确标为未配置，不使用品牌名或测试资料代替真实主体。字段和验收边界见[平台信息与隐私](docs/platform-compliance.md)。
+
+公开保存期限声明通过 `DATA_RETENTION_POLICY` 配置，同一合规页面会同时显示软件当前真实执行状态。声明不能代替自动清理、争议冻结、基础设施日志或备份验收；当前边界见[记录留存声明](docs/retention-policy.md)。
+
 ```dotenv
 MERCHANT_CREDENTIALS={"merchant-a":"REPLACE_WITH_RANDOM_SECRET_AT_LEAST_24_CHARS"}
 ```
