@@ -33,6 +33,17 @@ const emptyPrompt: PromptContent = {
 };
 const messageOf = (error: unknown) =>
   error instanceof Error ? error.message : "请求暂时未完成，请重试。";
+const decisionLabel = {
+  superiority: "绝对化或排他比较",
+  contextual_ordinal: "顺序语境",
+  medical_efficacy: "疾病与医疗功效",
+  guarantee: "效果或安全保证",
+  testimonial: "代言与亲历",
+  emotional_association: "主观情感联想",
+  price_scarcity: "价格与库存稀缺",
+  platform_incentive: "平台激励",
+  instruction_override: "越权指令",
+} as const;
 const contentOf = (version: PromptVersion): PromptContent => ({
   ...(version.presenter ? { presenter: { ...version.presenter } } : {}),
   systemPrompt: version.systemPrompt,
@@ -1331,7 +1342,32 @@ export function AgentWorkbench({
               </h2>
               <span className="aw-badge">事实规则</span>
             </div>
-            {quickResult?.alerts.length ? (
+            {quickResult?.claimDecisions?.length ? (
+              quickResult.claimDecisions.map((decision, index) => (
+                <div
+                  className={`aw-risk aw-risk-${decision.disposition === "block" ? "high" : "review"}`}
+                  key={`${decision.ruleId}:${index}`}
+                >
+                  <strong>
+                    {decision.disposition === "block"
+                      ? "建议暂停"
+                      : decision.disposition === "context"
+                        ? "结合语境"
+                        : "人工复核"}
+                    · {decisionLabel[decision.type]} · {decision.phrase}
+                  </strong>
+                  <p>{decision.explanation}</p>
+                  <p>
+                    <b>需要：</b>
+                    {decision.evidenceNeeded}
+                  </p>
+                  <p>
+                    <b>处理：</b>
+                    {decision.suggestedAction}
+                  </p>
+                </div>
+              ))
+            ) : quickResult?.alerts.length ? (
               quickResult.alerts.map((alert, index) => (
                 <div className={`aw-risk aw-risk-${alert.level}`} key={index}>
                   <strong>
@@ -1355,15 +1391,28 @@ export function AgentWorkbench({
             {!!agentResult?.alerts.length && (
               <div className="aw-agent-alerts">
                 <h3>本次生成复核</h3>
-                {agentResult.alerts.map((alert, index) => (
-                  <div className={`aw-risk aw-risk-${alert.level}`} key={index}>
-                    <strong>{alert.phrase}</strong>
-                    <p>{alert.reason}</p>
-                  </div>
-                ))}
+                {agentResult.alerts
+                  .filter(
+                    (alert) =>
+                      !agentResult.claimDecisions?.some(
+                        (decision) =>
+                          decision.phrase === alert.phrase &&
+                          decision.category === alert.category,
+                      ),
+                  )
+                  .map((alert, index) => (
+                    <div
+                      className={`aw-risk aw-risk-${alert.level}`}
+                      key={index}
+                    >
+                      <strong>{alert.phrase}</strong>
+                      <p>{alert.reason}</p>
+                    </div>
+                  ))}
               </div>
             )}
             <p className="aw-help">
+              规则版本 {quickResult?.policyVersion || "等待检查"} ·
               按主张、证据和上下文核查，不用同义词包装违规承诺。
             </p>
           </section>

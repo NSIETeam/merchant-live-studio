@@ -58,6 +58,17 @@ interface Dependencies {
 const idSchema = z.string().min(1).max(128);
 const unique = <T>(items: T[], key: (item: T) => string) =>
   new Set(items.map(key)).size === items.length;
+const decisionTypeSchema = z.enum([
+  "superiority",
+  "contextual_ordinal",
+  "medical_efficacy",
+  "guarantee",
+  "testimonial",
+  "emotional_association",
+  "price_scarcity",
+  "platform_incentive",
+  "instruction_override",
+]);
 const exampleSchema = z
   .object({
     situation: z.string().trim().min(1).max(500),
@@ -89,6 +100,11 @@ export const evaluationCaseSchema = z
           )
           .max(5)
           .refine((items) => unique(items, (item) => item)),
+        decisionTypes: z
+          .array(decisionTypeSchema)
+          .max(9)
+          .refine((items) => unique(items, (item) => item))
+          .optional(),
         forbiddenPhrases: z.array(z.string().trim().min(1).max(100)).max(8),
       })
       .strict(),
@@ -222,6 +238,15 @@ function rubric(
       name: `提示类别：${category}`,
       passed: output.alerts.some((alert) => alert.category === category),
       detail: "仅检查声明的提示类别是否出现，不判断完整语义是否合法。",
+    });
+  for (const type of sample.expect.decisionTypes || [])
+    checks.push({
+      name: `主张识别：${type}`,
+      passed: Boolean(
+        output.claimDecisions?.some((decision) => decision.type === type),
+      ),
+      detail:
+        "检查结构化主张类型是否出现；它用于回归提示，不代表监管机关结论。",
     });
   const generated = comparable(`${output.suggestion}\n${output.nextCue}`);
   for (const phrase of sample.expect.forbiddenPhrases)

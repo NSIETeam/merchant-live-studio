@@ -6,6 +6,17 @@ import type { EvaluationReport } from "../../shared/training.js";
 import type { AgentBridge } from "./agent-bridge.js";
 
 const identifier = z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/);
+const decisionType = z.enum([
+  "superiority",
+  "contextual_ordinal",
+  "medical_efficacy",
+  "guarantee",
+  "testimonial",
+  "emotional_association",
+  "price_scarcity",
+  "platform_incentive",
+  "instruction_override",
+]);
 const caseSchema = z
   .object({
     id: identifier,
@@ -22,6 +33,11 @@ const caseSchema = z
           )
           .max(5)
           .refine((v) => new Set(v).size === v.length),
+        decisionTypes: z
+          .array(decisionType)
+          .max(9)
+          .refine((v) => new Set(v).size === v.length)
+          .optional(),
         forbiddenPhrases: z.array(z.string().trim().min(1).max(100)).max(8),
       })
       .strict(),

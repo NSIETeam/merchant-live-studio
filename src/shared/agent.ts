@@ -61,6 +61,27 @@ export interface AgentAlert {
   reason: string;
   category?: "claim" | "evidence" | "emotion" | "platform" | "instruction";
 }
+export type ClaimDecisionType =
+  | "superiority"
+  | "contextual_ordinal"
+  | "medical_efficacy"
+  | "guarantee"
+  | "testimonial"
+  | "emotional_association"
+  | "price_scarcity"
+  | "platform_incentive"
+  | "instruction_override";
+export interface ClaimDecision {
+  ruleId: string;
+  type: ClaimDecisionType;
+  disposition: "block" | "review" | "context";
+  category: NonNullable<AgentAlert["category"]>;
+  phrase: string;
+  statement: string;
+  explanation: string;
+  evidenceNeeded: string;
+  suggestedAction: string;
+}
 export interface AgentResult {
   provider: "grounded-rules" | "remote-model";
   modelConfigured: boolean;
@@ -79,6 +100,10 @@ export interface AgentResult {
     summary: string;
   }[];
   decisionSummary: string[];
+  /** Added in policy v1. Older persisted run results may not contain these fields. */
+  policyVersion?: string;
+  policyPack?: "general" | "food-nutrition" | "regulated-health";
+  claimDecisions?: ClaimDecision[];
 }
 export interface AgentRun {
   id: string;
