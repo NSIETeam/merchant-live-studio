@@ -197,6 +197,38 @@ test("moderation freezes reopening, preserves failure results, retries safely an
       db.prepare("SELECT count(*) AS n FROM moderation_results").get()!.n,
       2,
     );
+    const resultsPath = `${base}/${stop.data.id}/results`;
+    const history = await call(resultsPath, "GET", undefined, presenter);
+    assert.equal(history.status, 200);
+    assert.deepEqual(history.data.items.map((r: any) => r.disconnected), [1, 0]);
+    assert.equal((await call(resultsPath, "GET", undefined, other)).status, 404);
+    assert.equal((await call(resultsPath)).status, 401);
+    assert.equal((await call(`${base}/999999/results`, "GET", undefined, owner)).status, 404);
+    assert.equal((await call(resultsPath + "?before=0", "GET", undefined, owner)).status, 400);
+    const insertResult = db.prepare("INSERT INTO moderation_results(action_id,disconnected,message,actor_id,created_at) VALUES(?,?,?,?,?)");
+    for (let i=0; i<105; i++) insertResult.run(stop.data.id, 0, `Synthetic attempt ${i}`, "demo", Date.now());
+    let cursor: number | null = null;
+    const ids: number[] = [];
+    do {
+      const page = await call(resultsPath + (cursor ? `?before=${cursor}` : ""), "GET", undefined, owner);
+      ids.push(...page.data.items.map((r: any) => r.id));
+      cursor = page.data.nextBefore;
+    } while(cursor);
+    assert.equal(ids.length, 107);
+    assert.equal(new Set(ids).size, 107);
+    const exported = await app.request("/api" + resultsPath + "/export", { headers: {cookie: reviewer} });
+    assert.equal(exported.status, 200);
+    assert.equal(exported.headers.get("cache-control"), "no-store");
+    insertResult.run(stop.data.id, 0, "Added during export", "demo", Date.now());
+    const lines = (await exported.text()).trim().split("\n").map(line => JSON.parse(line));
+    assert.equal(lines[0].type, "manifest");
+    assert.equal(lines[0].action.id, stop.data.id);
+    assert.equal(lines.at(-1).type, "complete");
+    assert.equal(lines.at(-1).count, 107);
+    const exportedIds = lines.filter(row => row.type === "result").map(row => row.id);
+    assert.deepEqual(exportedIds, ids.toReversed());
+    assert.equal((await app.request("/api" + resultsPath + "/export", {headers: {cookie:other}})).status, 404);
+    assert.equal((await app.request("/api" + resultsPath + "/export")).status, 401);
     assert.throws(() => db.exec("DELETE FROM moderation_actions"));
     assert.throws(() =>
       db.exec("UPDATE moderation_results SET disconnected=1"),

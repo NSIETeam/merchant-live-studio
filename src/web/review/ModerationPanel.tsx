@@ -1,3 +1,4 @@
+import { ModerationResults } from "./ModerationResults.js";
 import { useEffect, useState } from "react";
 import { api } from "../shared/api.js";
 import {
@@ -212,6 +213,7 @@ export function ModerationPanel({
                   <p>依据：{item.evidenceReference}</p>
                 )}
                 {item.result && <p>断流结果：{item.result.message}</p>}
+                {item.kind === "stop" && <ModerationResults key={`${roomId}-${item.id}`} roomId={roomId} actionId={item.id} />}
               </article>
             ))}
             {before && (

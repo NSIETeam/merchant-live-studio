@@ -1,4 +1,4 @@
-import { moderationQuery1, moderationQuery2, moderationQuery3, moderationQuery4, moderationQuery5, moderationQuery6, moderationQuery7, moderationQuery8, moderationQuery9 } from "./persistence/moderation-queries.js";
+import { moderationAction, moderationResults, moderationResultBound, moderationResultBatch, moderationQuery1, moderationQuery2, moderationQuery3, moderationQuery4, moderationQuery5, moderationQuery6, moderationQuery7, moderationQuery8, moderationQuery9 } from "./persistence/moderation-queries.js";
 import type { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { randomBytes } from "node:crypto";
@@ -79,6 +79,47 @@ export function attachModeration(
       })),
       nextBefore: rows.length > 50 ? rows[49].id : null,
     });
+  });
+  function actionFor(id: string | undefined, merchant: string, raw: string | undefined) {
+    const room = owned(z.string().parse(id), merchant);
+    const actionId = z.coerce.number().int().positive().safe().parse(raw);
+    const action = moderationAction(db, actionId, String(room.id));
+    if (!action) throw new HTTPException(404);
+    return { action, actionId };
+  }
+  app.get(base + "/:actionId/results", (c) => {
+    const { actionId } = actionFor(c.req.param("id"), c.get("merchantId"), c.req.param("actionId"));
+    const before = z.coerce.number().int().positive().safe().parse(c.req.query("before") || Number.MAX_SAFE_INTEGER);
+    const rows = moderationResults(db, actionId, before);
+    c.header("Cache-Control", "no-store");
+    return c.json({ items: rows.slice(0,50), nextBefore: rows.length > 50 ? rows[49].id : null });
+  });
+  app.get(base + "/:actionId/results/export", (c) => {
+    const { action, actionId } = actionFor(c.req.param("id"), c.get("merchantId"), c.req.param("actionId"));
+    const through = moderationResultBound(db, actionId);
+    const encoder = new TextEncoder();
+    let after = 0, count = 0, started = false;
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        try {
+          if (!started) {
+            started = true;
+            controller.enqueue(encoder.encode(JSON.stringify({ type: "manifest", formatVersion: 1, roomId: c.req.param("id"), action, throughResultId: through, exportedAt: clock() }) + "\n"));
+            return;
+          }
+          const rows = moderationResultBatch(db, actionId, after, through);
+          if (!rows.length) {
+            controller.enqueue(encoder.encode(JSON.stringify({ type: "complete", count, throughResultId: through }) + "\n"));
+            controller.close();
+            return;
+          }
+          count += rows.length;
+          after = Number(rows[rows.length-1].id);
+          controller.enqueue(encoder.encode(rows.map(row => JSON.stringify({ type: "result", ...row })).join("\n") + "\n"));
+        } catch (error) { controller.error(error); }
+      },
+    });
+    return new Response(stream, { headers: { "Content-Type": "application/x-ndjson; charset=utf-8", "Content-Disposition": `attachment; filename="moderation-${actionId}.ndjson"`, "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
   });
   app.post(base, async (c) => {
     const room = owned(
