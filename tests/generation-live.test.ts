@@ -1,14 +1,14 @@
-import test from "node:test";
-import assert from "node:assert/strict";
 import { HTTPException } from "hono/http-exception";
-import { createApp, seedDemo } from "../src/server/app.js";
-import { loadConfig } from "../src/server/config.js";
+import assert from "node:assert/strict";
+import test from "node:test";
+import { createApp, seedDemo } from "../src/composition/studio.js";
+import { createAgentService } from "../src/modules/agent/app.js";
+import { loadAgentConfig } from "../src/modules/agent/config.js";
+import type { GenerationProvider } from "../src/modules/agent/generation-provider.js";
+import { openAgentDatabase } from "../src/modules/agent/persistence/database.js";
+import type { AgentBridge } from "../src/platform/adapters/public.js";
+import { loadConfig } from "../src/platform/infrastructure/public.js";
 import { openDatabase } from "../src/server/db.js";
-import { createAgentService } from "../src/agent/app.js";
-import { openAgentDatabase } from "../src/agent/db.js";
-import { loadAgentConfig } from "../src/agent/config.js";
-import type { GenerationProvider } from "../src/agent/generation-provider.js";
-import type { AgentBridge } from "../src/server/services/agent-bridge.js";
 async function setup(configured = true) {
   const agentDB = openAgentDatabase(":memory:"),
     agentConfig = loadAgentConfig({});

@@ -1,20 +1,20 @@
-import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDatabase } from "../src/server/db.js";
-import { createApp, seedDemo } from "../src/server/app.js";
-import { loadConfig } from "../src/server/config.js";
-import { getRoomContentBinding } from "../src/server/content.js";
+import test from "node:test";
+import { getRoomContentBinding } from "../src/composition/content.js";
+import { createApp, seedDemo } from "../src/composition/studio.js";
 import {
   checkScript,
   CONTENT_RULE_VERSION,
-} from "../src/server/content-check.js";
+} from "../src/modules/review/public.js";
+import { loadConfig } from "../src/platform/infrastructure/public.js";
+import { openDatabase } from "../src/server/db.js";
 import type {
   ProductInput,
-  ScriptInput,
   ProductVersion,
+  ScriptInput,
 } from "../src/shared/content.js";
 
 const productInput: ProductInput = {

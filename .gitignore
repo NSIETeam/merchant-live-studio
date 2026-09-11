@@ -1,6 +1,8 @@
 node_modules/
 dist/
 data/
+# Local runtime assets, quarantine, cache and backup staging (see docs/storage-architecture.md)
+/var/
 .env
 .env.*
 !.env.example
@@ -9,3 +11,5 @@ data/
 coverage/
 playwright-report/
 test-results/
+__pycache__/
+*.pyc

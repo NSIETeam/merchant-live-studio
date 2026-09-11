@@ -1,20 +1,21 @@
-import { test } from "node:test";
 import assert from "node:assert/strict";
-import { openDatabase } from "../src/server/db.js";
-import { createApp, seedDemo } from "../src/server/app.js";
-import { loadConfig } from "../src/server/config.js";
-import {
-  processSimulationJobs,
-  WeChatPaymentProvider,
-} from "../src/server/services/payments.js";
-import { expireCampaigns } from "../src/server/services/rewards.js";
-import { createStreamAdapter } from "../src/server/services/stream.js";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { test } from "node:test";
+import {
+  createApp,
+  expireCampaigns,
+  processSimulationJobs,
+  seedDemo,
+  WeChatPaymentProvider,
+} from "../src/composition/studio.js";
+import { createStreamAdapter } from "../src/modules/live/public.js";
+import { loadConfig } from "../src/platform/infrastructure/public.js";
+import { openDatabase } from "../src/server/db.js";
 
 function fixture(
-  agentBridge?: import("../src/server/services/agent-bridge.js").AgentBridge,
+  agentBridge?: import("../src/platform/adapters/public.js").AgentBridge,
 ) {
   const db = openDatabase(":memory:");
   let now = Date.now();

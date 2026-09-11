@@ -1,11 +1,11 @@
 import { serve } from "@hono/node-server";
-import { loadAgentConfig } from "./config.js";
-import { openAgentDatabase } from "./db.js";
-import { createAgentService } from "./app.js";
+import {
+  createAgentRuntime,
+  loadAgentConfig,
+} from "../modules/agent/public.js";
 
 const config = loadAgentConfig();
-const db = openAgentDatabase(config.databasePath);
-const service = createAgentService(db, config);
+const service = createAgentRuntime(config);
 const server = serve(
   { fetch: service.app.fetch, hostname: config.host, port: config.port },
   () => {
@@ -20,7 +20,6 @@ async function shutdown() {
   stopping = true;
   server.close();
   await service.close();
-  db.close();
 }
 process.on("SIGINT", () => {
   void shutdown();

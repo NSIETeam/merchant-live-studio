@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "sourceCommit": "9493ed1",
+  "files": {
+    "src/agent/index.ts": {
+      "owner": "agent",
+      "reason": "Existing in source snapshot 9493ed1; migrate by feature without expanding legacy responsibilities."
+    },
+    "src/server/db.ts": {
+      "owner": "legacy-storage",
+      "reason": "Existing in source snapshot 9493ed1; migrate by feature without expanding legacy responsibilities."
+    },
+    "src/server/index.ts": {
+      "owner": "composition",
+      "reason": "Existing in source snapshot 9493ed1; migrate by feature without expanding legacy responsibilities."
+    }
+  }
+}

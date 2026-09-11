@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "sourceCommit": "9493ed1",
+  "exceptions": [
+    {
+      "key": "[\"LEGACY_CROSS_MODULE\",\"src/server/index.ts\",\"src/server/db.ts\",\"import\",false,[\"openDatabase:openDatabase\"]]",
+      "reason": "Existing dependency in 9493ed1; remove when its callers migrate to module public contracts."
+    }
+  ]
+}

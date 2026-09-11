@@ -1,15 +1,14 @@
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { existsSync } from "node:fs";
-import { loadConfig } from "./config.js";
+import { createStudio } from "../composition/studio.js";
+import { loadConfig } from "../platform/infrastructure/public.js";
 import { openDatabase } from "./db.js";
-import { createApp, seedDemo } from "./app.js";
-import { processSimulationJobs } from "./services/payments.js";
-import { expireCampaigns } from "./services/rewards.js";
 const config = loadConfig();
 const db = openDatabase(config.databasePath);
-if (config.demoMode) seedDemo(db);
-const app = createApp(db, config);
+const studio = createStudio(db, config);
+if (config.demoMode) studio.seedDemo();
+const app = studio.app;
 if (existsSync("dist/web/index.html")) {
   app.get("/assets/*", serveStatic({ root: "./dist/web" }));
   app.get("/brand/*", serveStatic({ root: "./dist/web" }));
@@ -18,11 +17,7 @@ if (existsSync("dist/web/index.html")) {
 }
 const worker = setInterval(() => {
   try {
-    db.prepare("DELETE FROM revoked_sessions WHERE expires_at<?").run(
-      Date.now(),
-    );
-    expireCampaigns(db);
-    processSimulationJobs(db);
+    studio.tick();
   } catch (error) {
     console.error(
       "Simulation worker failed",

@@ -1,7 +1,7 @@
 import type {
+  AgentAlert,
   AgentFact,
   AgentRun,
-  AgentAlert,
   PromptVersion,
 } from "./agent.js";
 

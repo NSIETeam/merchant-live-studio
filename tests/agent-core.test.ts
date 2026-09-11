@@ -1,12 +1,12 @@
-import { test } from "node:test";
 import assert from "node:assert/strict";
+import { test } from "node:test";
 import {
-  runAgent,
-  STANDARD_PROMPT_CONTENT,
   DEFAULT_PROMPT_CONTENT,
   isModelConfigured,
+  runAgent,
+  STANDARD_PROMPT_CONTENT,
   type AgentModelConfig,
-} from "../src/agent/core/index.js";
+} from "../src/modules/agent/core/index.js";
 import type { AgentExecutionInput } from "../src/shared/agent.js";
 
 function input(): AgentExecutionInput {
