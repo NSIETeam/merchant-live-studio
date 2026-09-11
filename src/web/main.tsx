@@ -1,3 +1,4 @@
+import { ModerationPanel } from "./ModerationPanel.js";
 import { AdmissionPanel } from "./AdmissionPanel.js";
 import { MerchantDisclosure } from "./DisclosurePanel.js";
 import { ComplaintsPanel } from "./ComplaintsPanel.js";
@@ -250,6 +251,7 @@ function Workspace({
     [product, setProduct] = useState(""),
     [saving, setSaving] = useState(false);
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
+  const [admissionRevision, setAdmissionRevision] = useState(0);
   const selected = rooms.find((r) => r.id === roomId);
   const refreshRooms = useCallback(async () => {
     const data = await api<{ rooms: Room[] }>("/merchant/rooms");
@@ -359,7 +361,7 @@ function Workspace({
                 (memberRole === "analyst"
                   ? t.id === "analytics"
                   : memberRole === "reviewer"
-                    ? ["content", "analytics"].includes(t.id)
+                    ? ["content", "studio", "analytics"].includes(t.id)
                     : t.id !== "rewards"),
             )
             .map((t) => (
@@ -548,14 +550,30 @@ function Workspace({
                     />
                   )}
                   <Stats analytics={analytics} />
-                  <AdmissionPanel key={selected.id} roomId={selected.id} />
+                  <AdmissionPanel
+                    key={selected.id + selected.status + admissionRevision}
+                    roomId={selected.id}
+                  />
+                  <ModerationPanel
+                    key={selected.id + "-moderation"}
+                    onChanged={async () => {
+                      await refreshRooms();
+                      setAdmissionRevision((value) => value + 1);
+                    }}
+                    roomId={selected.id}
+                    actorId={actorId}
+                    editable={["owner", "reviewer"].includes(memberRole)}
+                  />
                   <div className="studio-grid">
                     <section>
                       <div className="section-title">
                         <h2>直播预览</h2>
                         <span className="muted">{selected.productName}</span>
                       </div>
-                      <Signal roomId={selected.id} />
+                      <Signal
+                        key={selected.id + selected.status}
+                        roomId={selected.id}
+                      />
                       <Player
                         key={selected.id}
                         url={selected.playbackUrl}

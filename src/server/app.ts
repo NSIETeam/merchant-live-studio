@@ -1,3 +1,4 @@
+import { activeModerationHold, attachModeration } from "./moderation.js";
 import { admissionCheck } from "./admission.js";
 import { attachDisclosure } from "./disclosure.js";
 import { attachComplaints } from "./complaints.js";
@@ -118,6 +119,7 @@ export function createApp(
     return media.readyForAdmission();
   }
   async function checkPublishAdmission(r: RoomRow) {
+    if (activeModerationHold(db, r.id)) throw new HTTPException(403);
     if (!config.requireReviewedLive) return;
     const reachable = await controlForAdmission(r);
     const current = room(r.id);
@@ -400,6 +402,10 @@ export function createApp(
         message: "请先结束当前直播，或将已结束直播重置为待开播",
       });
     transaction(db, () => {
+      if (input.status === "live" && activeModerationHold(db, r.id))
+        throw new HTTPException(409, {
+          message: "直播间因现场处置暂停，请由另一审核账号复核解除后再开播",
+        });
       if (input.status === "live" && config.requireReviewedLive) {
         const check = admissionCheck(
           db,
@@ -511,6 +517,7 @@ export function createApp(
   attachEngagement(app, db, clock);
   attachComplaints(app, db, clock);
   attachDisclosure(app, db, clock);
+  attachModeration(app, db, media, clock);
   const agentBasis = (roomId: string, tenant: string) => {
     const r = owned(roomId, tenant);
     const binding = getRoomContentBinding(

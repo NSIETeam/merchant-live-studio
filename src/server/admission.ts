@@ -1,3 +1,4 @@
+import { activeModerationHold } from "./moderation.js";
 import type { DB } from "./db.js";
 import type { Config } from "./config.js";
 import { getRoomContentBinding } from "./content.js";
@@ -19,6 +20,7 @@ export function admissionCheck(
     config.streamProvider === "mediamtx" &&
     Boolean(config.mediaControlUrl) &&
     Boolean(config.streamAuthSecret);
+  const hold = activeModerationHold(db, roomId);
   const checks = [
     {
       code: "disclosure",
@@ -48,6 +50,14 @@ export function admissionCheck(
         : !controlReachable
           ? "流媒体控制服务暂时不可达，请恢复后重试"
           : "控制服务可达；实际断流效果仍需现场验证",
+    },
+    {
+      code: "moderation",
+      label: "现场处置状态",
+      passed: !hold,
+      detail: hold
+        ? "直播间已暂停，需另一审核账号复核解除"
+        : "没有尚未解除的暂停记录",
     },
   ];
   return {

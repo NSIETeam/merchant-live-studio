@@ -27,7 +27,7 @@ export function AdmissionPanel({ roomId }: { roomId: string }) {
           <p>
             {check.enforced
               ? "服务器将在开放直播间和接收新推流时重新核对。"
-              : "当前是本地演示模式，以下为准备提示；生产环境会强制检查。"}
+              : "当前是本地演示模式，一般资料检查为提示；现场暂停仍强制生效，生产环境会强制检查全部项目。"}
           </p>
           <ul>
             {check.checks.map((item) => (

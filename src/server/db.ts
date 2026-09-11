@@ -339,6 +339,20 @@ export function openDatabase(path: string) {
         Date.now(),
       );
     });
+  if (version < 15)
+    transaction(db, () => {
+      db.exec(`CREATE TABLE moderation_actions(id INTEGER PRIMARY KEY AUTOINCREMENT,room_id TEXT NOT NULL REFERENCES rooms(id),merchant_id TEXT NOT NULL,actor_id TEXT NOT NULL,kind TEXT NOT NULL CHECK(kind IN('note','stop','release')),note TEXT NOT NULL,evidence_reference TEXT NOT NULL,hold_id INTEGER REFERENCES moderation_actions(id),idempotency_key TEXT NOT NULL,created_at INTEGER NOT NULL,UNIQUE(merchant_id,idempotency_key));
+      CREATE INDEX moderation_actions_room ON moderation_actions(room_id,id);
+      CREATE TABLE moderation_results(id INTEGER PRIMARY KEY AUTOINCREMENT,action_id INTEGER NOT NULL REFERENCES moderation_actions(id),disconnected INTEGER NOT NULL CHECK(disconnected IN(0,1)),message TEXT NOT NULL,actor_id TEXT NOT NULL,created_at INTEGER NOT NULL);`);
+      for (const table of ["moderation_actions", "moderation_results"])
+        db.exec(
+          `CREATE TRIGGER ${table}_immutable_update BEFORE UPDATE ON ${table} BEGIN SELECT RAISE(ABORT,'immutable'); END; CREATE TRIGGER ${table}_immutable_delete BEFORE DELETE ON ${table} BEGIN SELECT RAISE(ABORT,'immutable'); END;`,
+        );
+      db.prepare("INSERT INTO schema_migrations VALUES(?,?)").run(
+        15,
+        Date.now(),
+      );
+    });
   return db;
 }
 export type DB = ReturnType<typeof openDatabase>;
