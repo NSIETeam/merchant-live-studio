@@ -1,0 +1,6 @@
+# Merge into the deployed MediaMTX pathDefaults block only after installing
+# /etc/merchant-live-studio/speech-relay.env for merchant-live-media.service.
+# MediaMTX terminates this command with SIGINT when the stream goes offline.
+pathDefaults:
+  runOnOnline: /opt/merchant-live-studio/runtime/node/bin/node /opt/merchant-live-studio/current/dist/server/composition/speech-relay.js
+  runOnOnlineRestart: false

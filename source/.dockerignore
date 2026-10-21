@@ -1,0 +1,13 @@
+node_modules
+dist
+.git
+.env
+.env.*
+data
+# Runtime assets must not enter the image build context.
+var
+*.log
+work
+tests
+__pycache__
+*.pyc
