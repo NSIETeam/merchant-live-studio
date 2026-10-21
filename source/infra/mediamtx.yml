@@ -1,0 +1,18 @@
+# Local development only; add HTTP publish auth before exposing ingest.
+logLevel: info
+rtmp: true
+rtmpAddress: :1935
+rtsp: false
+srt: false
+webrtc: false
+api: false
+hls: true
+hlsAddress: :8888
+hlsVariant: mpegts
+hlsAllowOrigins:
+  - http://127.0.0.1:5173
+  - http://localhost:5173
+  - http://127.0.0.1:8787
+  - http://localhost:8787
+paths:
+  all_others:

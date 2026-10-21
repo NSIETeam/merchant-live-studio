@@ -1,0 +1,24 @@
+[Unit]
+Description=Merchant Live Studio MediaMTX
+After=network-online.target merchant-live-studio.service
+Wants=merchant-live-studio.service
+
+[Service]
+Type=simple
+User=live-studio
+Group=live-studio
+WorkingDirectory=/var/lib/merchant-live-studio
+ExecStart=/opt/merchant-live-studio/runtime/media/mediamtx /etc/merchant-live-studio/mediamtx.yml
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/merchant-live-studio
+MemoryMax=128M
+TasksMax=64
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

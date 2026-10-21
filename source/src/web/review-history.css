@@ -1,0 +1,87 @@
+.script-comparison,
+.binding-history {
+  border-top: 1px solid var(--line, #dce4de);
+  margin-top: 12px;
+  padding-top: 10px;
+}
+.script-comparison summary,
+.binding-history summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: 6px 0;
+}
+.comparison-body {
+  padding: 10px 0;
+  overflow-wrap: anywhere;
+}
+.comparison-body > label {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0;
+}
+.comparison-body select {
+  max-width: 150px;
+}
+.comparison-toggle input {
+  width: auto;
+  min-height: auto;
+}
+.comparison-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+.comparison-columns > section {
+  min-width: 0;
+  background: #f7f9f7;
+  border-radius: 6px;
+  padding: 10px;
+}
+.comparison-change {
+  margin-top: 12px;
+  padding: 10px;
+  border: 1px solid #dce4de;
+  border-radius: 8px;
+}
+.comparison-change h4 {
+  margin: 0 0 8px;
+}
+.comparison-added {
+  border-left: 3px solid #117c60;
+}
+.comparison-removed {
+  border-left: 3px solid #c96044;
+}
+.comparison-snapshot p {
+  white-space: pre-wrap;
+  line-height: 1.7;
+}
+.comparison-snapshot ul {
+  margin: 6px 0;
+  padding-left: 18px;
+}
+.comparison-empty,
+.comparison-note {
+  color: #65736b;
+}
+.binding-history ol {
+  max-height: 350px;
+  overflow: auto;
+  padding-left: 22px;
+}
+.binding-history li {
+  padding: 10px 0;
+  border-bottom: 1px solid #e5eae5;
+}
+.binding-history p {
+  margin: 6px 0;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 700px) {
+  .comparison-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
